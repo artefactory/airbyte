@@ -4,9 +4,9 @@ connectionSpecification:
   title: Airbyte Api Spec
   type: object
   required:
-    - TODO
+    - apiKey
   properties:
     # 'TODO: This schema defines the configuration required for the source. This usually involves metadata such as database and/or authentication information.':
-    TODO:
+    ApiKey:
       type: string
-      description: describe me
+      description: Api key to connect to the api

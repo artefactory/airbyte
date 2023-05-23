@@ -1,0 +1,18 @@
+{
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "required" : ["workspaceId", "name", "dataResidency"],
+    "type": "object",
+    "properties": {
+      "workspaceId": {
+        "type": "string"
+      },
+      "name": {
+        "type": "string"
+      },
+      "dataResidency": {
+        "type":  "string",
+        "enum": ["eu","us","auto"]
+      }
+    }
+  }
+  
