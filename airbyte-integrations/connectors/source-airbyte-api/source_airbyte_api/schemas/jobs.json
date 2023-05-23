@@ -1,0 +1,33 @@
+{
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "required" : ["jobId","status","jobType","startTime"],
+    "type": "object",
+    "properties": {
+      "jobId": {
+        "type": "integer"
+      },
+      "status": {
+        "type": "string",
+        "enum": ["pending","running","incomplete","failed","succeeded","cancelled"]
+      },
+      "jobType": {
+        "type":  "string",
+        "enum": ["sync","reset"]
+      },
+      "startTime":{
+        "type": "string"
+      },
+      "lastUpdatedAt":{
+        "type":"string"
+      },
+      "duration":{
+        "type":"string"
+      },
+      "bytesSynced":{
+        "type":"integer"
+      },
+      "rowsSynced":{
+        "type":"integer"
+      }
+    }
+  }

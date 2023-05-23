@@ -1,0 +1,47 @@
+{
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "required" : ["workspaceId", "name", "dataResidency"],
+    "type": "object",
+    "properties": {
+      "connectionId": {
+        "type": "string"
+      },
+      "name": {
+        "type": "string"
+      },
+      "sourceId": {
+        "type":  "string"
+      },
+      "workspaceId":{
+        "type": "string"
+      },
+      "destinationId":{
+        "type": "string"
+      },
+      "status":{
+        "type":"string",
+        "enum": ["active","inactive","deprecated"]
+      },
+      "schedule":{
+        "type":"object",
+        "required": ["scheduleType"],
+        "properties": {
+            "scheduleType":{
+                "type":"string",
+                "enum": ["manual","cron","basic"]
+            },
+            "cronExpression":{
+                "type":"string"
+            },
+            "basicTiming":{
+                "type":"string"
+            }
+        }
+      },
+      "dataResidency":{
+        "type":"string",
+        "enum": ["eu","us","auto"]
+      }
+    }
+  }
+  
