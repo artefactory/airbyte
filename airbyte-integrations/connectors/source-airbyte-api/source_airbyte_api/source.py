@@ -5,6 +5,7 @@
 
 from abc import ABC
 from typing import Any, Iterable, List, Mapping, MutableMapping, Optional, Tuple
+from airbyte_cdk.sources.streams.http.http import HttpStream
 
 import requests
 from requests.auth import HTTPBasicAuth
@@ -13,7 +14,7 @@ from urllib.parse import urlparse, parse_qsl
 from urllib.parse import urljoin
 from airbyte_cdk.sources import AbstractSource
 from airbyte_cdk.sources.streams import Stream
-from airbyte_cdk.sources.streams.http import HttpStream
+from airbyte_cdk.sources.streams.http import HttpStream , HttpSubStream
 from airbyte_cdk.sources.streams.http.auth import TokenAuthenticator
 
 
@@ -47,7 +48,6 @@ class AirbyteApiStream(HttpStream, ABC):
     
     def request_headers(self, stream_state: Mapping[str, Any], stream_slice: Mapping[str, Any] = None, next_page_token: Mapping[str, Any] = None) -> Mapping[str, Any]:
         return {"user-agent": "source-airbyte-api"}
-
 
 # Basic incremental stream
 class IncrementalAirbyteApiStream(AirbyteApiStream, ABC):
@@ -118,13 +118,24 @@ class Employees(IncrementalAirbyteApiStream):
         """
         raise NotImplementedError("Implement stream slices or delete this method!")
 
-class workspaces(AirbyteApiStream):
+class Workspaces(AirbyteApiStream):
     primary_key = "workspaceId"
 
     def path(self, **kwargs) -> str:
         return "workspaces"
 
-# Source
+class Sources(AirbyteApiStream, HttpSubStream):
+    primary_key = "sourceId"
+
+    def path(self, **kwargs)-> str:
+        return "sources"
+
+    def request_params(self, stream_state: Mapping[str, Any], stream_slice: Mapping[str, Any] = None, next_page_token: Mapping[str, Any] = None) -> MutableMapping[str, Any]:
+        print(stream_slice)
+        base_dict =  super().request_params(stream_state, stream_slice, next_page_token)
+        base_dict["workspaceId"]=stream_slice["parent"]["workspaceId"]
+        return base_dict
+        
 class SourceAirbyteApi(AbstractSource):
     def check_connection(self, logger, config) -> Tuple[bool, any]:
         headers = {
@@ -139,5 +150,7 @@ class SourceAirbyteApi(AbstractSource):
         return True, None
 
     def streams(self, config: Mapping[str, Any]) -> List[Stream]:
-        auth = TokenAuthenticator(token=config.get("apiKey"))  # Oauth2Authenticator is also available if you need oauth support
-        return [workspaces(authenticator=auth)]
+        auth = TokenAuthenticator(token=config.get("apiKey")) 
+        workspaces = Workspaces(authenticator=auth)
+        sources = Sources(parent = workspaces, authenticator=auth)
+        return [workspaces, sources]
