@@ -1,0 +1,20 @@
+data:
+  allowedHosts:
+    hosts:
+      - TODO # Please change to the hostname of the source.
+  registries:
+    oss:
+      enabled: false
+  connectorSubtype: api
+  connectorType: source
+  definitionId: 2aece76f-35b9-48aa-a80b-c41761c1d5fb
+  dockerImageTag: 0.1.0
+  dockerRepository: airbyte/source-airbyte-api
+  githubIssueLabel: source-airbyte-api
+  icon: airbyte-api.svg
+  license: MIT
+  name: Airbyte Api
+  releaseDate: TODO
+  releaseStage: alpha
+  supportUrl: https://docs.airbyte.com/integrations/sources/airbyte-api
+metadataSpecVersion: "1.0"
