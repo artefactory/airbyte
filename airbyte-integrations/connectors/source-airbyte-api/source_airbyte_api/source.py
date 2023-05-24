@@ -8,29 +8,32 @@ from typing import Any, Iterable, List, Mapping, MutableMapping, Optional, Tuple
 from airbyte_cdk.sources.streams.http.http import HttpStream
 
 import requests
-from requests.auth import HTTPBasicAuth
 from urllib.parse import urlparse, parse_qsl
 
 from urllib.parse import urljoin
 from airbyte_cdk.sources import AbstractSource
-from airbyte_cdk.sources.streams import Stream
+from airbyte_cdk.sources.streams import Stream, IncrementalMixin
 from airbyte_cdk.sources.streams.http import HttpStream , HttpSubStream
-from airbyte_cdk.sources.streams.http.auth import TokenAuthenticator
+from airbyte_cdk.sources.streams.http.requests_native_auth import TokenAuthenticator
 
 
 BASE_URL = "https://api.airbyte.com/v1/"
+DEFAULT_HEADER = {}
 
 # Basic full refresh stream
 class AirbyteApiStream(HttpStream, ABC):
    
     url_base = BASE_URL
 
-
     def next_page_token(self, response: requests.Response) -> Optional[Mapping[str, Any]]:
         if next  := response.json().get("next"):
             return {"next": next}
-        return {}
-        
+        return None
+    
+    @property
+    def use_cache(self):
+        return True
+
 
     def request_params(
         self, stream_state: Mapping[str, Any], stream_slice: Mapping[str, any] = None, next_page_token: Mapping[str, Any] = None
@@ -40,7 +43,7 @@ class AirbyteApiStream(HttpStream, ABC):
             captured_params = dict(parse_qsl(parsed_url.query))
             return captured_params
 
-        return {}
+        return DEFAULT_HEADER
 
     def parse_response(self, response: requests.Response, **kwargs) -> Iterable[Mapping]:
         for entry in response.json().get("data",[]):
@@ -80,6 +83,11 @@ class Connections(AirbyteApiSubStream):
 class Jobs(AirbyteApiSubStream):
     primary_key = "jobId"
 
+    def __init__(self, parent: HttpStream, **kwargs):
+        super().__init__(parent, **kwargs)
+        self._cursor_value = None
+    
+
     def path(self, **kwargs)->str:
         return "jobs"
     
@@ -104,3 +112,6 @@ class SourceAirbyteApi(AbstractSource):
         jobs = Jobs(parent=connections, authenticator=auth)
 
         return [workspaces, sources,connections,jobs]
+
+
+

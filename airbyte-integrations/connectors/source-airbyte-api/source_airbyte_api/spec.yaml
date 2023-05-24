@@ -7,6 +7,6 @@ connectionSpecification:
     - apiKey
   properties:
     # 'TODO: This schema defines the configuration required for the source. This usually involves metadata such as database and/or authentication information.':
-    ApiKey:
+    apiKey:
       type: string
       description: Api key to connect to the api
