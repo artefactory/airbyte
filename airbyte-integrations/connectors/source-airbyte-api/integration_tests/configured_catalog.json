@@ -157,6 +157,20 @@
                        "us",
                        "auto"
                     ]
+                 },
+                 "nonBreakingSchemaUpdatesBehavior":{
+                   "type": "string",
+                   "enum": ["ignore","disable_connection"]
+                 },
+                 "namespaceDefinition":{
+                   "type": "string",
+                   "enum": ["source","destination","custom_format"]
+                 },
+                 "namespaceFormat":{
+                   "type":"string"
+                 },
+                 "prefix" :{
+                   "type":"string"
                  }
               }
            },
