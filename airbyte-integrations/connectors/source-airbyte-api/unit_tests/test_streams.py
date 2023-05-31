@@ -18,28 +18,43 @@ def patch_base_class(mocker):
     mocker.patch.object(AirbyteApiSubStream, "__abstractmethods__", set())
     mocker.patch.object(AirbyteApiSubStream, "primary_key", "test_primary_key_sub")
 
+
 @pytest.mark.parametrize(
     ("inputs", "expected"),
     [
-        ({"stream_slice": None, "stream_state": None, "next_page_token": {"next":"http://dummy_url.com/dummy_path?limit=1&offset=1"}}, {"offset": "1", "limit": "1"}),
+        (
+            {"stream_slice": None, "stream_state": None, "next_page_token": {"next": "http://dummy_url.com/dummy_path?limit=1&offset=1"}},
+            {"offset": "1", "limit": "1"},
+        ),
         ({"stream_slice": None, "stream_state": None, "next_page_token": {}}, {}),
-        ({"stream_slice": None, "stream_state": None, "next_page_token": None}, {})
+        ({"stream_slice": None, "stream_state": None, "next_page_token": None}, {}),
     ],
 )
-def test_request_params_Stream(patch_base_class,inputs, expected):
+def test_request_params_Stream(patch_base_class, inputs, expected):
     stream = AirbyteApiStream()
     inputs = inputs
     expected_params = expected
     assert stream.request_params(**inputs) == expected_params
 
+
 @pytest.mark.parametrize(
     ("inputs", "expected"),
     [
-        ({"stream_slice": {"parent":{"test_primary_key":"1234"}}, "stream_state": None, "next_page_token": {"next":"http://dummy_url.com/dummy_path?limit=1&offset=1"}}, {"offset": "1", "limit": "1","test_primary_key":"1234"}),
-        ({"stream_slice": {"parent":{"test_primary_key":"1234"}}, "stream_state": None, "next_page_token": {}}, {"test_primary_key":"1234"}),
+        (
+            {
+                "stream_slice": {"parent": {"test_primary_key": "1234"}},
+                "stream_state": None,
+                "next_page_token": {"next": "http://dummy_url.com/dummy_path?limit=1&offset=1"},
+            },
+            {"offset": "1", "limit": "1", "test_primary_key": "1234"},
+        ),
+        (
+            {"stream_slice": {"parent": {"test_primary_key": "1234"}}, "stream_state": None, "next_page_token": {}},
+            {"test_primary_key": "1234"},
+        ),
     ],
 )
-def test_request_params_SubStream(patch_base_class,inputs, expected):
+def test_request_params_SubStream(patch_base_class, inputs, expected):
     substream = AirbyteApiSubStream(parent=AirbyteApiStream())
     input = inputs
     expected_params = expected
@@ -49,36 +64,37 @@ def test_request_params_SubStream(patch_base_class,inputs, expected):
 @pytest.mark.parametrize(
     ("inputs", "expected"),
     [
-        ({"next":"dummy_next","data":[{"key":"value"}]}, {"next":"dummy_next"}),
-        ({"previous":"dummy_previous"}, None),
-        ({"data":[{"key":"value"}]}, None)
+        ({"next": "dummy_next", "data": [{"key": "value"}]}, {"next": "dummy_next"}),
+        ({"previous": "dummy_previous"}, None),
+        ({"data": [{"key": "value"}]}, None),
     ],
 )
-def test_next_page_token(patch_base_class,inputs,expected):
+def test_next_page_token(patch_base_class, inputs, expected):
     stream = AirbyteApiStream()
     response = MagicMock()
-    response.json.return_value=inputs
+    response.json.return_value = inputs
     inputs = {"response": response}
     expected_token = expected
     assert stream.next_page_token(**inputs) == expected_token
 
+
 @pytest.mark.parametrize(
     ("inputs", "expected"),
     [
-        ({"next":"dummy_next","data":[{"key":"value"}]}, {"key":"value"}),
-        ({"previous":"dummy_previous"}, "finished"),
-        ({"data":[{"key":"value"}]}, {"key":"value"})
+        ({"next": "dummy_next", "data": [{"key": "value"}]}, {"key": "value"}),
+        ({"previous": "dummy_previous"}, "finished"),
+        ({"data": [{"key": "value"}]}, {"key": "value"}),
     ],
 )
-def test_parse_response(patch_base_class,inputs,expected):
+def test_parse_response(patch_base_class, inputs, expected):
     stream = AirbyteApiStream()
     # TODO: replace this with your input parameters
     response = MagicMock()
-    response.json.return_value=inputs
-    inputs = {"response": response}
+    response.json.return_value = inputs
+    inputs = {"response": response, "stream_state": None}
     # TODO: replace this with your expected parced object
     expected_parsed_object = expected
-    assert next(stream.parse_response(**inputs),"finished") == expected_parsed_object
+    assert next(stream.parse_response(**inputs), "finished") == expected_parsed_object
 
 
 def test_request_headers(patch_base_class):
