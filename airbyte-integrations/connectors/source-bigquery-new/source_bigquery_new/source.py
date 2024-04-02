@@ -26,13 +26,12 @@ The approach here is not authoritative, and devs are free to use their own judge
 
 There are additional required TODOs in the files within the integration_tests folder and the spec.yaml file.
 """
+URL_BASE: str = "https://bigquery.googleapis.com"
 
 
 # Basic full refresh stream
 class BigqueryDatasets(HttpSubStream):
     """
-    TODO remove this comment
-
     This class represents a stream output by the connector.
     This is an abstract base class meant to contain all the common functionality at the API level e.g: the API base URL, pagination strategy,
     parsing responses etc..
@@ -57,14 +56,11 @@ class BigqueryDatasets(HttpSubStream):
     """ 
     # sourceOperations = new BigQuerySourceOperations()
 
-    url_base = "https://bigquery.googleapis.com"
+    url_base = URL_BASE
+    name = "datasets"
 
-    def __init__(self, stream_path: str, stream_name: str, stream_schema, table_name: str, **kwargs):
+    def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self.stream_path = stream_path
-        self.stream_name = stream_name
-        self.stream_schema = stream_schema
-        self.table_name = table_name
 
     def path(self, project_id, **kwargs) -> str:
         """
@@ -121,6 +117,62 @@ class BigqueryTables(BigqueryDatasets):
         Documentation: https://cloud.google.com/bigquery/docs/reference/rest#rest-resource:-v2.tables
         """
         return f"{super().path()}/{self.dataset_id}/tables"
+
+
+class BigqueryStream(HttpSubStream):
+    """
+    """ 
+    url_base = URL_BASE
+    name = "datasets"
+
+    def __init__(self, stream_path: str, stream_name: str, stream_schema, table_name: str, **kwargs):
+        super().__init__(**kwargs)
+        self.stream_path = stream_path
+        self.stream_name = stream_name
+        self.stream_schema = stream_schema
+        self.table_name = table_name
+
+    def path(self, project_id, **kwargs) -> str:
+        """
+        Documentation: https://cloud.google.com/bigquery/docs/reference/rest#rest-resource:-v2.datasets
+        """
+        return f"/bigquery/v2/projects/{project_id}/datasets"
+    
+    def next_page_token(self, response: requests.Response) -> Optional[Mapping[str, Any]]:
+        """
+        TODO: Override this method to define a pagination strategy. If you will not be using pagination, no action is required - just return None.
+
+        This method should return a Mapping (e.g: dict) containing whatever information required to make paginated requests. This dict is passed
+        to most other methods in this class to help you form headers, request bodies, query params, etc..
+
+        For example, if the API accepts a 'page' parameter to determine which page of the result to return, and a response from the API contains a
+        'page' number, then this method should probably return a dict {'page': response.json()['page'] + 1} to increment the page count by 1.
+        The request_params method should then read the input next_page_token and set the 'page' param to next_page_token['page'].
+
+        :param response: the most recent response from the API
+        :return If there is another page in the result, a mapping (e.g: dict) containing information needed to query the next page in the response.
+                If there are no more pages in the result, return None.
+        """
+        # next_page = response.json().get("offset")
+        # if next_page:
+        #     return next_page
+        return None
+
+    def request_params(
+        self, stream_state: Mapping[str, Any], stream_slice: Mapping[str, any] = None, next_page_token: Mapping[str, Any] = None
+    ) -> MutableMapping[str, Any]:
+        """
+        TODO: Override this method to define any query parameters to be set. Remove this method if you don't need to define request params.
+        Usually contains common params e.g. pagination size etc.
+        """
+        return {}
+
+    def parse_response(self, response: requests.Response, **kwargs) -> Iterable[Mapping]:
+        """
+        TODO: Override this method to define how a response is parsed.
+        :return an iterable containing each record in the response
+        """
+        yield {}
 
 
 # Basic incremental stream
@@ -191,4 +243,14 @@ class SourceBigqueryNew(AbstractSource):
         """
         # TODO remove the authenticator if not required.
         auth = TokenAuthenticator(token="api_key")  # Oauth2Authenticator is also available if you need oauth support
-        return [Customers(authenticator=auth), Employees(authenticator=auth)]
+        # self._auth = AirtableAuth(config)
+        if not self.streams_catalog:
+            self.discover(None, config)
+        for stream in self.streams_catalog:
+            yield BigqueryStream(
+                stream_path=stream["stream_path"],
+                stream_name=stream["stream"].name,
+                stream_schema=stream["stream"].json_schema,
+                table_name=stream["table_name"],
+                authenticator=auth,
+            )
