@@ -206,7 +206,7 @@ class IncrementalBigqueryDatasets(BigqueryDatasets, ABC):
 
 # Source
 class SourceBigqueryNew(AbstractSource):
-    LOGGER = logging.getLogger(self.__class__.__name__)
+    LOGGER = logging.getLogger("airbyte")
     QUOTE = "`"
     CONFIG_DATASET_ID = "dataset_id"
     CONFIG_PROJECT_ID = "project_id"
