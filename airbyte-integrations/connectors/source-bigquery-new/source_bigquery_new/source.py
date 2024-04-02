@@ -11,6 +11,7 @@ from airbyte_cdk.sources import AbstractSource
 from airbyte_cdk.sources.streams import Stream
 from airbyte_cdk.sources.streams.http import HttpStream, HttpSubStream
 from airbyte_cdk.sources.streams.http.auth import TokenAuthenticator
+from airbyte_protocol.models import SyncMode
 
 """
 TODO: Most comments in this class are instructive and should be deleted after the source is implemented.
@@ -28,7 +29,7 @@ There are additional required TODOs in the files within the integration_tests fo
 
 
 # Basic full refresh stream
-class BigqueryNewStream(HttpSubStream):
+class BigqueryDatasets(HttpSubStream):
     """
     TODO remove this comment
 
@@ -44,29 +45,33 @@ class BigqueryNewStream(HttpSubStream):
         - GET v1/employees
 
     then you should have three classes:
-    `class BigqueryNewStream(HttpStream, ABC)` which is the current class
-    `class Customers(BigqueryNewStream)` contains behavior to pull data for customers using v1/customers
-    `class Employees(BigqueryNewStream)` contains behavior to pull data for employees using v1/employees
+    `class BigqueryDatasets(HttpStream, ABC)` which is the current class
+    `class Customers(BigqueryDatasets)` contains behavior to pull data for customers using v1/customers
+    `class Employees(BigqueryDatasets)` contains behavior to pull data for employees using v1/employees
 
     If some streams implement incremental sync, it is typical to create another class
-    `class IncrementalBigqueryNewStream((BigqueryNewStream), ABC)` then have concrete stream implementations extend it. An example
+    `class IncrementalBigqueryDatasets((BigqueryDatasets), ABC)` then have concrete stream implementations extend it. An example
     is provided below.
 
     See the reference docs for the full list of configurable options.
     """ 
-    LOGGER = logging.getLogger(self.__class__)
-    QUOTE = "`"
-
-    CONFIG_DATASET_ID = "dataset_id"
-    CONFIG_PROJECT_ID = "project_id"
-    CONFIG_CREDS = "credentials_json"
-
-    dbConfig = {}
     # sourceOperations = new BigQuerySourceOperations()
 
-    # TODO: Fill in the url base. Required.
-    url_base = "https://example-api.com/v1/"
+    url_base = "https://bigquery.googleapis.com"
 
+    def __init__(self, stream_path: str, stream_name: str, stream_schema, table_name: str, **kwargs):
+        super().__init__(**kwargs)
+        self.stream_path = stream_path
+        self.stream_name = stream_name
+        self.stream_schema = stream_schema
+        self.table_name = table_name
+
+    def path(self, project_id, **kwargs) -> str:
+        """
+        Documentation: https://cloud.google.com/bigquery/docs/reference/rest#rest-resource:-v2.datasets
+        """
+        return f"/bigquery/v2/projects/{project_id}/datasets"
+    
     def next_page_token(self, response: requests.Response) -> Optional[Mapping[str, Any]]:
         """
         TODO: Override this method to define a pagination strategy. If you will not be using pagination, no action is required - just return None.
@@ -82,6 +87,9 @@ class BigqueryNewStream(HttpSubStream):
         :return If there is another page in the result, a mapping (e.g: dict) containing information needed to query the next page in the response.
                 If there are no more pages in the result, return None.
         """
+        # next_page = response.json().get("offset")
+        # if next_page:
+        #     return next_page
         return None
 
     def request_params(
@@ -101,8 +109,22 @@ class BigqueryNewStream(HttpSubStream):
         yield {}
 
 
+class BigqueryTables(BigqueryDatasets):
+    def __init__(self, dataset_id: list, **kwargs):
+        super().__init__(**kwargs)
+        self.dataset_id = dataset_id
+
+    name = "tables"
+
+    def path(self, **kwargs) -> str:
+        """
+        Documentation: https://cloud.google.com/bigquery/docs/reference/rest#rest-resource:-v2.tables
+        """
+        return f"{super().path()}/{self.dataset_id}/tables"
+
+
 # Basic incremental stream
-class IncrementalBigqueryNewStream(BigqueryNewStream, ABC):
+class IncrementalBigqueryDatasets(BigqueryDatasets, ABC):
     """
     TODO fill in details of this class to implement functionality related to incremental syncs for your connector.
          if you do not need to implement incremental sync for any streams, remove this class.
@@ -132,6 +154,13 @@ class IncrementalBigqueryNewStream(BigqueryNewStream, ABC):
 
 # Source
 class SourceBigqueryNew(AbstractSource):
+    LOGGER = logging.getLogger(self.__class__.__name__)
+    QUOTE = "`"
+    CONFIG_DATASET_ID = "dataset_id"
+    CONFIG_PROJECT_ID = "project_id"
+    CONFIG_CREDS = "credentials_json"
+    _dbConfig = {}
+
     def check_connection(self, logger, config) -> Tuple[bool, any]:
         """
         TODO: Implement a connection check to validate that the user-provided config can be used to connect to the underlying API
@@ -143,7 +172,16 @@ class SourceBigqueryNew(AbstractSource):
         :param logger:  logger object
         :return Tuple[bool, any]: (True, None) if the input config can be used to connect to the API successfully, (False, error) otherwise.
         """
-        return True, None
+        try:
+            # try reading first table from each base, to check the connectivity,
+            for dataset in BigqueryDatasets().read_records(sync_mode=SyncMode.full_refresh):
+                dataset_id = dataset.get("id")
+                dataset_name = dataset.get("name")
+                self.logger.info(f"Reading first table info for base: {dataset_name}")
+                next(BigqueryTables(dataset_id=dataset_id).read_records(sync_mode=SyncMode.full_refresh))
+            return True, None
+        except Exception as e:
+            return False, str(e)
 
     def streams(self, config: Mapping[str, Any]) -> List[Stream]:
         """
