@@ -30,7 +30,7 @@ URL_BASE: str = "https://bigquery.googleapis.com"
 
 
 # Basic full refresh stream
-class BigqueryDatasets(HttpSubStream):
+class BigqueryDatasets(HttpStream, ABC):
     """
     This class represents a stream output by the connector.
     This is an abstract base class meant to contain all the common functionality at the API level e.g: the API base URL, pagination strategy,
@@ -58,15 +58,17 @@ class BigqueryDatasets(HttpSubStream):
 
     url_base = URL_BASE
     name = "datasets"
+    primary_key = None
 
-    def __init__(self, **kwargs):
+    def __init__(self, project_id: list, **kwargs):
         super().__init__(**kwargs)
+        self.project_id = project_id
 
-    def path(self, project_id, **kwargs) -> str:
+    def path(self, **kwargs) -> str:
         """
         Documentation: https://cloud.google.com/bigquery/docs/reference/rest#rest-resource:-v2.datasets
         """
-        return f"/bigquery/v2/projects/{project_id}/datasets"
+        return f"/bigquery/v2/projects/{self.project_id}/datasets"
     
     def next_page_token(self, response: requests.Response) -> Optional[Mapping[str, Any]]:
         """
@@ -106,20 +108,21 @@ class BigqueryDatasets(HttpSubStream):
 
 
 class BigqueryTables(BigqueryDatasets):
-    def __init__(self, dataset_id: list, **kwargs):
-        super().__init__(**kwargs)
-        self.dataset_id = dataset_id
-
     name = "tables"
+
+    def __init__(self, dataset_id: list, project_id: list, **kwargs):
+        self.dataset = super().__init__(project_id=project_id, **kwargs)
+        self.dataset_id = dataset_id
+        self.project_id = project_id
 
     def path(self, **kwargs) -> str:
         """
         Documentation: https://cloud.google.com/bigquery/docs/reference/rest#rest-resource:-v2.tables
         """
-        return f"{super().path()}/{self.dataset_id}/tables"
+        return f"{self.dataset.path()}/{self.dataset_id}/tables"
 
 
-class BigqueryStream(HttpSubStream):
+class BigqueryStream(HttpStream, ABC):
     """
     """ 
     url_base = URL_BASE
@@ -226,7 +229,7 @@ class SourceBigqueryNew(AbstractSource):
         """
         try:
             # try reading first table from each base, to check the connectivity,
-            for dataset in BigqueryDatasets().read_records(sync_mode=SyncMode.full_refresh):
+            for dataset in BigqueryDatasets(project_id=self.CONFIG_PROJECT_ID).read_records(sync_mode=SyncMode.full_refresh):
                 dataset_id = dataset.get("id")
                 dataset_name = dataset.get("name")
                 self.logger.info(f"Reading first table info for base: {dataset_name}")
