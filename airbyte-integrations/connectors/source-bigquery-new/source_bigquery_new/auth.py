@@ -89,7 +89,7 @@ class BigqueryAuth:
         # print(sc.token_expiry)
         # print(sc.client_secret)
         # print(sc.refresh_token)
-        auth = Oauth2Authenticator(token_refresh_endpoint=credentials_json["auth_uri"], client_id=credentials_json["client_id"], client_secret=credentials_json["private_key_id"],refresh_token=token)
+        auth = Oauth2Authenticator(token_refresh_endpoint=credentials_json["token_uri"], client_id=credentials_json["client_id"], client_secret=credentials_json["private_key_id"],refresh_token=token)
         # print(token)
         return auth
         # if credentials["auth_method"] == "oauth2.0":
