@@ -7,12 +7,13 @@ from abc import ABC
 from typing import Any, Iterable, List, Mapping, MutableMapping, Optional, Tuple
 
 import requests
+from oauth2client.service_account import ServiceAccountCredentials
 from airbyte_cdk.sources import AbstractSource
 from airbyte_cdk.sources.streams import Stream
 from airbyte_cdk.sources.streams.http import HttpStream, HttpSubStream
 from airbyte_cdk.sources.streams.http.auth import TokenAuthenticator
 from airbyte_protocol.models import SyncMode
-
+from .auth import BigqueryAuth
 """
 TODO: Most comments in this class are instructive and should be deleted after the source is implemented.
 
@@ -215,8 +216,9 @@ class SourceBigqueryNew(AbstractSource):
     CONFIG_PROJECT_ID = "project_id"
     CONFIG_CREDS = "credentials_json"
     _dbConfig = {}
+    _auth: BigqueryAuth = None
 
-    def check_connection(self, logger, config) -> Tuple[bool, any]:
+    def check_connection(self, logger, config: Mapping[str, Any]) -> Tuple[bool, any]:
         """
         TODO: Implement a connection check to validate that the user-provided config can be used to connect to the underlying API
 
@@ -227,13 +229,15 @@ class SourceBigqueryNew(AbstractSource):
         :param logger:  logger object
         :return Tuple[bool, any]: (True, None) if the input config can be used to connect to the API successfully, (False, error) otherwise.
         """
+        auth = BigqueryAuth(config)
+
         try:
             # try reading first table from each base, to check the connectivity,
-            for dataset in BigqueryDatasets(project_id=self.CONFIG_PROJECT_ID).read_records(sync_mode=SyncMode.full_refresh):
+            for dataset in BigqueryDatasets(project_id=self.CONFIG_PROJECT_ID, authenticator=auth).read_records(sync_mode=SyncMode.full_refresh):
                 dataset_id = dataset.get("id")
                 dataset_name = dataset.get("name")
                 self.logger.info(f"Reading first table info for base: {dataset_name}")
-                next(BigqueryTables(dataset_id=dataset_id).read_records(sync_mode=SyncMode.full_refresh))
+                next(BigqueryTables(dataset_id=dataset_id, authenticator=auth).read_records(sync_mode=SyncMode.full_refresh))
             return True, None
         except Exception as e:
             return False, str(e)
