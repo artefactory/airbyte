@@ -59,7 +59,7 @@ class BigqueryDatasets(HttpStream, ABC):
 
     url_base = URL_BASE
     name = "datasets"
-    primary_key = None
+    primary_key = "id"
 
     def __init__(self, project_id: list, **kwargs):
         super().__init__(**kwargs)
@@ -233,11 +233,12 @@ class SourceBigqueryNew(AbstractSource):
 
         try:
             # try reading first table from each base, to check the connectivity,
-            for dataset in BigqueryDatasets(project_id=self.CONFIG_PROJECT_ID, authenticator=auth).read_records(sync_mode=SyncMode.full_refresh):
+            for dataset in BigqueryDatasets(project_id=config["project_id"], authenticator=auth).read_records(sync_mode=SyncMode.full_refresh):
+                print(dataset)
                 dataset_id = dataset.get("id")
                 dataset_name = dataset.get("name")
-                self.logger.info(f"Reading first table info for base: {dataset_name}")
-                next(BigqueryTables(dataset_id=dataset_id, authenticator=auth).read_records(sync_mode=SyncMode.full_refresh))
+                # self.logger.info(f"Reading first table info for base: {dataset_name}")
+                next(BigqueryTables(dataset_id=dataset_id, project_id=config["project_id"], authenticator=auth).read_records(sync_mode=SyncMode.full_refresh))
             return True, None
         except Exception as e:
             return False, str(e)
