@@ -89,8 +89,11 @@ class BigqueryAuth:
         # print(sc.token_expiry)
         # print(sc.client_secret)
         # print(sc.refresh_token)
-        auth = Oauth2Authenticator(token_refresh_endpoint=credentials_json["token_uri"], client_id=credentials_json["client_id"], client_secret=credentials_json["private_key_id"],refresh_token=token)
-        # print(token)
+        # print(sc.get_client_secret())
+        # auth = Oauth2Authenticator(token_refresh_endpoint=credentials_json["token_uri"], client_id=credentials_json["client_id"], client_secret=credentials_json["private_key"],refresh_token=token)
+        # print(str(token.access_token))
+        access_token = str(token.access_token)
+        auth = TokenAuthenticator(token=access_token)
         return auth
         # if credentials["auth_method"] == "oauth2.0":
         #     return BigqueryOAuth(config, "https://airtable.com/oauth2/v1/token")
