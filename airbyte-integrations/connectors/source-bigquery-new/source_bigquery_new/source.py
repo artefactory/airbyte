@@ -131,7 +131,8 @@ class BigqueryStream(HttpStream, ABC):
     """
     """ 
     url_base = URL_BASE
-    name = "datasets"
+    primary_key = "id"
+    raise_on_http_errors = True
 
     def __init__(self, stream_path: str, stream_name: str, stream_schema, table_name: str, **kwargs):
         super().__init__(**kwargs)
@@ -140,49 +141,65 @@ class BigqueryStream(HttpStream, ABC):
         self.stream_schema = stream_schema
         self.table_name = table_name
 
-    def path(self, project_id, **kwargs) -> str:
-        """
-        Documentation: https://cloud.google.com/bigquery/docs/reference/rest#rest-resource:-v2.datasets
-        """
-        return f"/bigquery/v2/projects/{project_id}/datasets"
-    
-    def next_page_token(self, response: requests.Response) -> Optional[Mapping[str, Any]]:
-        """
-        TODO: Override this method to define a pagination strategy. If you will not be using pagination, no action is required - just return None.
+    @property
+    def name(self):
+        return self.stream_name
 
-        This method should return a Mapping (e.g: dict) containing whatever information required to make paginated requests. This dict is passed
-        to most other methods in this class to help you form headers, request bodies, query params, etc..
+    # def should_retry(self, response: requests.Response) -> bool:
+    #     if response.status_code == 403 or response.status_code == 422:
+    #         self.logger.error(f"Stream {self.name}: permission denied or entity is unprocessable. Skipping.")
+    #         setattr(self, "raise_on_http_errors", False)
+    #         return False
+    #     return super().should_retry(response)
 
-        For example, if the API accepts a 'page' parameter to determine which page of the result to return, and a response from the API contains a
-        'page' number, then this method should probably return a dict {'page': response.json()['page'] + 1} to increment the page count by 1.
-        The request_params method should then read the input next_page_token and set the 'page' param to next_page_token['page'].
+    # def backoff_time(self, response: requests.Response) -> Optional[float]:
+    #     """
+    #     Based on official docs: https://airtable.com/developers/web/api/rate-limits
+    #     when 429 is received, we should wait at least 30 sec.
+    #     """
+    #     if response.status_code == 429:
+    #         self.logger.error(f"Stream {self.name}: rate limit exceeded")
+    #         return 30.0
+    #     return None
 
-        :param response: the most recent response from the API
-        :return If there is another page in the result, a mapping (e.g: dict) containing information needed to query the next page in the response.
-                If there are no more pages in the result, return None.
-        """
-        # next_page = response.json().get("offset")
-        # if next_page:
-        #     return next_page
-        return None
+    def get_json_schema(self) -> Mapping[str, Any]:
+        return self.stream_schema
 
-    def request_params(
-        self, stream_state: Mapping[str, Any], stream_slice: Mapping[str, any] = None, next_page_token: Mapping[str, Any] = None
-    ) -> MutableMapping[str, Any]:
-        """
-        TODO: Override this method to define any query parameters to be set. Remove this method if you don't need to define request params.
-        Usually contains common params e.g. pagination size etc.
-        """
-        return {}
+    # def next_page_token(self, response: requests.Response, **kwargs) -> Optional[Mapping[str, Any]]:
+    #     next_page = response.json().get("offset")
+    #     if next_page:
+    #         return next_page
+    #     return None
+
+    # def request_params(self, next_page_token: Mapping[str, Any] = None, **kwargs) -> MutableMapping[str, Any]:
+    #     """
+    #     All available params: https://airtable.com/developers/web/api/list-records#query
+    #     """
+    #     params = {}
+    #     if next_page_token:
+    #         params["offset"] = next_page_token
+    #     return params
+
+    # def process_records(self, records) -> Iterable[Mapping[str, Any]]:
+    #     for record in records:
+    #         data = record.get("fields")
+    #         if len(data) > 0:
+    #             yield {
+    #                 "_airtable_id": record.get("id"),
+    #                 "_airtable_created_time": record.get("createdTime"),
+    #                 "_airtable_table_name": self.table_name,
+    #                 **{SchemaHelpers.clean_name(k): v for k, v in data.items()},
+    #             }
 
     def parse_response(self, response: requests.Response, **kwargs) -> Iterable[Mapping]:
-        """
-        TODO: Override this method to define how a response is parsed.
-        :return an iterable containing each record in the response
-        """
-        records = response.json().get(self.name)
+        records = response.json().get("records", [])
         for dataset in records:
             yield dataset
+
+        # yield from self.process_records(records)
+
+    def path(self, **kwargs) -> str:
+        return self.stream_path
 
 
 # Basic incremental stream
@@ -258,7 +275,8 @@ class SourceBigqueryNew(AbstractSource):
         :param config: A Mapping of the user input configuration as defined in the connector spec.
         """
         # TODO remove the authenticator if not required.
-        auth = TokenAuthenticator(token="api_key")  # Oauth2Authenticator is also available if you need oauth support
+        # auth = TokenAuthenticator(token="api_key")  # Oauth2Authenticator is also available if you need oauth support
+        auth = BigqueryAuth(config)
         # self._auth = AirtableAuth(config)
         if not self.streams_catalog:
             self.discover(None, config)
