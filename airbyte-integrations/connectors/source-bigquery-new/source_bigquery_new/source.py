@@ -60,6 +60,7 @@ class BigqueryDatasets(HttpStream, ABC):
     url_base = URL_BASE
     name = "datasets"
     primary_key = "id"
+    raise_on_http_errors = True
 
     def __init__(self, project_id: list, **kwargs):
         super().__init__(**kwargs)
@@ -69,6 +70,7 @@ class BigqueryDatasets(HttpStream, ABC):
         """
         Documentation: https://cloud.google.com/bigquery/docs/reference/rest#rest-resource:-v2.datasets
         """
+        # print(kwargs)
         return f"/bigquery/v2/projects/{self.project_id}/datasets"
     
     def next_page_token(self, response: requests.Response) -> Optional[Mapping[str, Any]]:
@@ -91,28 +93,30 @@ class BigqueryDatasets(HttpStream, ABC):
         #     return next_page
         return None
 
-    def request_params(
-        self, stream_state: Mapping[str, Any], stream_slice: Mapping[str, any] = None, next_page_token: Mapping[str, Any] = None
-    ) -> MutableMapping[str, Any]:
-        """
-        TODO: Override this method to define any query parameters to be set. Remove this method if you don't need to define request params.
-        Usually contains common params e.g. pagination size etc.
-        """
-        return {}
+    # def request_params(
+    #     self, stream_state: Mapping[str, Any], stream_slice: Mapping[str, any] = None, next_page_token: Mapping[str, Any] = None
+    # ) -> MutableMapping[str, Any]:
+    #     """
+    #     TODO: Override this method to define any query parameters to be set. Remove this method if you don't need to define request params.
+    #     Usually contains common params e.g. pagination size etc.
+    #     """
+    #     return {}
 
     def parse_response(self, response: requests.Response, **kwargs) -> Iterable[Mapping]:
         """
         TODO: Override this method to define how a response is parsed.
         :return an iterable containing each record in the response
         """
-        yield {}
+        records = response.json().get(self.name)
+        for dataset in records:
+            yield dataset
 
 
 class BigqueryTables(BigqueryDatasets):
     name = "tables"
 
     def __init__(self, dataset_id: list, project_id: list, **kwargs):
-        self.dataset = super().__init__(project_id=project_id, **kwargs)
+        super().__init__(project_id=project_id, **kwargs)
         self.dataset_id = dataset_id
         self.project_id = project_id
 
@@ -120,7 +124,7 @@ class BigqueryTables(BigqueryDatasets):
         """
         Documentation: https://cloud.google.com/bigquery/docs/reference/rest#rest-resource:-v2.tables
         """
-        return f"{self.dataset.path()}/{self.dataset_id}/tables"
+        return f"{super().path()}/{self.dataset_id}/tables"
 
 
 class BigqueryStream(HttpStream, ABC):
@@ -176,7 +180,9 @@ class BigqueryStream(HttpStream, ABC):
         TODO: Override this method to define how a response is parsed.
         :return an iterable containing each record in the response
         """
-        yield {}
+        records = response.json().get(self.name)
+        for dataset in records:
+            yield dataset
 
 
 # Basic incremental stream
@@ -235,8 +241,10 @@ class SourceBigqueryNew(AbstractSource):
             # try reading first table from each base, to check the connectivity,
             for dataset in BigqueryDatasets(project_id=config["project_id"], authenticator=auth).read_records(sync_mode=SyncMode.full_refresh):
                 print(dataset)
-                dataset_id = dataset.get("id")
+                dataset_id = dataset.get("datasetReference")["datasetId"]
                 dataset_name = dataset.get("name")
+                # print(dataset_id)
+                # print(dataset_name)
                 # self.logger.info(f"Reading first table info for base: {dataset_name}")
                 next(BigqueryTables(dataset_id=dataset_id, project_id=config["project_id"], authenticator=auth).read_records(sync_mode=SyncMode.full_refresh))
             return True, None
