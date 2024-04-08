@@ -243,7 +243,7 @@ class SourceBigqueryNew(AbstractSource):
 
     def check_connection(self, logger, config: Mapping[str, Any]) -> Tuple[bool, any]:
         """
-        TODO: Implement a connection check to validate that the user-provided config can be used to connect to the underlying API
+        Implement a connection check to validate that the user-provided config can be used to connect to the underlying API
 
         See https://github.com/airbytehq/airbyte/blob/master/airbyte-integrations/connectors/source-stripe/source_stripe/source.py#L232
         for an example.
