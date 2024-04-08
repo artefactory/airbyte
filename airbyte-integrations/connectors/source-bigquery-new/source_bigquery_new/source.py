@@ -13,6 +13,10 @@ from airbyte_cdk.sources.streams import Stream
 from airbyte_cdk.sources.streams.http import HttpStream, HttpSubStream
 from airbyte_cdk.sources.streams.http.auth import TokenAuthenticator
 from airbyte_protocol.models import SyncMode
+from airbyte_cdk.models import AirbyteCatalog, AirbyteMessage, AirbyteStateMessage, ConfiguredAirbyteCatalog
+from airbyte_cdk.logger import AirbyteLogger
+
+from .schema_helpers import SchemaHelpers, SchemaTypes
 from .auth import BigqueryAuth
 """
 TODO: Most comments in this class are instructive and should be deleted after the source is implemented.
@@ -127,6 +131,21 @@ class BigqueryTables(BigqueryDatasets):
         return f"{super().path()}/{self.dataset_id}/tables"
 
 
+class BigqueryTable(BigqueryTables):
+    name = "table"
+
+    def __init__(self, dataset_id: list, project_id: list, table_id: list, **kwargs):
+        super().__init__(dataset_id=dataset_id, project_id=project_id, **kwargs)
+        self.table_id = table_id
+
+    def path(self, **kwargs) -> str:
+        """
+        Documentation: https://cloud.google.com/bigquery/docs/reference/rest#rest-resource:-v2.tables
+                       https://cloud.google.com/bigquery/docs/reference/rest/v2/tables/get
+        """
+        return f"{super().path()}/{self.table_id}"
+    
+
 class BigqueryStream(HttpStream, ABC):
     """
     """ 
@@ -240,6 +259,7 @@ class SourceBigqueryNew(AbstractSource):
     CONFIG_CREDS = "credentials_json"
     _dbConfig = {}
     _auth: BigqueryAuth = None
+    streams_catalog: Iterable[Mapping[str, Any]] = []
 
     def check_connection(self, logger, config: Mapping[str, Any]) -> Tuple[bool, any]:
         """
@@ -268,6 +288,36 @@ class SourceBigqueryNew(AbstractSource):
         except Exception as e:
             return False, str(e)
 
+    def discover(self, logger: AirbyteLogger, config) -> AirbyteCatalog:
+        """
+        Override to provide the dynamic schema generation capabilities,
+        using resource available for authenticated user.
+
+        Retrieve: Bases, Tables from each Base, generate JSON Schema for each table.
+        """
+        auth = self._auth or BigqueryAuth(config)
+        # list all bases available for authenticated account
+        for dataset in BigqueryDatasets(project_id=config["project_id"], authenticator=auth).read_records(sync_mode=SyncMode.full_refresh):
+            dataset_id = dataset.get("datasetReference")["datasetId"]
+            print(dataset)
+            # dataset_name = SchemaHelpers.clean_name(dataset.get("name"))
+            # list and process each table under each base to generate the JSON Schema
+            print(BigqueryTables(dataset_id=dataset_id, project_id=config["project_id"], authenticator=auth).read_records(sync_mode=SyncMode.full_refresh))
+            for table in BigqueryTables(dataset_id=dataset_id, project_id=config["project_id"], authenticator=auth).read_records(sync_mode=SyncMode.full_refresh):
+                print(table)
+                table_id = table.get("tableReference")["tableId"]
+                self.streams_catalog.append(
+                    {
+                        "stream_path": f"{dataset_id}/{table.get('id')}",
+                        "stream": SchemaHelpers.get_airbyte_stream(
+                            f"{dataset_id}/{table_id}",
+                            SchemaHelpers.get_json_schema(table),
+                        ),
+                        "table_name": table_id,
+                    }
+                )
+        return AirbyteCatalog(streams=[stream["stream"] for stream in self.streams_catalog])
+    
     def streams(self, config: Mapping[str, Any]) -> List[Stream]:
         """
         TODO: Replace the streams below with your own streams.
