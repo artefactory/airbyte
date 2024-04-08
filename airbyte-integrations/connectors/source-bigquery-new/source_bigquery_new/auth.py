@@ -82,7 +82,7 @@ class BigqueryAuth:
         # # print(credentials.access_token)
         # print(credentials.token_expiry)
         # print(credentials.access_token_expired)
-        sc = credentials.create_scoped(scopes=['https://www.googleapis.com/auth/bigquery', 'https://www.googleapis.com/auth/cloud-platform', 'https://www.googleapis.com/auth/devstorage.full_control'])
+        sc = credentials.create_scoped(scopes=['https://www.googleapis.com/auth/bigquery', 'https://www.googleapis.com/auth/cloud-platform', 'https://www.googleapis.com/auth/cloud-platform.read-only'])
         auth = TokenAuthenticator(token=credentials.get_access_token())
         # print("scope")
         token = sc.get_access_token()
