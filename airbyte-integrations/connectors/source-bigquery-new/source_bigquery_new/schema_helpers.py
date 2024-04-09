@@ -70,7 +70,7 @@ class SchemaHelpers:
         # ipdb.set_trace()
 
         fields: Dict = table.get("schema", {})["fields"]
-        print(fields)
+        # print(fields)
         # import ipdb
         # ipdb.set_trace()
 
@@ -83,19 +83,20 @@ class SchemaHelpers:
                 properties.update(**{name: deepcopy(SIMPLE_BIGQUERY_TYPES.get(original_type))})
             elif original_type in COMPLEX_BIGQUERY_TYPES.keys():
                 if original_type == "ARRAY" or original_type == "RECORD":
-                    sub_fields: Dict = table.get("fields")
+                    sub_fields: Dict = field.get("fields")
                     complex_type = deepcopy(COMPLEX_BIGQUERY_TYPES.get(original_type))
                     complex_type["items"] = []
-
+                    # add the type of each sub column
                     for sfield in sub_fields:
                         sub_name: str = sfield.get("name")
                         original_sub_type: str = sfield.get("type")
                         complex_type["items"].append(deepcopy(SIMPLE_BIGQUERY_TYPES.get(original_sub_type)))
-
                     properties.update(**{name: complex_type})
             else:
                 properties.update(**{name: SchemaTypes.string})
 
+        # import ipdb
+        # ipdb.set_trace()
         json_schema: Dict = {
             "$schema": "https://json-schema.org/draft-07/schema#",
             "type": "object",
