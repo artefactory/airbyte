@@ -108,7 +108,7 @@ class BigqueryDatasets(HttpStream, ABC):
 
     def parse_response(self, response: requests.Response, **kwargs) -> Iterable[Mapping]:
         """
-        TODO: Override this method to define how a response is parsed.
+        Override this method to define how a response is parsed.
         :return an iterable containing each record in the response
         """
         records = response.json().get(self.name)
@@ -145,6 +145,13 @@ class BigqueryTable(BigqueryTables):
         """
         return f"{super().path()}/{self.table_id}"
     
+    def parse_response(self, response: requests.Response, **kwargs) -> Iterable[Mapping]:
+        """
+        Override this method to define how a response is parsed.
+        :return an iterable containing each record in the response
+        """
+        record = response.json()
+        yield record
 
 class BigqueryStream(HttpStream, ABC):
     """
@@ -302,20 +309,24 @@ class SourceBigqueryNew(AbstractSource):
             print(dataset)
             # dataset_name = SchemaHelpers.clean_name(dataset.get("name"))
             # list and process each table under each base to generate the JSON Schema
-            print(BigqueryTables(dataset_id=dataset_id, project_id=config["project_id"], authenticator=auth).read_records(sync_mode=SyncMode.full_refresh))
-            for table in BigqueryTables(dataset_id=dataset_id, project_id=config["project_id"], authenticator=auth).read_records(sync_mode=SyncMode.full_refresh):
-                print(table)
-                table_id = table.get("tableReference")["tableId"]
-                self.streams_catalog.append(
-                    {
-                        "stream_path": f"{dataset_id}/{table.get('id')}",
-                        "stream": SchemaHelpers.get_airbyte_stream(
-                            f"{dataset_id}/{table_id}",
-                            SchemaHelpers.get_json_schema(table),
-                        ),
-                        "table_name": table_id,
-                    }
-                )
+            # print(BigqueryTables(dataset_id=dataset_id, project_id=config["project_id"], authenticator=auth).read_records(sync_mode=SyncMode.full_refresh))
+            for table_info in BigqueryTables(dataset_id=dataset_id, project_id=config["project_id"], authenticator=auth).read_records(sync_mode=SyncMode.full_refresh):
+                print(table_info)
+                table_id = table_info.get("tableReference")["tableId"]
+                # table = BigqueryTable(dataset_id=dataset_id, project_id=config["project_id"], table_id=table_id, authenticator=auth).read_records(sync_mode=SyncMode.full_refresh)
+                # print(BigqueryTable(dataset_id=dataset_id, project_id=config["project_id"], table_id=table_id, authenticator=auth).read_records(sync_mode=SyncMode.full_refresh))
+                for table in BigqueryTable(dataset_id=dataset_id, project_id=config["project_id"], table_id=table_id, authenticator=auth).read_records(sync_mode=SyncMode.full_refresh):
+                    print(table)
+                    self.streams_catalog.append(
+                        {
+                            "stream_path": f"{dataset_id}/{table.get('id')}",
+                            "stream": SchemaHelpers.get_airbyte_stream(
+                                f"{dataset_id}/{table_id}",
+                                SchemaHelpers.get_json_schema(table),
+                            ),
+                            "table_name": table_id,
+                        }
+                    )
         return AirbyteCatalog(streams=[stream["stream"] for stream in self.streams_catalog])
     
     def streams(self, config: Mapping[str, Any]) -> List[Stream]:
