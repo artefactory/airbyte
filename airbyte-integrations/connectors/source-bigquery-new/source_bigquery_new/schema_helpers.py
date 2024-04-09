@@ -20,7 +20,7 @@ class SchemaTypes:
 
     boolean: Dict = {"type": ["null", "boolean"]}
 
-    array: Dict = {"type": ["null", "array"], "items": {}}
+    array: Dict = {"type": ["null", "array"]}
 
     object: Dict = {"type": ["null", "object"]}
 
@@ -40,7 +40,6 @@ SIMPLE_BIGQUERY_TYPES: Dict = {
     "DATETIME": SchemaTypes.string,
     "TIMESTAMP": SchemaTypes.string,
     "TIME": SchemaTypes.string,
-    "STRUCT": SchemaTypes.object,
     "GEOGRAPHY": SchemaTypes.string
 }
 
@@ -48,7 +47,9 @@ SIMPLE_BIGQUERY_TYPES: Dict = {
 # the final array is fulled with some simple type.
 COMPLEX_BIGQUERY_TYPES: Dict = {
     "ARRAY": SchemaTypes.array,
-    "RECORD": SchemaTypes.array
+    "RECORD": SchemaTypes.array,
+    "STRUCT": SchemaTypes.object,
+    "JSON": SchemaTypes.object
 }
 
 
@@ -85,12 +86,13 @@ class SchemaHelpers:
                 if original_type == "ARRAY" or original_type == "RECORD":
                     sub_fields: Dict = field.get("fields")
                     complex_type = deepcopy(COMPLEX_BIGQUERY_TYPES.get(original_type))
-                    complex_type["items"] = []
                     # add the type of each sub column
                     for sfield in sub_fields:
                         sub_name: str = sfield.get("name")
                         original_sub_type: str = sfield.get("type")
-                        complex_type["items"].append(deepcopy(SIMPLE_BIGQUERY_TYPES.get(original_sub_type)))
+                        # complex_type[sub_name] = []
+                        complex_type[sub_name] = deepcopy(SIMPLE_BIGQUERY_TYPES.get(original_sub_type))
+
                     properties.update(**{name: complex_type})
             else:
                 properties.update(**{name: SchemaTypes.string})
