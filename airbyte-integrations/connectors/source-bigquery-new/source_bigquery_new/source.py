@@ -211,25 +211,27 @@ class BigqueryStream(HttpStream, ABC):
     #         params["offset"] = next_page_token
     #     return params
 
-    def process_records(self, records) -> Iterable[Mapping[str, Any]]:
+    def process_records(self, record) -> Iterable[Mapping[str, Any]]:
         # import ipdb
         # ipdb.set_trace()
-        for record in records:
-            data = record.get("schema", {})["fields"]
-            if len(data) > 0:
-                yield {
-                    "_bigquery_table_id": record.get("tableReference")["tableId"],
-                    "_bigquery_created_time": record.get("creationTime"),
-                    "_airbyte_raw_id": record.get("id"),
-                    "_airbyte_extracted_at": strftime("%Y-%m-%d %H:%M:%S", datetime.now()),
-                    **{k: v for k, v in data.items()},
-                }
+        #for record in records:
+        data = record.get("schema", {})["fields"]
+        if len(data) > 0:
+            yield {
+                "_bigquery_table_id": record.get("tableReference")["tableId"],
+                "_bigquery_created_time": record.get("creationTime"),
+                "_airbyte_raw_id": record.get("id"),
+                "_airbyte_extracted_at": datetime.strftime(datetime.now(), "%Y-%m-%d %H:%M:%S"),
+                **{k: v for k, v in data.items()},
+            }
 
     def parse_response(self, response: requests.Response, **kwargs) -> Iterable[Mapping]:
         # records = response.json().get("records", [])
         # for dataset in records:
         #     yield dataset
-        records = response.json().get("records", [])
+        # import ipdb
+        # ipdb.set_trace()
+        records = response.json() #.get("records", [])
         yield from self.process_records(records)
         # yield from self.process_records(records)
 
