@@ -83,7 +83,7 @@ class BigqueryAuth:
         # print(credentials.token_expiry)
         # print(credentials.access_token_expired)
         sc = credentials.create_scoped(scopes=['https://www.googleapis.com/auth/bigquery', 'https://www.googleapis.com/auth/cloud-platform', 'https://www.googleapis.com/auth/cloud-platform.read-only'])
-        auth = TokenAuthenticator(token=credentials.get_access_token())
+        # auth = TokenAuthenticator(token=credentials.get_access_token())
         # print("scope")
         token = sc.get_access_token()
         # print(sc.token_expiry)
@@ -93,6 +93,7 @@ class BigqueryAuth:
         # auth = Oauth2Authenticator(token_refresh_endpoint=credentials_json["token_uri"], client_id=credentials_json["client_id"], client_secret=credentials_json["private_key"],refresh_token=token)
         # print(str(token.access_token))
         access_token = str(token.access_token)
+        print(access_token)
         auth = TokenAuthenticator(token=access_token)
         return auth
         # if credentials["auth_method"] == "oauth2.0":
