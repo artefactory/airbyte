@@ -194,11 +194,13 @@ class BigqueryStream(HttpStream, ABC):
     def get_json_schema(self) -> Mapping[str, Any]:
         return self.stream_schema
 
-    # def next_page_token(self, response: requests.Response, **kwargs) -> Optional[Mapping[str, Any]]:
-    #     next_page = response.json().get("offset")
-    #     if next_page:
-    #         return next_page
-    #     return None
+    def next_page_token(self, response: requests.Response, **kwargs) -> Optional[Mapping[str, Any]]:
+        # import ipdb
+        # ipdb.set_trace()
+        next_page = response.json().get("offset")
+        if next_page:
+            return next_page
+        return None
 
     # def request_params(self, next_page_token: Mapping[str, Any] = None, **kwargs) -> MutableMapping[str, Any]:
     #     """
@@ -320,10 +322,11 @@ class SourceBigqueryNew(AbstractSource):
                 table_id = table_info.get("tableReference")["tableId"]
                 # table = BigqueryTable(dataset_id=dataset_id, project_id=config["project_id"], table_id=table_id, authenticator=auth).read_records(sync_mode=SyncMode.full_refresh)
                 # print(BigqueryTable(dataset_id=dataset_id, project_id=config["project_id"], table_id=table_id, authenticator=auth).read_records(sync_mode=SyncMode.full_refresh))
-                for table in BigqueryTable(dataset_id=dataset_id, project_id=config["project_id"], table_id=table_id, authenticator=auth).read_records(sync_mode=SyncMode.full_refresh):
+                table_obj = BigqueryTable(dataset_id=dataset_id, project_id=config["project_id"], table_id=table_id, authenticator=auth)
+                for table in table_obj.read_records(sync_mode=SyncMode.full_refresh):
                     self.streams_catalog.append(
                         {
-                            "stream_path": f"{dataset_id}/{table.get('id')}",
+                            "stream_path": f"{table_obj.path()}",
                             "stream": SchemaHelpers.get_airbyte_stream(
                                 f"{dataset_id}/{table_id}",
                                 SchemaHelpers.get_json_schema(table),
@@ -335,11 +338,10 @@ class SourceBigqueryNew(AbstractSource):
     
     def streams(self, config: Mapping[str, Any]) -> List[Stream]:
         """
-        TODO: Replace the streams below with your own streams.
+        Replace the streams below with your own streams.
 
         :param config: A Mapping of the user input configuration as defined in the connector spec.
         """
-        # TODO remove the authenticator if not required.
         # auth = TokenAuthenticator(token="api_key")  # Oauth2Authenticator is also available if you need oauth support
         auth = BigqueryAuth(config)
         # self._auth = AirtableAuth(config)
