@@ -7,6 +7,8 @@ from abc import ABC
 from typing import Any, Iterable, List, Mapping, MutableMapping, Optional, Tuple
 
 import requests
+from datetime import datetime
+from time import gmtime, strftime
 from oauth2client.service_account import ServiceAccountCredentials
 from airbyte_cdk.sources import AbstractSource
 from airbyte_cdk.sources.streams import Stream
@@ -153,6 +155,7 @@ class BigqueryTable(BigqueryTables):
         record = response.json()
         yield record
 
+
 class BigqueryStream(HttpStream, ABC):
     """
     """ 
@@ -206,22 +209,26 @@ class BigqueryStream(HttpStream, ABC):
     #         params["offset"] = next_page_token
     #     return params
 
-    # def process_records(self, records) -> Iterable[Mapping[str, Any]]:
-    #     for record in records:
-    #         data = record.get("fields")
-    #         if len(data) > 0:
-    #             yield {
-    #                 "_airtable_id": record.get("id"),
-    #                 "_airtable_created_time": record.get("createdTime"),
-    #                 "_airtable_table_name": self.table_name,
-    #                 **{SchemaHelpers.clean_name(k): v for k, v in data.items()},
-    #             }
+    def process_records(self, records) -> Iterable[Mapping[str, Any]]:
+        # import ipdb
+        # ipdb.set_trace()
+        for record in records:
+            data = record.get("schema", {})["fields"]
+            if len(data) > 0:
+                yield {
+                    "_bigquery_table_id": record.get("tableReference")["tableId"],
+                    "_bigquery_created_time": record.get("creationTime"),
+                    "_airbyte_raw_id": record.get("id"),
+                    "_airbyte_extracted_at": strftime("%Y-%m-%d %H:%M:%S", datetime.now()),
+                    **{k: v for k, v in data.items()},
+                }
 
     def parse_response(self, response: requests.Response, **kwargs) -> Iterable[Mapping]:
+        # records = response.json().get("records", [])
+        # for dataset in records:
+        #     yield dataset
         records = response.json().get("records", [])
-        for dataset in records:
-            yield dataset
-
+        yield from self.process_records(records)
         # yield from self.process_records(records)
 
     def path(self, **kwargs) -> str:
@@ -306,17 +313,14 @@ class SourceBigqueryNew(AbstractSource):
         # list all bases available for authenticated account
         for dataset in BigqueryDatasets(project_id=config["project_id"], authenticator=auth).read_records(sync_mode=SyncMode.full_refresh):
             dataset_id = dataset.get("datasetReference")["datasetId"]
-            print(dataset)
             # dataset_name = SchemaHelpers.clean_name(dataset.get("name"))
             # list and process each table under each base to generate the JSON Schema
             # print(BigqueryTables(dataset_id=dataset_id, project_id=config["project_id"], authenticator=auth).read_records(sync_mode=SyncMode.full_refresh))
             for table_info in BigqueryTables(dataset_id=dataset_id, project_id=config["project_id"], authenticator=auth).read_records(sync_mode=SyncMode.full_refresh):
-                print(table_info)
                 table_id = table_info.get("tableReference")["tableId"]
                 # table = BigqueryTable(dataset_id=dataset_id, project_id=config["project_id"], table_id=table_id, authenticator=auth).read_records(sync_mode=SyncMode.full_refresh)
                 # print(BigqueryTable(dataset_id=dataset_id, project_id=config["project_id"], table_id=table_id, authenticator=auth).read_records(sync_mode=SyncMode.full_refresh))
                 for table in BigqueryTable(dataset_id=dataset_id, project_id=config["project_id"], table_id=table_id, authenticator=auth).read_records(sync_mode=SyncMode.full_refresh):
-                    print(table)
                     self.streams_catalog.append(
                         {
                             "stream_path": f"{dataset_id}/{table.get('id')}",
