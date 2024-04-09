@@ -33,27 +33,23 @@ SIMPLE_BIGQUERY_TYPES: Dict = {
     "FLOAT64": SchemaTypes.number,
     "NUMERIC": SchemaTypes.number,
     "BIGNUMERIC": SchemaTypes.number,
+    "INTEGER": SchemaTypes.number,
     "STRING": SchemaTypes.string,
     "BYTES": SchemaTypes.string,
     "DATE": SchemaTypes.string,
     "DATETIME": SchemaTypes.string,
     "TIMESTAMP": SchemaTypes.string,
     "TIME": SchemaTypes.string,
-    "ARRAY": SchemaTypes.array,
     "STRUCT": SchemaTypes.object,
     "GEOGRAPHY": SchemaTypes.string
 }
 
 # returns the `array of Any` where Any is based on Simple Types.
 # the final array is fulled with some simple type.
-# COMPLEX_AIRTABLE_TYPES: Dict = {
-#     "formula": SchemaTypes.array_with_any,
-#     "lookup": SchemaTypes.array_with_any,
-#     "multipleLookupValues": SchemaTypes.array_with_any,
-#     "rollup": SchemaTypes.array_with_any,
-# }
-
-ARRAY_FORMULAS = ("ARRAYCOMPACT", "ARRAYFLATTEN", "ARRAYUNIQUE", "ARRAYSLICE")
+COMPLEX_BIGQUERY_TYPES: Dict = {
+    "ARRAY": SchemaTypes.array,
+    "RECORD": SchemaTypes.array
+}
 
 
 class SchemaHelpers:
@@ -64,14 +60,41 @@ class SchemaHelpers:
     @staticmethod
     def get_json_schema(table: Dict[str, Any]) -> Dict[str, str]:
         properties: Dict = {
-            "_airtable_id": SchemaTypes.string,
-            "_airtable_created_time": SchemaTypes.string,
-            "_airtable_table_name": SchemaTypes.string,
+            "_bigquery_table_id": SchemaTypes.string,
+            "_bigquery_created_time": SchemaTypes.string,
+            "_airbyte_raw_id": SchemaTypes.string,
+            "_airbyte_extracted_at": SchemaTypes.string,
+            "_airbyte_meta": SchemaTypes.object
         }
         # import ipdb
         # ipdb.set_trace()
 
-        # fields: Dict = table.get("fields", {})
+        fields: Dict = table.get("schema", {})["fields"]
+        print(fields)
+        # import ipdb
+        # ipdb.set_trace()
+
+        for field in fields:
+            name: str = field.get("name")
+            original_type: str = field.get("type")
+            mode: str = field.get("mode")
+            # field_type: str = field.get("type")
+            if original_type in SIMPLE_BIGQUERY_TYPES.keys():
+                properties.update(**{name: deepcopy(SIMPLE_BIGQUERY_TYPES.get(original_type))})
+            elif original_type in COMPLEX_BIGQUERY_TYPES.keys():
+                if original_type == "ARRAY" or original_type == "RECORD":
+                    sub_fields: Dict = table.get("fields")
+                    complex_type = deepcopy(COMPLEX_BIGQUERY_TYPES.get(original_type))
+                    complex_type["items"] = []
+
+                    for sfield in sub_fields:
+                        sub_name: str = sfield.get("name")
+                        original_sub_type: str = sfield.get("type")
+                        complex_type["items"].append(deepcopy(SIMPLE_BIGQUERY_TYPES.get(original_sub_type)))
+
+                    properties.update(**{name: complex_type})
+            else:
+                properties.update(**{name: SchemaTypes.string})
 
         json_schema: Dict = {
             "$schema": "https://json-schema.org/draft-07/schema#",
