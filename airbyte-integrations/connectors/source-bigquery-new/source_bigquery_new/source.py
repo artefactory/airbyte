@@ -156,6 +156,28 @@ class BigqueryTable(BigqueryTables):
         yield record
 
 
+class BigqueryTableData(BigqueryTable):
+    name = "tabledata"
+
+    def __init__(self, dataset_id: list, project_id: list, table_id: list, **kwargs):
+        super().__init__(dataset_id=dataset_id, project_id=project_id, table_id=table_id, **kwargs)
+
+    def path(self, **kwargs) -> str:
+        """
+        Documentation: https://cloud.google.com/bigquery/docs/reference/rest#rest-resource:-v2.tabledata
+        """
+        return f"{super().path()}/data"
+    
+    def parse_response(self, response: requests.Response, **kwargs) -> Iterable[Mapping]:
+        """
+        Override this method to define how a response is parsed.
+        :return an iterable containing each record in the response
+        """
+        records = response.json().get("rows")
+        for table in records:
+            yield table
+
+
 class BigqueryStream(HttpStream, ABC):
     """
     """ 
@@ -222,7 +244,7 @@ class BigqueryStream(HttpStream, ABC):
                 "_bigquery_created_time": record.get("creationTime"),
                 "_airbyte_raw_id": record.get("id"),
                 "_airbyte_extracted_at": datetime.strftime(datetime.now(), "%Y-%m-%d %H:%M:%S"),
-                **{k: v for k, v in data.items()},
+                **{k: v for k, v in data},
             }
 
     def parse_response(self, response: requests.Response, **kwargs) -> Iterable[Mapping]:
@@ -326,6 +348,8 @@ class SourceBigqueryNew(AbstractSource):
                 # print(BigqueryTable(dataset_id=dataset_id, project_id=config["project_id"], table_id=table_id, authenticator=auth).read_records(sync_mode=SyncMode.full_refresh))
                 table_obj = BigqueryTable(dataset_id=dataset_id, project_id=config["project_id"], table_id=table_id, authenticator=auth)
                 for table in table_obj.read_records(sync_mode=SyncMode.full_refresh):
+                    # import ipdb
+                    # ipdb.set_trace()
                     self.streams_catalog.append(
                         {
                             "stream_path": f"{table_obj.path()}",
