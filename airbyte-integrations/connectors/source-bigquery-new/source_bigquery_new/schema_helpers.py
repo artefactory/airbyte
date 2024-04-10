@@ -83,17 +83,17 @@ class SchemaHelpers:
             if original_type in SIMPLE_BIGQUERY_TYPES.keys():
                 properties.update(**{name: deepcopy(SIMPLE_BIGQUERY_TYPES.get(original_type))})
             elif original_type in COMPLEX_BIGQUERY_TYPES.keys():
+                complex_type = deepcopy(COMPLEX_BIGQUERY_TYPES.get(original_type))
                 if original_type == "ARRAY" or original_type == "RECORD":
                     sub_fields: Dict = field.get("fields")
-                    complex_type = deepcopy(COMPLEX_BIGQUERY_TYPES.get(original_type))
+                    # complex_type = deepcopy(COMPLEX_BIGQUERY_TYPES.get(original_type))
                     # add the type of each sub column
                     for sfield in sub_fields:
                         sub_name: str = sfield.get("name")
                         original_sub_type: str = sfield.get("type")
                         # complex_type[sub_name] = []
                         complex_type[sub_name] = deepcopy(SIMPLE_BIGQUERY_TYPES.get(original_sub_type))
-
-                    properties.update(**{name: complex_type})
+                properties.update(**{name: complex_type})
             else:
                 properties.update(**{name: SchemaTypes.string})
 
