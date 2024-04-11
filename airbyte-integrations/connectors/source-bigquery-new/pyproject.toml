@@ -17,6 +17,8 @@ packages = [ { include = "source_bigquery_new" }, {include = "main.py" } ]
 [tool.poetry.dependencies]
 python = "^3.9,<3.12"
 airbyte-cdk = "^0"
+oauth2client = "^4.1.3"
+google-api-python-client = "^2.125.0"
 
 [tool.poetry.scripts]
 source-bigquery-new = "source_bigquery_new.run:run"
