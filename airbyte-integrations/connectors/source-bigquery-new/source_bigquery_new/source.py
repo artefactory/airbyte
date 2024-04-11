@@ -6,6 +6,7 @@ import logging
 from abc import ABC
 from typing import Any, Iterable, List, Mapping, MutableMapping, Optional, Tuple
 
+import uuid
 import requests
 from datetime import datetime
 from time import gmtime, strftime
@@ -241,7 +242,7 @@ class BigqueryStream(HttpStream, ABC):
             yield {
                 "_bigquery_table_id": record.get("tableReference")["tableId"],
                 "_bigquery_created_time": record.get("creationTime"),
-                "_airbyte_raw_id": record.get("id"),
+                "_airbyte_raw_id": uuid.uuid4(),
                 "_airbyte_extracted_at": datetime.strftime(datetime.now(), "%Y-%m-%d %H:%M:%S"),
                 **{element["name"]: rows[fields.index(element)]["v"] for element in fields},
             }
