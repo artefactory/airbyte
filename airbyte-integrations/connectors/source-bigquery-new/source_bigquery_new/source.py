@@ -218,8 +218,6 @@ class BigqueryStream(HttpStream, ABC):
         return self.stream_schema
 
     def next_page_token(self, response: requests.Response, **kwargs) -> Optional[Mapping[str, Any]]:
-        # import ipdb
-        # ipdb.set_trace()
         next_page = response.json().get("offset")
         if next_page:
             return next_page
@@ -236,46 +234,21 @@ class BigqueryStream(HttpStream, ABC):
 
     def process_records(self, record) -> Iterable[Mapping[str, Any]]:
         fields = record.get("schema", {})["fields"]
-        # import ipdb
-        # ipdb.set_trace()
-        for data in self.table_data:
-            # if len(fields) > 0:
+        table_data = self.table_data.read_records(sync_mode=SyncMode.full_refresh)
+
+        for data in table_data:
             rows = data.get("f")
-            # import ipdb
-            # ipdb.set_trace()
-            rec = {
+            yield {
                 "_bigquery_table_id": record.get("tableReference")["tableId"],
                 "_bigquery_created_time": record.get("creationTime"),
                 "_airbyte_raw_id": record.get("id"),
                 "_airbyte_extracted_at": datetime.strftime(datetime.now(), "%Y-%m-%d %H:%M:%S"),
                 **{element["name"]: rows[fields.index(element)]["v"] for element in fields},
             }
-            print(rec)
-            yield rec
-        # import ipdb
-        # ipdb.set_trace()
-        # for record in records:
-        #     data = record.get("rows", [])["f"]
-        #     import ipdb
-        #     ipdb.set_trace()
-        #     if len(data) > 0:
-        #         yield {
-        #             "_bigquery_table_id": record.get("tableReference")["tableId"],
-        #             "_bigquery_created_time": record.get("creationTime"),
-        #             "_airbyte_raw_id": record.get("id"),
-        #             "_airbyte_extracted_at": datetime.strftime(datetime.now(), "%Y-%m-%d %H:%M:%S"),
-        #             **{element for element in data},
-        #         }
 
     def parse_response(self, response: requests.Response, **kwargs) -> Iterable[Mapping]:
-        # records = response.json().get("records", [])
-        # for dataset in records:
-        #     yield dataset
-        # import ipdb
-        # ipdb.set_trace()
         records = response.json()
         yield from self.process_records(records)
-        # yield from self.process_records(records)
 
     def path(self, **kwargs) -> str:
         return self.stream_path
@@ -337,12 +310,7 @@ class SourceBigqueryNew(AbstractSource):
         try:
             # try reading first table from each base, to check the connectivity,
             for dataset in BigqueryDatasets(project_id=config["project_id"], authenticator=auth).read_records(sync_mode=SyncMode.full_refresh):
-                print(dataset)
                 dataset_id = dataset.get("datasetReference")["datasetId"]
-                dataset_name = dataset.get("name")
-                # print(dataset_id)
-                # print(dataset_name)
-                # self.logger.info(f"Reading first table info for base: {dataset_name}")
                 next(BigqueryTables(dataset_id=dataset_id, project_id=config["project_id"], authenticator=auth).read_records(sync_mode=SyncMode.full_refresh))
             return True, None
         except Exception as e:
@@ -370,7 +338,6 @@ class SourceBigqueryNew(AbstractSource):
                 # table = table_obj.read_records(sync_mode=SyncMode.full_refresh)
                 for table in table_obj.read_records(sync_mode=SyncMode.full_refresh):
                     data_obj = BigqueryTableData(dataset_id=dataset_id, project_id=config["project_id"], table_id=table_id, authenticator=auth)
-                    data = data_obj.read_records(sync_mode=SyncMode.full_refresh)
                     self.streams_catalog.append(
                         {
                             "stream_path": f"{table_obj.path()}",
@@ -379,7 +346,7 @@ class SourceBigqueryNew(AbstractSource):
                                 SchemaHelpers.get_json_schema(table),
                             ),
                             "table_name": table_id,
-                            "table_data": data
+                            "table_data": data_obj
                         }
                     )
         return AirbyteCatalog(streams=[stream["stream"] for stream in self.streams_catalog])
