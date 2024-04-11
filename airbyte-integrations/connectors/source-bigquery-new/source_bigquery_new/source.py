@@ -185,12 +185,13 @@ class BigqueryStream(HttpStream, ABC):
     primary_key = "id"
     raise_on_http_errors = True
 
-    def __init__(self, stream_path: str, stream_name: str, stream_schema, table_name: str, **kwargs):
+    def __init__(self, stream_path: str, stream_name: str, stream_schema, table_name: str, table_data, **kwargs):
         super().__init__(**kwargs)
         self.stream_path = stream_path
         self.stream_name = stream_name
         self.stream_schema = stream_schema
         self.table_name = table_name
+        self.table_data = table_data
 
     @property
     def name(self):
@@ -234,18 +235,37 @@ class BigqueryStream(HttpStream, ABC):
     #     return params
 
     def process_records(self, record) -> Iterable[Mapping[str, Any]]:
+        fields = record.get("schema", {})["fields"]
         # import ipdb
         # ipdb.set_trace()
-        #for record in records:
-        data = record.get("schema", {})["fields"]
-        if len(data) > 0:
-            yield {
+        for data in self.table_data:
+            # if len(fields) > 0:
+            rows = data.get("f")
+            # import ipdb
+            # ipdb.set_trace()
+            rec = {
                 "_bigquery_table_id": record.get("tableReference")["tableId"],
                 "_bigquery_created_time": record.get("creationTime"),
                 "_airbyte_raw_id": record.get("id"),
                 "_airbyte_extracted_at": datetime.strftime(datetime.now(), "%Y-%m-%d %H:%M:%S"),
-                **{k: v for k, v in data},
+                **{element["name"]: rows[fields.index(element)]["v"] for element in fields},
             }
+            print(rec)
+            yield rec
+        # import ipdb
+        # ipdb.set_trace()
+        # for record in records:
+        #     data = record.get("rows", [])["f"]
+        #     import ipdb
+        #     ipdb.set_trace()
+        #     if len(data) > 0:
+        #         yield {
+        #             "_bigquery_table_id": record.get("tableReference")["tableId"],
+        #             "_bigquery_created_time": record.get("creationTime"),
+        #             "_airbyte_raw_id": record.get("id"),
+        #             "_airbyte_extracted_at": datetime.strftime(datetime.now(), "%Y-%m-%d %H:%M:%S"),
+        #             **{element for element in data},
+        #         }
 
     def parse_response(self, response: requests.Response, **kwargs) -> Iterable[Mapping]:
         # records = response.json().get("records", [])
@@ -253,7 +273,7 @@ class BigqueryStream(HttpStream, ABC):
         #     yield dataset
         # import ipdb
         # ipdb.set_trace()
-        records = response.json() #.get("records", [])
+        records = response.json()
         yield from self.process_records(records)
         # yield from self.process_records(records)
 
@@ -347,9 +367,10 @@ class SourceBigqueryNew(AbstractSource):
                 # table = BigqueryTable(dataset_id=dataset_id, project_id=config["project_id"], table_id=table_id, authenticator=auth).read_records(sync_mode=SyncMode.full_refresh)
                 # print(BigqueryTable(dataset_id=dataset_id, project_id=config["project_id"], table_id=table_id, authenticator=auth).read_records(sync_mode=SyncMode.full_refresh))
                 table_obj = BigqueryTable(dataset_id=dataset_id, project_id=config["project_id"], table_id=table_id, authenticator=auth)
+                # table = table_obj.read_records(sync_mode=SyncMode.full_refresh)
                 for table in table_obj.read_records(sync_mode=SyncMode.full_refresh):
-                    # import ipdb
-                    # ipdb.set_trace()
+                    data_obj = BigqueryTableData(dataset_id=dataset_id, project_id=config["project_id"], table_id=table_id, authenticator=auth)
+                    data = data_obj.read_records(sync_mode=SyncMode.full_refresh)
                     self.streams_catalog.append(
                         {
                             "stream_path": f"{table_obj.path()}",
@@ -358,6 +379,7 @@ class SourceBigqueryNew(AbstractSource):
                                 SchemaHelpers.get_json_schema(table),
                             ),
                             "table_name": table_id,
+                            "table_data": data
                         }
                     )
         return AirbyteCatalog(streams=[stream["stream"] for stream in self.streams_catalog])
@@ -369,8 +391,8 @@ class SourceBigqueryNew(AbstractSource):
         :param config: A Mapping of the user input configuration as defined in the connector spec.
         """
         # auth = TokenAuthenticator(token="api_key")  # Oauth2Authenticator is also available if you need oauth support
-        auth = BigqueryAuth(config)
-        # self._auth = AirtableAuth(config)
+        self._auth = BigqueryAuth(config)
+
         if not self.streams_catalog:
             self.discover(None, config)
         for stream in self.streams_catalog:
@@ -379,5 +401,6 @@ class SourceBigqueryNew(AbstractSource):
                 stream_name=stream["stream"].name,
                 stream_schema=stream["stream"].json_schema,
                 table_name=stream["table_name"],
-                authenticator=auth,
+                table_data=stream["table_data"],
+                authenticator=self._auth,
             )
