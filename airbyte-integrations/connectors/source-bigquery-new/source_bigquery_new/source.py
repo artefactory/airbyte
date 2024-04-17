@@ -306,13 +306,13 @@ class SourceBigqueryNew(AbstractSource):
         :param logger:  logger object
         :return Tuple[bool, any]: (True, None) if the input config can be used to connect to the API successfully, (False, error) otherwise.
         """
-        auth = BigqueryAuth(config)
+        self._auth = BigqueryAuth(config)
 
         try:
             # try reading first table from each base, to check the connectivity,
-            for dataset in BigqueryDatasets(project_id=config["project_id"], authenticator=auth).read_records(sync_mode=SyncMode.full_refresh):
+            for dataset in BigqueryDatasets(project_id=config["project_id"], authenticator=self._auth).read_records(sync_mode=SyncMode.full_refresh):
                 dataset_id = dataset.get("datasetReference")["datasetId"]
-                next(BigqueryTables(dataset_id=dataset_id, project_id=config["project_id"], authenticator=auth).read_records(sync_mode=SyncMode.full_refresh))
+                next(BigqueryTables(dataset_id=dataset_id, project_id=config["project_id"], authenticator=self._auth).read_records(sync_mode=SyncMode.full_refresh))
             return True, None
         except Exception as e:
             return False, str(e)
