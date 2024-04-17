@@ -4,6 +4,7 @@
 
 from typing import Any, Mapping, Union
 
+import json
 import requests
 import httplib2
 from google.auth.crypt import RSASigner
@@ -65,6 +66,8 @@ class BigqueryAuth:
     def __new__(cls, config: dict) -> Union[ServiceAccountCredentials, BigqueryOAuth, Oauth2Authenticator]:       
         # for new oauth configs
         credentials_json = config["credentials_json"]
+        credentials_json = json.loads(config["credentials_json"], strict=False)
+
         credentials = ServiceAccountCredentials(credentials_json["client_email"], RSASigner.from_string(credentials_json["private_key"], credentials_json["private_key_id"]),\
                                                 scopes=['https://www.googleapis.com/auth/bigquery', 'https://www.googleapis.com/auth/cloud-platform', 'https://www.googleapis.com/auth/devstorage.full_control'], \
                                                 private_key_id=credentials_json["private_key_id"], client_id=credentials_json["client_id"])
