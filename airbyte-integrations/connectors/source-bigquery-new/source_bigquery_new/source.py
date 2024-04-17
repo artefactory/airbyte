@@ -225,7 +225,7 @@ class BigqueryStream(HttpStream, ABC):
                 "_bigquery_table_id": record.get("tableReference")["tableId"],
                 "_bigquery_created_time": record.get("creationTime"),
                 "_airbyte_raw_id": uuid.uuid4(),
-                "_airbyte_extracted_at": datetime.strftime(datetime.now(), "%Y-%m-%d %H:%M:%S"),
+                "_airbyte_extracted_at": datetime.strftime(datetime.now(), "%Y-%m-%d %H:%M:%S"), # TODO: check if correct format
                 **{element["name"]: rows[fields.index(element)]["v"] for element in fields},
             }
 
