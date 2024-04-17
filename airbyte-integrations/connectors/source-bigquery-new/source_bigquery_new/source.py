@@ -62,7 +62,6 @@ class BigqueryDatasets(HttpStream, ABC):
 
     See the reference docs for the full list of configurable options.
     """ 
-    # sourceOperations = new BigQuerySourceOperations()
 
     url_base = URL_BASE
     name = "datasets"
@@ -77,7 +76,6 @@ class BigqueryDatasets(HttpStream, ABC):
         """
         Documentation: https://cloud.google.com/bigquery/docs/reference/rest#rest-resource:-v2.datasets
         """
-        # print(kwargs)
         return f"/bigquery/v2/projects/{self.project_id}/datasets"
     
     def next_page_token(self, response: requests.Response) -> Optional[Mapping[str, Any]]:
@@ -198,27 +196,11 @@ class BigqueryStream(HttpStream, ABC):
     def name(self):
         return self.stream_name
 
-    # def should_retry(self, response: requests.Response) -> bool:
-    #     if response.status_code == 403 or response.status_code == 422:
-    #         self.logger.error(f"Stream {self.name}: permission denied or entity is unprocessable. Skipping.")
-    #         setattr(self, "raise_on_http_errors", False)
-    #         return False
-    #     return super().should_retry(response)
-
-    # def backoff_time(self, response: requests.Response) -> Optional[float]:
-    #     """
-    #     Based on official docs: https://airtable.com/developers/web/api/rate-limits
-    #     when 429 is received, we should wait at least 30 sec.
-    #     """
-    #     if response.status_code == 429:
-    #         self.logger.error(f"Stream {self.name}: rate limit exceeded")
-    #         return 30.0
-    #     return None
-
     def get_json_schema(self) -> Mapping[str, Any]:
         return self.stream_schema
 
     def next_page_token(self, response: requests.Response, **kwargs) -> Optional[Mapping[str, Any]]:
+        # TODO: check if correct
         next_page = response.json().get("offset")
         if next_page:
             return next_page
@@ -328,15 +310,11 @@ class SourceBigqueryNew(AbstractSource):
         # list all bases available for authenticated account
         for dataset in BigqueryDatasets(project_id=config["project_id"], authenticator=auth).read_records(sync_mode=SyncMode.full_refresh):
             dataset_id = dataset.get("datasetReference")["datasetId"]
-            # dataset_name = SchemaHelpers.clean_name(dataset.get("name"))
             # list and process each table under each base to generate the JSON Schema
-            # print(BigqueryTables(dataset_id=dataset_id, project_id=config["project_id"], authenticator=auth).read_records(sync_mode=SyncMode.full_refresh))
             for table_info in BigqueryTables(dataset_id=dataset_id, project_id=config["project_id"], authenticator=auth).read_records(sync_mode=SyncMode.full_refresh):
                 table_id = table_info.get("tableReference")["tableId"]
-                # table = BigqueryTable(dataset_id=dataset_id, project_id=config["project_id"], table_id=table_id, authenticator=auth).read_records(sync_mode=SyncMode.full_refresh)
-                # print(BigqueryTable(dataset_id=dataset_id, project_id=config["project_id"], table_id=table_id, authenticator=auth).read_records(sync_mode=SyncMode.full_refresh))
                 table_obj = BigqueryTable(dataset_id=dataset_id, project_id=config["project_id"], table_id=table_id, authenticator=auth)
-                # table = table_obj.read_records(sync_mode=SyncMode.full_refresh)
+
                 for table in table_obj.read_records(sync_mode=SyncMode.full_refresh):
                     data_obj = BigqueryTableData(dataset_id=dataset_id, project_id=config["project_id"], table_id=table_id, authenticator=auth)
                     self.streams_catalog.append(
@@ -358,7 +336,6 @@ class SourceBigqueryNew(AbstractSource):
 
         :param config: A Mapping of the user input configuration as defined in the connector spec.
         """
-        # auth = TokenAuthenticator(token="api_key")  # Oauth2Authenticator is also available if you need oauth support
         self._auth = BigqueryAuth(config)
 
         if not self.streams_catalog:
