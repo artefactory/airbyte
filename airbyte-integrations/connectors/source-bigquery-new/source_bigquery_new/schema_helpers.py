@@ -25,8 +25,7 @@ class SchemaTypes:
     object: Dict = {"type": ["null", "object"]}
 
 
-# More info about internal Airtable Data Types
-# https://airtable.com/developers/web/api/field-model
+# https://docs.airbyte.com/integrations/sources/bigquery
 SIMPLE_BIGQUERY_TYPES: Dict = {
     "BOOL": SchemaTypes.boolean,
     "INT64": SchemaTypes.number,
@@ -43,8 +42,6 @@ SIMPLE_BIGQUERY_TYPES: Dict = {
     "GEOGRAPHY": SchemaTypes.string
 }
 
-# returns the `array of Any` where Any is based on Simple Types.
-# the final array is fulled with some simple type.
 COMPLEX_BIGQUERY_TYPES: Dict = {
     "ARRAY": SchemaTypes.array,
     "RECORD": SchemaTypes.array,
@@ -67,18 +64,13 @@ class SchemaHelpers:
             "_airbyte_extracted_at": SchemaTypes.string,
             "_airbyte_meta": SchemaTypes.object
         }
-        # import ipdb
-        # ipdb.set_trace()
 
         fields: Dict = table.get("schema", {})["fields"]
-        # print(fields)
-        # import ipdb
-        # ipdb.set_trace()
 
         for field in fields:
             name: str = field.get("name")
             original_type: str = field.get("type")
-            mode: str = field.get("mode")
+            # mode: str = field.get("mode")
             # field_type: str = field.get("type")
             if original_type in SIMPLE_BIGQUERY_TYPES.keys():
                 properties.update(**{name: deepcopy(SIMPLE_BIGQUERY_TYPES.get(original_type))})
@@ -86,19 +78,15 @@ class SchemaHelpers:
                 complex_type = deepcopy(COMPLEX_BIGQUERY_TYPES.get(original_type))
                 if original_type == "ARRAY" or original_type == "RECORD":
                     sub_fields: Dict = field.get("fields")
-                    # complex_type = deepcopy(COMPLEX_BIGQUERY_TYPES.get(original_type))
                     # add the type of each sub column
                     for sfield in sub_fields:
                         sub_name: str = sfield.get("name")
                         original_sub_type: str = sfield.get("type")
-                        # complex_type[sub_name] = []
                         complex_type[sub_name] = deepcopy(SIMPLE_BIGQUERY_TYPES.get(original_sub_type))
                 properties.update(**{name: complex_type})
             else:
                 properties.update(**{name: SchemaTypes.string})
 
-        # import ipdb
-        # ipdb.set_trace()
         json_schema: Dict = {
             "$schema": "https://json-schema.org/draft-07/schema#",
             "type": "object",

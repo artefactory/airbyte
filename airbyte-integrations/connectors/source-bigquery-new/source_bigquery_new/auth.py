@@ -23,12 +23,10 @@ from airbyte_cdk.utils import AirbyteTracedException
 
 class BigqueryOAuth(Oauth2Authenticator):
     """
-    https://airtable.com/developers/web/api/oauth-reference#token-expiry-refresh-tokens
     """
 
     def build_refresh_request_headers(self) -> Mapping[str, Any]:
         """
-        https://airtable.com/developers/web/api/oauth-reference#token-refresh-request-headers
         """
         return {
             "Authorization": BasicHttpAuthenticator(self.get_client_id(), self.get_client_secret()).token,
@@ -37,7 +35,6 @@ class BigqueryOAuth(Oauth2Authenticator):
 
     def build_refresh_request_body(self) -> Mapping[str, Any]:
         """
-        https://airtable.com/developers/web/api/oauth-reference#token-refresh-request-body
         """
         return {
             "grant_type": self.get_grant_type(),
@@ -63,7 +60,7 @@ class BigqueryOAuth(Oauth2Authenticator):
 
 
 class BigqueryAuth:
-    def __new__(cls, config: dict) -> Union[ServiceAccountCredentials, BigqueryOAuth, Oauth2Authenticator]:       
+    def __new__(cls, config: dict) -> Union[ServiceAccountCredentials, BigqueryOAuth, Oauth2Authenticator, TokenAuthenticator]:       
         # for new oauth configs
         credentials_json = config["credentials_json"]
         credentials_json = json.loads(config["credentials_json"], strict=False)
