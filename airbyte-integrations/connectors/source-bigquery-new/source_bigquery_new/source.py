@@ -177,6 +177,53 @@ class BigqueryTableData(BigqueryTable):
             yield table
 
 
+class TableQueryResult(HttpStream, ABC):
+    """  
+    """ 
+
+    url_base = URL_BASE
+    name = "rows"
+    primary_key = "id"
+    raise_on_http_errors = True
+
+    def __init__(self, project_id: list, **kwargs):
+        super().__init__(**kwargs)
+        self.project_id = project_id
+
+    def path(self, **kwargs) -> str:
+        """
+        Documentation: https://cloud.google.com/bigquery/docs/reference/rest/v2/jobs/query
+        """
+        return f"/bigquery/v2/projects/{self.project_id}/queries"
+    
+    def next_page_token(self, response: requests.Response) -> Optional[Mapping[str, Any]]:
+        """
+        TODO: Override this method to define a pagination strategy. If you will not be using pagination, no action is required - just return None.
+        """
+        # next_page = response.json().get("offset")
+        # if next_page:
+        #     return next_page
+        return None
+
+    def request_params(
+        self, stream_state: Mapping[str, Any], stream_slice: Mapping[str, any] = None, next_page_token: Mapping[str, Any] = None
+    ) -> MutableMapping[str, Any]:
+        """
+        TODO: Override this method to define any query parameters to be set. Remove this method if you don't need to define request params.
+        Usually contains common params e.g. pagination size etc.
+        """
+        return {}
+
+    def parse_response(self, response: requests.Response, **kwargs) -> Iterable[Mapping]:
+        """
+        Override this method to define how a response is parsed.
+        :return an iterable containing each record in the response
+        """
+        records = response.json().get(self.name)
+        for record in records:
+            yield record
+
+
 class BigqueryStream(HttpStream, ABC):
     """
     """ 
