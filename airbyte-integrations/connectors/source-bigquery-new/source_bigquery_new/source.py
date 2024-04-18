@@ -156,7 +156,7 @@ class BigqueryTable(BigqueryTables):
 
 
 class BigqueryTableData(BigqueryTable):
-    name = "tabledata"
+    name = "rows"
 
     def __init__(self, dataset_id: list, project_id: list, table_id: list, **kwargs):
         super().__init__(dataset_id=dataset_id, project_id=project_id, table_id=table_id, **kwargs)
@@ -172,7 +172,7 @@ class BigqueryTableData(BigqueryTable):
         Override this method to define how a response is parsed.
         :return an iterable containing each record in the response
         """
-        records = response.json().get("rows")
+        records = response.json().get(self.name)
         for table in records:
             yield table
 
