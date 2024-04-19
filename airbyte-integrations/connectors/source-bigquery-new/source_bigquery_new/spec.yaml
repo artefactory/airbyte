@@ -37,6 +37,10 @@ connectionSpecification:
         title: FileBasedStreamConfig
         type: object
         properties:
+          name:
+            title: Name
+            description: The name of the stream.
+            type: string
           where_clause:
             title: Where Clause
             description: The where condition for filtering.
@@ -57,5 +61,5 @@ connectionSpecification:
             default: 3
             type: integer
         required:
+        - name
         - where_clause
-        - days_to_sync_if_history_is_full
