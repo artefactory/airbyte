@@ -22,7 +22,7 @@ data:
   dockerImageTag: 0.1.0
   dockerRepository: airbyte/source-bigquery-new
   githubIssueLabel: source-bigquery-new
-  icon: bigquery-new.svg
+  icon: bigquery.svg
   license: MIT
   name: Bigquery New
   releaseDate: "2024-04-15"
