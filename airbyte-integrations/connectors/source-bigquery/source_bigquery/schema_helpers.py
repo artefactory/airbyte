@@ -102,5 +102,5 @@ class SchemaHelpers:
             name=stream_name,
             json_schema=json_schema,
             supported_sync_modes=[SyncMode.full_refresh],
-            supported_destination_sync_modes=[DestinationSyncMode.overwrite, DestinationSyncMode.append_dedup],
+            supported_destination_sync_modes=[DestinationSyncMode.overwrite, DestinationSyncMode.append, DestinationSyncMode.append_dedup],
         )
