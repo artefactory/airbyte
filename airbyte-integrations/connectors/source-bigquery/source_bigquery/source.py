@@ -36,12 +36,7 @@ There are additional required TODOs in the files within the integration_tests fo
 
 # Source
 class SourceBigquery(AbstractSource):
-    LOGGER = logging.getLogger("airbyte")
-    QUOTE = "`"
-    CONFIG_DATASET_ID = "dataset_id"
-    CONFIG_PROJECT_ID = "project_id"
-    CONFIG_CREDS = "credentials_json"
-    _dbConfig = {}
+    logger = logging.getLogger("airbyte")
     streams_catalog: Iterable[Mapping[str, Any]] = []
 
     def check_connection(self, logger, config: Mapping[str, Any]) -> Tuple[bool, any]:
