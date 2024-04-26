@@ -80,41 +80,42 @@ class SourceBigquery(AbstractSource):
             return True, error_msg
         return True, None
 
+    def discover(self, logger: AirbyteLogger, config) -> AirbyteCatalog:
+        """
+        Override to provide the dynamic schema generation capabilities,
+        using resource available for authenticated user.
+
+        Retrieve: Bases, Tables from each Base, generate JSON Schema for each table.
+        """
+        auth = self._auth or BigqueryAuth(config)
+        # list all bases available for authenticated account
+        for dataset in BigqueryDatasets(project_id=config["project_id"], authenticator=auth).read_records(sync_mode=SyncMode.full_refresh):
+            dataset_id = dataset.get("datasetReference")["datasetId"]
+            # list and process each table under each base to generate the JSON Schema
+            for table_info in BigqueryTables(dataset_id=dataset_id, project_id=config["project_id"], authenticator=auth).read_records(sync_mode=SyncMode.full_refresh):
+                table_id = table_info.get("tableReference")["tableId"]
+                table_obj = BigqueryTable(dataset_id=dataset_id, project_id=config["project_id"], table_id=table_id, authenticator=auth)
+
+                for table in table_obj.read_records(sync_mode=SyncMode.full_refresh):
+                    data_obj = BigqueryTableData(dataset_id=dataset_id, project_id=config["project_id"], table_id=table_id, authenticator=auth)
+                    self.streams_catalog.append(
+                        {
+                            "stream_path": f"{table_obj.path()}",
+                            "stream": SchemaHelpers.get_airbyte_stream(
+                                f"{dataset_id}/{table_id}",
+                                SchemaHelpers.get_json_schema(table),
+                            ),
+                            "table_name": table_id,
+                            "table_data": data_obj
+                        }
+                    )
+        return AirbyteCatalog(streams=[stream["stream"] for stream in self.streams_catalog])
+    
     def streams(self, config: Mapping[str, Any]) -> List[Stream]:
         """
         Replace the streams below with your own streams.
 
         :param config: A Mapping of the user input configuration as defined in the connector spec.
         """
-        self._auth = self._auth or BigqueryAuth(config)
-
-        if not self.streams_catalog:
-            # list all datasets available for authenticated account
-            for dataset in BigqueryDatasets(project_id=config["project_id"], authenticator=self._auth).read_records(sync_mode=SyncMode.full_refresh):
-                dataset_id = dataset.get("datasetReference")["datasetId"]
-                # list and process each table in each dataset to generate the JSON Schema
-                for table_info in BigqueryTables(dataset_id=dataset_id, project_id=config["project_id"], authenticator=self._auth).read_records(sync_mode=SyncMode.full_refresh):
-                    table_id = table_info.get("tableReference")["tableId"]
-                    table_obj = BigqueryTable(dataset_id=dataset_id, project_id=config["project_id"], table_id=table_id, authenticator=self._auth)
-
-                    for table in table_obj.read_records(sync_mode=SyncMode.full_refresh):
-                        data_obj = BigqueryTableData(dataset_id=dataset_id, project_id=config["project_id"], table_id=table_id, authenticator=self._auth)
-                        self.streams_catalog.append(
-                            {
-                                "stream_path": f"{table_obj.path()}",
-                                "stream": SchemaHelpers.get_airbyte_stream(
-                                    f"{dataset_id}/{table_id}",
-                                    SchemaHelpers.get_json_schema(table),
-                                ),
-                                "table_data": data_obj
-                            }
-                        )
+        pass
         
-        for stream in self.streams_catalog:
-            yield BigqueryStream(
-                stream_path=stream["stream_path"],
-                stream_name=stream["stream"].name,
-                stream_schema=stream["stream"].json_schema,
-                stream_data=stream["table_data"],
-                authenticator=self._auth,
-            )
