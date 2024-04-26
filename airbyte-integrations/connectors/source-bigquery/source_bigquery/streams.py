@@ -8,6 +8,8 @@ from abc import ABC
 from typing import Any, Iterable, List, Mapping, MutableMapping, Optional, Tuple
 
 import requests
+import uuid
+from datetime import datetime
 from airbyte_cdk.sources import AbstractSource
 from airbyte_cdk.sources.streams import Stream
 from airbyte_cdk.sources.streams.http import HttpStream, HttpSubStream
@@ -45,6 +47,10 @@ class BigqueryStream(HttpStream, ABC):
         self.stream_data = stream_data
 
     @property
+    def namespace(self):
+        return self.stream_name
+    
+    @property
     def name(self):
         return self.stream_name
 
@@ -59,7 +65,18 @@ class BigqueryStream(HttpStream, ABC):
         return None
 
     def process_records(self, record) -> Iterable[Mapping[str, Any]]:
-        pass
+        fields = record.get("schema", {})["fields"]
+        stream_data = self.stream_data.read_records(sync_mode=SyncMode.full_refresh)
+        print(stream_data)
+        for data in stream_data:
+            rows = data.get("f")
+            yield {
+                "_bigquery_table_id": record.get("tableReference")["tableId"],
+                "_bigquery_created_time": record.get("creationTime"),
+                "_airbyte_raw_id": uuid.uuid4(),
+                "_airbyte_extracted_at": datetime.strftime(datetime.now(), "%Y-%m-%d %H:%M:%S"), # TODO: check if correct format
+                **{element["name"]: rows[fields.index(element)]["v"] for element in fields},
+            }
 
     def parse_response(self, response: requests.Response, **kwargs) -> Iterable[Mapping]:
         records = response.json()
