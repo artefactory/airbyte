@@ -4,5 +4,10 @@
 
 
 from .source import SourceSnowflake
+from .streams import SnowflakeStream, CheckConnectionStream
+from .authenticator import SnowflakeJwtAuthenticator
 
-__all__ = ["SourceSnowflake"]
+__all__ = ["SourceSnowflake",
+           "SnowflakeStream",
+           "CheckConnectionStream",
+           "SnowflakeJwtAuthenticator", ]

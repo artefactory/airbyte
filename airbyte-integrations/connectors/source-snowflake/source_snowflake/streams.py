@@ -1,0 +1,169 @@
+#
+import uuid
+from abc import ABC
+from typing import Any, Iterable, List, Mapping, MutableMapping, Optional, Tuple, Union
+
+import requests
+from airbyte_cdk.sources.streams.http import HttpStream
+
+"""
+TODO: Most comments in this class are instructive and should be deleted after the source is implemented.
+
+This file provides a stubbed example of how to use the Airbyte CDK to develop both a source connector which supports full refresh or and an
+incremental syncs from an HTTP API.
+
+The various TODOs are both implementation hints and steps - fulfilling all the TODOs should be sufficient to implement one basic and one incremental
+stream from a source. This pattern is the same one used by Airbyte internally to implement connectors.
+
+The approach here is not authoritative, and devs are free to use their own judgement.
+
+There are additional required TODOs in the files within the integration_tests folder and the spec.yaml file.
+"""
+
+
+# Basic full refresh stream
+class SnowflakeStream(HttpStream, ABC):
+    """
+    TODO remove this comment
+
+    This class represents a stream output by the connector.
+    This is an abstract base class meant to contain all the common functionality at the API level e.g: the API base URL, pagination strategy,
+    parsing responses etc..
+
+    Each stream should extend this class (or another abstract subclass of it) to specify behavior unique to that stream.
+
+    Typically for REST APIs each stream corresponds to a resource in the API. For example if the API
+    contains the endpoints
+        - GET v1/customers
+        - GET v1/employees
+
+    then you should have three classes:
+    `class SnowflakeStream(HttpStream, ABC)` which is the current class
+
+    If some streams implement incremental sync, it is typical to create another class
+    `class IncrementalSnowflakeStream((SnowflakeStream), ABC)`
+
+    See the reference docs for the full list of configurable options.
+    """
+    url_suffix = "api/v2/statements"
+    url_base = ""
+
+    @property
+    def statement(self):
+        return None
+
+    def next_page_token(self, response: requests.Response) -> Optional[Mapping[str, Any]]:
+        return None
+
+    def request_params(
+            self, stream_state: Mapping[str, Any], stream_slice: Mapping[str, any] = None, next_page_token: Mapping[str, Any] = None
+    ) -> MutableMapping[str, Any]:
+        """
+        TODO: Override this method to define any query parameters to be set. Remove this method if you don't need to define request params.
+        Usually contains common params e.g. pagination size etc.
+        """
+        params = {
+            "requestId": uuid.uuid4(),
+            "async": "false"
+        }
+        return params
+
+    @property
+    def http_method(self) -> str:
+        return "POST"
+
+    def request_headers(
+            self,
+            stream_state: Optional[Mapping[str, Any]],
+            stream_slice: Optional[Mapping[str, Any]] = None,
+            next_page_token: Optional[Mapping[str, Any]] = None,
+    ) -> Mapping[str, Any]:
+        headers = {
+            'User-Agent': 'myApplication/1.0',
+            'X-Snowflake-Authorization-Token-Type': 'KEYPAIR_JWT',  # to be changed when authentication method is set
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+        }
+
+        return headers
+
+    def parse_response(self, response: requests.Response, **kwargs) -> Iterable[Mapping]:
+        """
+        :return an iterable containing each record in the response
+        """
+        response_json = response.json()
+        yield from response_json
+
+
+    @property
+    def primary_key(self) -> Optional[Union[str, List[str], List[List[str]]]]:
+        """
+        :return: string if single primary key, list of strings if composite primary key, list of list of strings if composite primary key consisting of nested fields.
+          If the stream has no primary keys, return None.
+        """
+        return None
+
+
+
+class CheckConnectionStream(SnowflakeStream):
+
+    def __init__(self, url_base, config, **kwargs):
+        super().__init__(**kwargs)
+        self._url_base = url_base
+        self.config = config
+
+    def path(
+            self, stream_state: Mapping[str, Any] = None, stream_slice: Mapping[str, Any] = None, next_page_token: Mapping[str, Any] = None
+    ) -> str:
+        """
+            path of request
+        """
+
+        return f"{self.url_base}/{self.url_suffix}"
+
+    @property
+    def url_base(self):
+        return self._url_base
+
+    @property
+    def statement(self):
+
+        """
+        Assumptions:
+            if we can see the table when showing schema, we assume we have access to the table (stream)
+            We don't need to request the table in order to make sure it is working properly
+            SHOW TABLES IN DATABASE statement does not include "system tables" in the dataset0
+            if schema is provided by the use we replace the search of tables (streams) in database by search in shema
+
+        TODO: Validate that the streams in the pushdown filter configuration are available
+        """
+        database = self.config["database"]
+        schema = self.config["schema"]
+        if not schema:
+            return f"SHOW TABLES IN DATABASE {database}"
+
+        return f"SHOW TABLES IN SCHEMA {database}.{schema}"
+    def request_body_json(
+            self,
+            stream_state: Optional[Mapping[str, Any]],
+            stream_slice: Optional[Mapping[str, Any]] = None,
+            next_page_token: Optional[Mapping[str, Any]] = None,
+    ) -> Optional[Mapping[str, Any]]:
+        json_payload = {
+            "statement": self.statement,
+            "role": self.config['role'],
+            "warehouse": self.config['warehouse'],
+            "database": self.config['database'],
+            "timeout": "1000",
+        }
+        if self.config['schema']:
+            json_payload['schema'] = self.config['schema']
+        return json_payload
+
+    def parse_response(self, response: requests.Response, **kwargs) -> Iterable[Mapping]:
+        """
+        :return an iterable containing each record in the response
+        """
+        response_json = response.json()
+        records = response_json.get("data", [])
+        yield from records

@@ -1,145 +1,144 @@
 documentationUrl: https://docs.airbyte.com/integrations/sources/snowflake
 connectionSpecification:
-  "$schema": http://json-schema.org/draft-07/schema#
-  title: Connection specification
+  $schema: http://json-schema.org/draft-07/schema#
+  title: Snowflake Source Specification
   type: object
-  properties:
-    credentials:
-      oneOf:
-      - order: 0
-        properties:
-          auth_type:
-            const: OAuth
-            order: 0
-            type: string
-          client_id:
-            airbyte_secret: true
-            description: The Client ID of your Snowflake developer application.
-            order: 1
-            title: Client ID
-            type: string
-          client_secret:
-            airbyte_secret: true
-            description: The Client Secret of your Snowflake developer application.
-            order: 2
-            title: Client Secret
-            type: string
-          access_token:
-            airbyte_secret: true
-            description: Access Token for making authenticated requests.
-            order: 3
-            title: Access Token
-            type: string
-          refresh_token:
-            airbyte_secret: true
-            description: Refresh Token for making authenticated requests.
-            order: 4
-            title: Refresh Token
-            type: string
-        required:
-        - client_id
-        - client_secret
-        - auth_type
-        title: OAuth2.0
-        type: object
-      - order: 1
-        properties:
-          auth_type:
-            const: JWT Token
-            order: 0
-            type: string
-          user_name:
-            description: User name
-            order: 2
-            title: Snowflake user name
-            type: string
-          private_key:
-            airbyte_secret: true
-            description: The private key to generate the JWT Token
-            order: 2
-            title: Private key
-            type: string
-        required:
-        - private_key
-        - user_name
-        title: JWT Token
-        type: object
-      order: 0
-      title: Authorization Method
-      type: object
-    database:
-      description: The database you created for Airbyte to access data.
-      examples:
-      - AIRBYTE_DATABASE
-      order: 4
-      title: Database
-      type: string
-    host:
-      description: The host domain of the snowflake instance (must include the account,
-        region, cloud environment, and end with snowflakecomputing.com).
-      examples:
-      - accountname.us-east-2.aws.snowflakecomputing.com
-      order: 1
-      title: Account Name
-      type: string
-    role:
-      description: The role you created for Airbyte to access Snowflake.
-      examples:
-      - AIRBYTE_ROLE
-      order: 2
-      title: Role
-      type: string
-    schema:
-      description: The source Snowflake schema tables. Leave empty to access tables
-        from multiple schemas.
-      examples:
-      - AIRBYTE_SCHEMA
-      order: 5
-      title: Schema
-      type: string
-    warehouse:
-      description: The warehouse you created for Airbyte to access data.
-      examples:
-      - AIRBYTE_WAREHOUSE
-      order: 3
-      title: Warehouse
-      type: string
-    streams:
-      title: Push Down Filter
-      description: Used to filter out data on the source and creates a dedicated stream
-      order: 8
-      type: array
-      items:
-        title: FileBasedStreamConfig
-        type: object
-        properties:
-          namespace:
-            title: Namespace
-            description: The namespace that will be used to identify the pushdown filter stream in the connection (nullable).
-            type: string
-          name:
-            title: Name
-            description: The name that will be used to identify the pushdown filter stream in the connection (not nullable)
-            type: string
-          parent_namespace:
-            title: Parent namespace
-            description: The namespace of the relevant stream that the filter is being applied on (nullable).
-            type: string
-          parent_stream:
-            title: Parent stream
-            description: The name of the relevant stream that the filter is being applied on (not nullable).
-            type: string
-          where_clause:
-            title: Where Clause
-            description: A string that must be a valid where clause in the relevant warehouse (not nullable).
-            type: string
-        required:
-        - name
-        - parent_stream
-        - where_clause
+  required:
+    - credentials
+    - host
+    - warehouse
+    - database
+    - role
+  credentials:
+    oneOf:
+    - order: 0
+      properties:
+        auth_type:
+          const: OAuth
+          order: 0
+          type: string
+        client_id:
+          airbyte_secret: true
+          description: The Client ID of your Snowflake developer application.
+          order: 1
+          title: Client ID
+          type: string
+        client_secret:
+          airbyte_secret: true
+          description: The Client Secret of your Snowflake developer application.
+          order: 2
+          title: Client Secret
+          type: string
+        access_token:
+          airbyte_secret: true
+          description: Access Token for making authenticated requests.
+          order: 3
+          title: Access Token
+          type: string
+        refresh_token:
+          airbyte_secret: true
+          description: Refresh Token for making authenticated requests.
+          order: 4
+          title: Refresh Token
+          type: string
       required:
-        - credentials
-        - host
-        - warehouse
-        - database
-        - role
+      - client_id
+      - client_secret
+      - auth_type
+      title: OAuth2.0
+      type: object
+    - order: 1
+      properties:
+        auth_type:
+          const: JWT Token
+          order: 0
+          type: string
+        user_name:
+          description: User name
+          order: 2
+          title: Snowflake user name
+          type: string
+        private_key:
+          airbyte_secret: true
+          description: The private key to generate the JWT Token
+          order: 2
+          title: Private key
+          type: string
+      required:
+      - private_key
+      - user_name
+      title: JWT Token
+      type: object
+    order: 0
+    title: Authorization Method
+    type: object
+  database:
+    description: The database you created for Airbyte to access data.
+    examples:
+    - AIRBYTE_DATABASE
+    order: 4
+    title: Database
+    type: string
+  host:
+    description: The host domain of the snowflake instance (must include the account,
+      region, cloud environment, and end with snowflakecomputing.com).
+    examples:
+    - accountname.us-east-2.aws.snowflakecomputing.com
+    order: 1
+    title: Account Name
+    type: string
+  role:
+    description: The role you created for Airbyte to access Snowflake.
+    examples:
+    - AIRBYTE_ROLE
+    order: 2
+    title: Role
+    type: string
+  schema:
+    description: The source Snowflake schema tables. Leave empty to access tables
+      from multiple schemas.
+    examples:
+    - AIRBYTE_SCHEMA
+    order: 5
+    title: Schema
+    type: string
+  warehouse:
+    description: The warehouse you created for Airbyte to access data.
+    examples:
+    - AIRBYTE_WAREHOUSE
+    order: 3
+    title: Warehouse
+    type: string
+  streams:
+    title: Push Down Filter
+    description: Used to filter out data on the source and creates a dedicated stream
+    order: 8
+    type: array
+    items:
+      title: FileBasedStreamConfig
+      type: object
+      properties:
+        namespace:
+          title: Namespace
+          description: The namespace that will be used to identify the pushdown filter stream in the connection (nullable).
+          type: string
+        name:
+          title: Name
+          description: The name that will be used to identify the pushdown filter stream in the connection (not nullable)
+          type: string
+        parent_namespace:
+          title: Parent namespace
+          description: The namespace of the relevant stream that the filter is being applied on (nullable).
+          type: string
+        parent_stream:
+          title: Parent stream
+          description: The name of the relevant stream that the filter is being applied on (not nullable).
+          type: string
+        where_clause:
+          title: Where Clause
+          description: A string that must be a valid where clause in the relevant warehouse (not nullable).
+          type: string
+      required:
+      - name
+      - parent_stream
+      - where_clause
