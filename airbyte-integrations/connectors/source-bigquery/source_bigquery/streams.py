@@ -8,7 +8,6 @@ from abc import ABC
 from typing import Any, Iterable, List, Mapping, MutableMapping, Optional, Tuple
 
 import requests
-import uuid
 from datetime import datetime
 from airbyte_cdk.sources import AbstractSource
 from airbyte_cdk.sources.streams import Stream
