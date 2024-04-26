@@ -105,7 +105,6 @@ class SourceBigquery(AbstractSource):
                                 f"{dataset_id}/{table_id}",
                                 SchemaHelpers.get_json_schema(table),
                             ),
-                            "table_name": table_id,
                             "table_data": data_obj
                         }
                     )
@@ -117,5 +116,16 @@ class SourceBigquery(AbstractSource):
 
         :param config: A Mapping of the user input configuration as defined in the connector spec.
         """
-        pass
+        self._auth = BigqueryAuth(config)
+
+        if not self.streams_catalog:
+            self.discover(None, config)
+        for stream in self.streams_catalog:
+            yield BigqueryStream(
+                stream_path=stream["stream_path"],
+                stream_name=stream["stream"].name,
+                stream_schema=stream["stream"].json_schema,
+                stream_data=stream["table_data"],
+                authenticator=self._auth,
+            )
         
