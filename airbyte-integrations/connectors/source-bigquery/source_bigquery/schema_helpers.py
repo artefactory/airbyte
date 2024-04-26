@@ -101,3 +101,11 @@ class SchemaHelpers:
             supported_sync_modes=[SyncMode.full_refresh],
             supported_destination_sync_modes=[DestinationSyncMode.overwrite, DestinationSyncMode.append, DestinationSyncMode.append_dedup],
         )
+    
+    @staticmethod
+    def format_field(field, field_type):
+        if SIMPLE_BIGQUERY_TYPES.get(field_type) == SchemaTypes.number and field:
+            # TODO: update to handle floats as well
+            return int(field)
+        
+        return field

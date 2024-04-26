@@ -16,6 +16,7 @@ from airbyte_cdk.sources.streams.http.auth import TokenAuthenticator
 from airbyte_protocol.models import SyncMode
 from airbyte_cdk.models import AirbyteCatalog, AirbyteMessage, AirbyteStateMessage, ConfiguredAirbyteCatalog
 from airbyte_cdk.logger import AirbyteLogger
+from .schema_helpers import SchemaHelpers
 
 """
 This file provides a stubbed example of how to use the Airbyte CDK to develop both a source connector which supports full refresh or and an
@@ -72,7 +73,7 @@ class BigqueryStream(HttpStream, ABC):
             yield {
                 "_bigquery_table_id": record.get("tableReference")["tableId"],
                 "_bigquery_created_time": record.get("creationTime"),
-                **{element["name"]: rows[fields.index(element)]["v"] for element in fields},
+                **{element["name"]: SchemaHelpers.format_field(rows[fields.index(element)]["v"], element["type"]) for element in fields},
             }
 
     def parse_response(self, response: requests.Response, **kwargs) -> Iterable[Mapping]:
