@@ -1,16 +1,18 @@
 #
 # Copyright (c) 2024 Airbyte, Inc., all rights reserved.
 #
-
-
+import uuid
 from abc import ABC
-from typing import Any, Iterable, List, Mapping, MutableMapping, Optional, Tuple
+from typing import Any, Iterable, List, Mapping, MutableMapping, Optional, Tuple, Union
 
 import requests
 from airbyte_cdk.sources import AbstractSource
 from airbyte_cdk.sources.streams import Stream
 from airbyte_cdk.sources.streams.http import HttpStream
 from airbyte_cdk.sources.streams.http.requests_native_auth import TokenAuthenticator
+from airbyte_protocol.models import SyncMode
+
+from .authenticator import SnowflakeJwtAuthenticator
 
 """
 TODO: Most comments in this class are instructive and should be deleted after the source is implemented.
@@ -54,42 +56,64 @@ class SnowflakeStream(HttpStream, ABC):
 
     See the reference docs for the full list of configurable options.
     """
+    url_suffix = "api/v2/statements"
+    url_base = ""
 
-    # TODO: Fill in the url base. Required.
-    url_base = "https://example-api.com/v1/"
+    @property
+    def statement(self):
+        return None
 
     def next_page_token(self, response: requests.Response) -> Optional[Mapping[str, Any]]:
-        """
-        TODO: Override this method to define a pagination strategy. If you will not be using pagination, no action is required - just return None.
-
-        This method should return a Mapping (e.g: dict) containing whatever information required to make paginated requests. This dict is passed
-        to most other methods in this class to help you form headers, request bodies, query params, etc..
-
-        For example, if the API accepts a 'page' parameter to determine which page of the result to return, and a response from the API contains a
-        'page' number, then this method should probably return a dict {'page': response.json()['page'] + 1} to increment the page count by 1.
-        The request_params method should then read the input next_page_token and set the 'page' param to next_page_token['page'].
-
-        :param response: the most recent response from the API
-        :return If there is another page in the result, a mapping (e.g: dict) containing information needed to query the next page in the response.
-                If there are no more pages in the result, return None.
-        """
         return None
 
     def request_params(
-        self, stream_state: Mapping[str, Any], stream_slice: Mapping[str, any] = None, next_page_token: Mapping[str, Any] = None
+            self, stream_state: Mapping[str, Any], stream_slice: Mapping[str, any] = None, next_page_token: Mapping[str, Any] = None
     ) -> MutableMapping[str, Any]:
         """
         TODO: Override this method to define any query parameters to be set. Remove this method if you don't need to define request params.
         Usually contains common params e.g. pagination size etc.
         """
-        return {}
+        params = {
+            "requestId": "96c46822-fec9-43ee-accf-b2dd222bd024",#uuid.uuid4(),
+            "async": "false"
+        }
+        return params
+
+    @property
+    def http_method(self) -> str:
+        return "POST"
+
+    def request_headers(
+            self,
+            stream_state: Optional[Mapping[str, Any]],
+            stream_slice: Optional[Mapping[str, Any]] = None,
+            next_page_token: Optional[Mapping[str, Any]] = None,
+    ) -> Mapping[str, Any]:
+        headers = {
+            'User-Agent': 'myApplication/1.0',
+            'X-Snowflake-Authorization-Token-Type': 'KEYPAIR_JWT',
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+        }
+
+        return headers
 
     def parse_response(self, response: requests.Response, **kwargs) -> Iterable[Mapping]:
         """
-        TODO: Override this method to define how a response is parsed.
         :return an iterable containing each record in the response
         """
-        yield {}
+        response_json = response.json()
+        records = response_json.get("data", [])
+        yield from records
+
+
+    @property
+    def primary_key(self) -> Optional[Union[str, List[str], List[List[str]]]]:
+        """
+        :return: string if single primary key, list of strings if composite primary key, list of list of strings if composite primary key consisting of nested fields.
+          If the stream has no primary keys, return None.
+        """
+        return None
 
 
 class Customers(SnowflakeStream):
@@ -101,7 +125,7 @@ class Customers(SnowflakeStream):
     primary_key = "customer_id"
 
     def path(
-        self, stream_state: Mapping[str, Any] = None, stream_slice: Mapping[str, Any] = None, next_page_token: Mapping[str, Any] = None
+            self, stream_state: Mapping[str, Any] = None, stream_slice: Mapping[str, Any] = None, next_page_token: Mapping[str, Any] = None
     ) -> str:
         """
         TODO: Override this method to define the path this stream corresponds to. E.g. if the url is https://example-api.com/v1/customers then this
@@ -193,6 +217,29 @@ class SourceSnowflake(AbstractSource):
         :param logger:  logger object
         :return Tuple[bool, any]: (True, None) if the input config can be used to connect to the API successfully, (False, error) otherwise.
         """
+
+        snow_flake_url_suffix = ".snowflakecomputing.com"
+        http_prefix = "https://"
+        host = config['host']
+
+        if not host.endswith(snow_flake_url_suffix):
+            error_message = f"your host is not ending with {snow_flake_url_suffix}"
+            return (False, error_message)
+
+        url_base = host
+
+        if not url_base.startswith(http_prefix):
+            url_base = f"{http_prefix}{url_base}"
+
+        authenticator = SnowflakeJwtAuthenticator.from_config(config)
+
+        stream = CheckConnectionStream(url_base=url_base, config=config, authenticator=authenticator)
+        try:
+            records = stream.read_records(sync_mode=SyncMode.full_refresh)
+        except Exception as e:
+            return False, e.__str__()
+        for r in records:
+            print('record', r)
         return True, None
 
     def streams(self, config: Mapping[str, Any]) -> List[Stream]:
@@ -204,3 +251,46 @@ class SourceSnowflake(AbstractSource):
         # TODO remove the authenticator if not required.
         auth = TokenAuthenticator(token="api_key")  # Oauth2Authenticator is also available if you need oauth support
         return [Customers(authenticator=auth), Employees(authenticator=auth)]
+
+
+class CheckConnectionStream(SnowflakeStream):
+
+    def __init__(self, url_base, config, **kwargs):
+        super().__init__(**kwargs)
+        self._url_base = url_base
+        self.config = config
+
+    def path(
+            self, stream_state: Mapping[str, Any] = None, stream_slice: Mapping[str, Any] = None, next_page_token: Mapping[str, Any] = None
+    ) -> str:
+        """
+            path of request
+        """
+
+        return f"{self.url_base}/{self.url_suffix}"
+
+    @property
+    def url_base(self):
+        return self._url_base
+
+    @property
+    def statement(self):
+        return "SELECT 1;"
+
+    def request_body_json(
+            self,
+            stream_state: Optional[Mapping[str, Any]],
+            stream_slice: Optional[Mapping[str, Any]] = None,
+            next_page_token: Optional[Mapping[str, Any]] = None,
+    ) -> Optional[Mapping[str, Any]]:
+        json_payload = {
+            "statement": self.statement,
+            "role": self.config['role'],
+            "warehouse": self.config['warehouse'],
+            "database": self.config['database'],
+            "timeout": "1000",
+        }
+        if self.config['schema']:
+            json_payload['schema'] = self.config['schema']
+        print("json_payload", json_payload)
+        return json_payload
