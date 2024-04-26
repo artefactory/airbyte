@@ -66,7 +66,7 @@ class BigqueryStream(HttpStream, ABC):
     def process_records(self, record) -> Iterable[Mapping[str, Any]]:
         fields = record.get("schema", {})["fields"]
         stream_data = self.stream_data.read_records(sync_mode=SyncMode.full_refresh)
-        print(stream_data)
+
         for data in stream_data:
             rows = data.get("f")
             yield {
