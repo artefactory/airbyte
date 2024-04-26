@@ -59,10 +59,7 @@ class SchemaHelpers:
     def get_json_schema(table: Dict[str, Any]) -> Dict[str, str]:
         properties: Dict = {
             "_bigquery_table_id": SchemaTypes.string,
-            "_bigquery_created_time": SchemaTypes.string,
-            "_airbyte_raw_id": SchemaTypes.string,
-            "_airbyte_extracted_at": SchemaTypes.string,
-            "_airbyte_meta": SchemaTypes.object
+            "_bigquery_created_time": SchemaTypes.string
         }
 
         fields: Dict = table.get("schema", {})["fields"]
