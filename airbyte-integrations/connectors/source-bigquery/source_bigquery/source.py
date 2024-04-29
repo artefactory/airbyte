@@ -110,7 +110,7 @@ class SourceBigquery(AbstractSource):
                     )
         return AirbyteCatalog(streams=[stream["stream"] for stream in self.streams_catalog])
     
-    def streams(self, config: Mapping[str, Any]) -> List[Stream]:
+    def streams(self, config: Mapping[str, Any]) -> Iterable[Stream]:
         """
         Replace the streams below with your own streams.
 
