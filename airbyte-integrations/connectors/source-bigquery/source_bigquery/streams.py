@@ -16,6 +16,7 @@ from airbyte_cdk.sources.streams.http.auth import TokenAuthenticator
 from airbyte_protocol.models import SyncMode
 from airbyte_cdk.models import AirbyteCatalog, AirbyteMessage, AirbyteStateMessage, ConfiguredAirbyteCatalog
 from airbyte_cdk.logger import AirbyteLogger
+from airbyte_cdk.utils.traced_exception import AirbyteTracedException, FailureType
 from .schema_helpers import SchemaHelpers
 
 """
@@ -107,9 +108,16 @@ class BigqueryDatasets(BigqueryStream):
         Override this method to define how a response is parsed.
         :return an iterable containing each record in the response
         """
-        records = response.json().get(self.name)
-        for record in records:
-            yield record
+        try:
+            datasets = response.json().get(self.name)
+            for dataset in datasets:
+                yield dataset
+        except TypeError as e:
+            raise AirbyteTracedException(
+                            internal_message=str(e),
+                            failure_type=FailureType.config_error,
+                            message="Provided crendentials do not give access to any datasets or project has no datasets",
+                        )
 
 
 class BigqueryTables(BigqueryDatasets):
@@ -125,6 +133,15 @@ class BigqueryTables(BigqueryDatasets):
         Documentation: https://cloud.google.com/bigquery/docs/reference/rest#rest-resource:-v2.tables
         """
         return f"{super().path()}/{self.dataset_id}/tables"
+    
+    def parse_response(self, response: requests.Response, **kwargs) -> Iterable[Mapping]:
+        """
+        Override this method to define how a response is parsed.
+        :return an iterable containing each record in the response
+        """
+        tables = response.json().get(self.name, [])
+        for table in tables:
+            yield table
 
 
 class BigqueryTable(BigqueryTables):
