@@ -8,7 +8,7 @@ from unittest.mock import MagicMock
 import pytest
 from source_snowflake.source import SnowflakeStream
 
-
+#TODO all tests
 @pytest.fixture
 def patch_base_class(mocker):
     # Mock abstract methods to enable instantiating abstract class

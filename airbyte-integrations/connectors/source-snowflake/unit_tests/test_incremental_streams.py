@@ -7,7 +7,7 @@ from airbyte_cdk.models import SyncMode
 from pytest import fixture
 from source_snowflake.source import IncrementalSnowflakeStream
 
-
+#TODO all tests
 @fixture
 def patch_incremental_base_class(mocker):
     # Mock abstract methods to enable instantiating abstract class

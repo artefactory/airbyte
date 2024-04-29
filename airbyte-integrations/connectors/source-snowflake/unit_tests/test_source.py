@@ -6,7 +6,7 @@ from unittest.mock import MagicMock
 
 from source_snowflake.source import SourceSnowflake
 
-
+#TODO all tests
 def test_check_connection(mocker):
     source = SourceSnowflake()
     logger_mock, config_mock = MagicMock(), MagicMock()
