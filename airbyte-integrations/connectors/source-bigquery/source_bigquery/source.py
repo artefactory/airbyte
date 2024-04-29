@@ -56,7 +56,9 @@ class SourceBigquery(AbstractSource):
             # try reading first table from each dataset, to check the connectivity,
             for dataset in BigqueryDatasets(project_id=config["project_id"], authenticator=self._auth).read_records(sync_mode=SyncMode.full_refresh):
                 dataset_id = dataset.get("datasetReference")["datasetId"]
-                next(BigqueryTables(dataset_id=dataset_id, project_id=config["project_id"], authenticator=self._auth).read_records(sync_mode=SyncMode.full_refresh))
+                for table_info in BigqueryTables(dataset_id=dataset_id, project_id=config["project_id"], authenticator=self._auth).read_records(sync_mode=SyncMode.full_refresh):
+                    table_id = table_info.get("tableReference")["tableId"]
+                    BigqueryTable(dataset_id=dataset_id, project_id=config["project_id"], table_id=table_id, authenticator=self._auth)
         except exceptions.HTTPError as error:
             error_msg = f"An error occurred: {error.response.text}"
             try:
