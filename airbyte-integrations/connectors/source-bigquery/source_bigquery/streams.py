@@ -183,7 +183,7 @@ class BigqueryTableData(BigqueryTable):
         """
         :return an iterable containing each record in the response
         """
-        records = response.json().get("rows")
+        records = response.json().get("rows", [])
         for record in records:
             yield record
     
