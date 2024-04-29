@@ -109,6 +109,18 @@ class BigqueryTables(BigqueryDatasets):
         Documentation: https://cloud.google.com/bigquery/docs/reference/rest#rest-resource:-v2.tables
         """
         return f"{super().path()}/{self.dataset_id}/tables"
+    
+    def parse_response(self, response: requests.Response, **kwargs) -> Iterable[Mapping]:
+        """
+        Override this method to define how a response is parsed.
+        :return an iterable containing each record in the response
+        """
+        try:
+            tables = response.json().get(self.name)
+            for table in tables:
+                yield table
+        except TypeError as e:
+            self.logger.warning(f"Dataset has no tables causing the error {str(e)}")
 
 
 class BigqueryTable(BigqueryTables):
