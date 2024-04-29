@@ -49,7 +49,7 @@ class SourceSnowflake(AbstractSource):
             next(records)
         except StopIteration:
             error_message = "There is no stream available for the connection specification provided"
-            return False, error_message
+            raise StopIteration(error_message)
         except requests.exceptions.HTTPError as error:
             error_message = error.__str__()
             error_code = error.args[0]
@@ -58,9 +58,7 @@ class SourceSnowflake(AbstractSource):
                                  "The origin of the error is very likely to be:\n"
                                  "- The configuration provided does not have enough permissions to access the requested database/schema.\n"
                                  "- The configuration is not consistent (example: schema not present is database.")
-            return False, error_message
-        except Exception as error:
-            return False, error.__str__()
+            raise requests.exceptions.HTTPError(error_message)
 
         return True, None
 
