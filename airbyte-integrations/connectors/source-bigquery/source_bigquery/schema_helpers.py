@@ -20,7 +20,7 @@ class SchemaTypes:
 
     boolean: Dict = {"type": ["null", "boolean"]}
 
-    array: Dict = {"type": ["null", "array"]}
+    array: Dict = {"type": ["null", "array"], "items": {}}
 
     object: Dict = {"type": ["null", "object"]}
 
@@ -77,9 +77,9 @@ class SchemaHelpers:
                     sub_fields: Dict = field.get("fields")
                     # add the type of each sub column
                     for sfield in sub_fields:
-                        sub_name: str = sfield.get("name")
+                        # sub_name: str = sfield.get("name")
                         original_sub_type: str = sfield.get("type")
-                        complex_type[sub_name] = deepcopy(SIMPLE_BIGQUERY_TYPES.get(original_sub_type))
+                        complex_type["items"] = deepcopy(SIMPLE_BIGQUERY_TYPES.get(original_sub_type))
                 properties.update(**{name: complex_type})
             else:
                 properties.update(**{name: SchemaTypes.string})
