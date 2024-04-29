@@ -44,7 +44,7 @@ SIMPLE_BIGQUERY_TYPES: Dict = {
 
 COMPLEX_BIGQUERY_TYPES: Dict = {
     "ARRAY": SchemaTypes.array,
-    "RECORD": SchemaTypes.array,
+    "RECORD": SchemaTypes.object,
     "STRUCT": SchemaTypes.object,
     "JSON": SchemaTypes.object
 }
@@ -73,7 +73,7 @@ class SchemaHelpers:
                 properties.update(**{name: deepcopy(SIMPLE_BIGQUERY_TYPES.get(original_type))})
             elif original_type in COMPLEX_BIGQUERY_TYPES.keys():
                 complex_type = deepcopy(COMPLEX_BIGQUERY_TYPES.get(original_type))
-                if original_type == "ARRAY" or original_type == "RECORD":
+                if original_type == "ARRAY":
                     sub_fields: Dict = field.get("fields")
                     # add the type of each sub column
                     for sfield in sub_fields:
