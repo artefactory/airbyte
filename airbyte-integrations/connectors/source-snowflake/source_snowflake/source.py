@@ -4,7 +4,7 @@
 import uuid
 from abc import ABC
 from typing import Any, Iterable, List, Mapping, MutableMapping, Optional, Tuple, Union
-from .streams import SnowflakeStream, CheckConnectionStream
+from .streams import SnowflakeStream, CheckConnectionStream, TableCatalogStream, TableStream
 import requests
 from airbyte_cdk.sources import AbstractSource
 from airbyte_cdk.sources.streams import Stream
@@ -16,7 +16,6 @@ from .authenticator import SnowflakeJwtAuthenticator
 
 # Source
 class SourceSnowflake(AbstractSource):
-
     SNOWFLAKE_URL_SUFFIX = ".snowflakecomputing.com"
     HTTP_PREFIX = "https://"
 
@@ -40,9 +39,9 @@ class SourceSnowflake(AbstractSource):
 
         authenticator = SnowflakeJwtAuthenticator.from_config(config)
 
-        stream = CheckConnectionStream(url_base=url_base, config=config, authenticator=authenticator)
+        check_connection_stream = CheckConnectionStream(url_base=url_base, config=config, authenticator=authenticator)
         try:
-            records = stream.read_records(sync_mode=SyncMode.full_refresh)
+            records = check_connection_stream.read_records(sync_mode=SyncMode.full_refresh)
             next(records)
         except StopIteration:
             error_message = "There is no stream available for the connection specification provided"
@@ -70,7 +69,13 @@ class SourceSnowflake(AbstractSource):
         """
         :param config: A Mapping of the user input configuration as defined in the connector spec.
         """
-        return []
+        host = config['host']
+        url_base = self.format_url_base(host)
+        authenticator = SnowflakeJwtAuthenticator.from_config(config)
 
+        table_catalog_stream = TableCatalogStream(url_base=url_base,
+                                                  config=config,
+                                                  authenticator=authenticator)
 
-
+        return [TableStream(url_base=url_base, config=config, authenticator=authenticator, table_object=table_object)
+                for table_object in table_catalog_stream.read_records(sync_mode=SyncMode.full_refresh)]
