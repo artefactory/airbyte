@@ -36,10 +36,7 @@ class SourceSnowflake(AbstractSource):
             error_message = f"your host is not ending with {self.SNOWFLAKE_URL_SUFFIX}"
             return False, error_message
 
-        url_base = host
-
-        if not url_base.startswith(self.HTTP_PREFIX):
-            url_base = f"{self.HTTP_PREFIX}{url_base}"
+        url_base = self.format_url_base(host)
 
         authenticator = SnowflakeJwtAuthenticator.from_config(config)
 
@@ -61,6 +58,13 @@ class SourceSnowflake(AbstractSource):
             raise requests.exceptions.HTTPError(error_message)
 
         return True, None
+
+    @classmethod
+    def format_url_base(cls, host: str) -> str:
+        url_base = host
+        if not host.startswith(cls.HTTP_PREFIX):
+            url_base = f"{cls.HTTP_PREFIX}{host}"
+        return url_base
 
     def streams(self, config: Mapping[str, Any]) -> List[Stream]:
         """
