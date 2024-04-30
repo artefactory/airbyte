@@ -191,6 +191,34 @@ class BigqueryTableData(BigqueryTable):
             yield record
     
 
+class TableQueryResult(BigqueryStream):
+    """  
+    """ 
+    name = "query_results"
+
+    def __init__(self, project_id: list, **kwargs):
+        self.project_id = project_id
+        super().__init__(self.path(), self.name, self.get_json_schema(), **kwargs)
+
+    def path(self, **kwargs) -> str:
+        """
+        Documentation: https://cloud.google.com/bigquery/docs/reference/rest/v2/jobs/query
+        """
+        return f"/bigquery/v2/projects/{self.project_id}/queries"
+
+    def get_json_schema(self) -> Mapping[str, Any]:
+        return {}
+    
+    def parse_response(self, response: requests.Response, **kwargs) -> Iterable[Mapping]:
+        """
+        Override this method to define how a response is parsed.
+        :return an iterable containing each record in the response
+        """
+        records = response.json().get("rows")
+        for record in records:
+            yield record
+
+
 # Basic incremental stream
 class IncrementalBigqueryDatasets(BigqueryDatasets, ABC):
     """
