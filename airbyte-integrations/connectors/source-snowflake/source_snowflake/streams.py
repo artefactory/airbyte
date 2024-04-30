@@ -5,6 +5,9 @@ from typing import Any, Iterable, List, Mapping, MutableMapping, Optional, Tuple
 
 import requests
 from airbyte_cdk.sources.streams.http import HttpStream
+from airbyte_protocol.models import SyncMode
+from .schema_builder import mapping_snowflake_type_airbyte_type
+
 
 """
 TODO: Most comments in this class are instructive and should be deleted after the source is implemented.
@@ -94,7 +97,6 @@ class SnowflakeStream(HttpStream, ABC):
         response_json = response.json()
         yield from response_json
 
-
     @property
     def primary_key(self) -> Optional[Union[str, List[str], List[List[str]]]]:
         """
@@ -102,7 +104,6 @@ class SnowflakeStream(HttpStream, ABC):
           If the stream has no primary keys, return None.
         """
         return None
-
 
 
 class CheckConnectionStream(SnowflakeStream):
@@ -143,6 +144,7 @@ class CheckConnectionStream(SnowflakeStream):
             return f"SHOW TABLES IN DATABASE {database}"
 
         return f"SHOW TABLES IN SCHEMA {database}.{schema}"
+
     def request_body_json(
             self,
             stream_state: Optional[Mapping[str, Any]],
@@ -217,7 +219,6 @@ class TableCatalogStream(SnowflakeStream):
             json_payload['schema'] = self.config['schema']
         return json_payload
 
-
     @classmethod
     def get_index_of_columns_from_names(cls, metadata_object: Mapping[Any, any], column_names: Iterable[str]) -> Mapping[str, Any]:
         mapping_column_name_to_index = {column_name: -1 for column_name in column_names}
@@ -248,3 +249,142 @@ class TableCatalogStream(SnowflakeStream):
         for record in response_json.get("data", []):
             yield {'schema': record[schema_name_index],
                    'table': record[database_name_index]}
+
+
+class TableSchemaStream(SnowflakeStream):
+    def __init__(self, url_base, config, table_object, **kwargs):
+        super().__init__(**kwargs)
+        self._url_base = url_base
+        self.config = config
+        self.table_object = table_object
+
+    def path(
+            self, stream_state: Mapping[str, Any] = None, stream_slice: Mapping[str, Any] = None, next_page_token: Mapping[str, Any] = None
+    ) -> str:
+        """
+            path of request
+        """
+
+        return f"{self.url_base}/{self.url_suffix}"
+
+    @property
+    def url_base(self):
+        return self._url_base
+
+    @property
+    def statement(self):
+        database = self.config["database"]
+        schema = self.table_object["schema"]
+        table = self.table_object["table"]
+
+        return f"SELECT TOP 1 * FROM {database}.{schema}.{table}"
+
+    def request_body_json(
+            self,
+            stream_state: Optional[Mapping[str, Any]],
+            stream_slice: Optional[Mapping[str, Any]] = None,
+            next_page_token: Optional[Mapping[str, Any]] = None,
+    ) -> Optional[Mapping[str, Any]]:
+        json_payload = {
+            "statement": self.statement,
+            "role": self.config['role'],
+            "warehouse": self.config['warehouse'],
+            "database": self.config['database'],
+            "timeout": "1000",
+        }
+
+        if self.table_object["schema"]:
+            json_payload['schema'] = self.table_object["schema"]
+
+        return json_payload
+
+    def parse_response(self, response: requests.Response, **kwargs) -> Iterable[Mapping]:
+        """
+        :return an iterable containing each record in the response
+        """
+        response_json = response.json()
+        # checks in the response nested fields response -> resultSetMetaData -> rowType
+        for row_type in response_json.get('resultSetMetaData', {'rowType': []}).get('rowType', []):
+            yield {'column_name': row_type['name'],
+                   'type': row_type['type'],
+                   }
+
+    def __str__(self):
+        return f"Current stream has this table object as constructor {self.table_object}"
+
+
+class TableStream(SnowflakeStream):
+    def __init__(self, url_base, config, table_object, **kwargs):
+        super().__init__(**kwargs)
+        self._url_base = url_base
+        self.config = config
+        self.table_object = table_object
+        self.table_schema_stream = TableSchemaStream(url_base=url_base, config=config, table_object=table_object, **kwargs)
+
+    def path(
+            self, stream_state: Mapping[str, Any] = None, stream_slice: Mapping[str, Any] = None, next_page_token: Mapping[str, Any] = None
+    ) -> str:
+        """
+            path of request
+        """
+
+        return f"{self.url_base}/{self.url_suffix}"
+
+    @property
+    def url_base(self):
+        return self._url_base
+
+    @property
+    def statement(self):
+        database = self.config["database"]
+        schema = self.table_object["schema"]
+        table = self.table_object["table"]
+
+        return f"SELECT * FROM {database}.{schema}.{table}"
+
+    def request_body_json(
+            self,
+            stream_state: Optional[Mapping[str, Any]],
+            stream_slice: Optional[Mapping[str, Any]] = None,
+            next_page_token: Optional[Mapping[str, Any]] = None,
+    ) -> Optional[Mapping[str, Any]]:
+        json_payload = {
+            "statement": self.statement,
+            "role": self.config['role'],
+            "warehouse": self.config['warehouse'],
+            "database": self.config['database'],
+            "timeout": "1000",
+        }
+
+        if self.table_object["schema"]:
+            json_payload['schema'] = self.table_object["schema"]
+
+        return json_payload
+
+    def parse_response(self, response: requests.Response, **kwargs) -> Iterable[Mapping]:
+        """
+        :return an iterable containing each record in the response
+        """
+        response_json = response.json()
+        for record in response_json.get("data", []):
+            yield record
+
+    def __str__(self):
+        return f"Current stream has this table object as constructor {self.table_object}"
+
+    def get_json_schema(self) -> Mapping[str, Any]:
+        properties = {}
+        json_schema = {
+            "$schema": "https://json-schema.org/draft-07/schema#",
+            "type": "object",
+            "additionalProperties": True,
+            "properties": properties,
+        }
+
+        for column_object in self.table_schema_stream.read_records(sync_mode=SyncMode.full_refresh):
+            column_name = column_object['column_name']
+            snowflake_column_type = column_object['type'].lower()
+            # TODO: ask the answer for the default type
+            airbyte_column_type_object = mapping_snowflake_type_airbyte_type.get(snowflake_column_type, )
+            properties[column_name] = airbyte_column_type_object
+        return json_schema
