@@ -167,3 +167,84 @@ class CheckConnectionStream(SnowflakeStream):
         response_json = response.json()
         records = response_json.get("data", [])
         yield from records
+
+
+class TableCatalogStream(SnowflakeStream):
+    DATABASE_NAME_COLUMN = "name"
+    SCHEMA_NAME_COLUMN = "schema_name"
+
+    def __init__(self, url_base, config, **kwargs):
+        super().__init__(**kwargs)
+        self._url_base = url_base
+        self.config = config
+
+    def path(
+            self, stream_state: Mapping[str, Any] = None, stream_slice: Mapping[str, Any] = None, next_page_token: Mapping[str, Any] = None
+    ) -> str:
+        """
+            path of request
+        """
+
+        return f"{self.url_base}/{self.url_suffix}"
+
+    @property
+    def url_base(self):
+        return self._url_base
+
+    @property
+    def statement(self):
+        database = self.config["database"]
+        schema = self.config["schema"]
+        if not schema:
+            return f"SHOW TABLES IN DATABASE {database}"
+
+        return f"SHOW TABLES IN SCHEMA {database}.{schema}"
+
+    def request_body_json(
+            self,
+            stream_state: Optional[Mapping[str, Any]],
+            stream_slice: Optional[Mapping[str, Any]] = None,
+            next_page_token: Optional[Mapping[str, Any]] = None,
+    ) -> Optional[Mapping[str, Any]]:
+        json_payload = {
+            "statement": self.statement,
+            "role": self.config['role'],
+            "warehouse": self.config['warehouse'],
+            "database": self.config['database'],
+            "timeout": "1000",
+        }
+        if self.config['schema']:
+            json_payload['schema'] = self.config['schema']
+        return json_payload
+
+
+    @classmethod
+    def get_index_of_columns_from_names(cls, metadata_object: Mapping[Any, any], column_names: Iterable[str]) -> Mapping[str, Any]:
+        mapping_column_name_to_index = {column_name: -1 for column_name in column_names}
+        for current_index, column_object in enumerate(metadata_object["resultSetMetaData"]["rowType"]):
+            for column_name in mapping_column_name_to_index:
+                if column_object['name'] == column_name:
+                    mapping_column_name_to_index[column_name] = current_index
+
+        column_name_index_updated_filter = [0 if key_word_index == -1 else 1 for key_word_index in mapping_column_name_to_index.values()]
+
+        if not all(column_name_index_updated_filter):
+            raise ValueError('At least one index of column names is not updated. The error might a wrong key word '
+                             'or a change in the naming of keys in resultSetMetaData of Snowflake API')
+
+        return mapping_column_name_to_index
+
+    def parse_response(self, response: requests.Response, **kwargs) -> Iterable[Mapping]:
+        """
+        :return an iterable containing each record in the response
+        """
+        response_json = response.json()
+        column_names_to_be_extracted_from_records = [self.DATABASE_NAME_COLUMN, self.SCHEMA_NAME_COLUMN]
+        index_of_columns_from_names = self.get_index_of_columns_from_names(response_json, column_names_to_be_extracted_from_records)
+
+        database_name_index = index_of_columns_from_names[self.DATABASE_NAME_COLUMN]
+        schema_name_index = index_of_columns_from_names[self.SCHEMA_NAME_COLUMN]
+
+        for record in response_json.get("data", []):
+            yield {'schema': record[schema_name_index],
+                   'table': record[database_name_index]}
