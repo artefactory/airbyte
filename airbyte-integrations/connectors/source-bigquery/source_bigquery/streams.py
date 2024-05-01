@@ -73,13 +73,13 @@ class BigqueryStream(HttpStream, ABC):
             rows = data.get("f")
             yield {
                 "_bigquery_table_id": record.get("tableReference")["tableId"],
-                "_bigquery_created_time": record.get("creationTime"),
+                "_bigquery_created_time": record.get("creationTime"), #TODO: Update this to row insertion time
                 **{element["name"]: SchemaHelpers.format_field(rows[fields.index(element)]["v"], element["type"]) for element in fields},
             }
 
     def parse_response(self, response: requests.Response, **kwargs) -> Iterable[Mapping]:
-        records = response.json()
-        yield from self.process_records(records)
+        record = response.json()
+        yield from self.process_records(record)
 
     def path(self, **kwargs) -> str:
         return self.stream_path
@@ -201,7 +201,7 @@ class TableQueryResult(BigqueryStream):
         self.parent_stream = parent_stream
         self.where_clause = where_clause
         super().__init__(self.path(), self.name, self.get_json_schema(), **kwargs)
-
+    
     def path(self, **kwargs) -> str:
         """
         Documentation: https://cloud.google.com/bigquery/docs/reference/rest/v2/jobs/query
@@ -229,15 +229,14 @@ class TableQueryResult(BigqueryStream):
             }
         
         return request_body
-    
+
     def parse_response(self, response: requests.Response, **kwargs) -> Iterable[Mapping]:
         """
         Override this method to define how a response is parsed.
         :return an iterable containing each record in the response
         """
-        records = response.json().get("rows")
-        for record in records:
-            yield record
+        record = response.json()
+        yield record
 
 
 # Basic incremental stream
