@@ -19,7 +19,7 @@ from airbyte_cdk.logger import AirbyteLogger
 from airbyte_cdk.utils.traced_exception import AirbyteTracedException, FailureType
 
 from .auth import BigqueryAuth
-from .streams import BigqueryDatasets, BigqueryTables, BigqueryStream, BigqueryTable, BigqueryTableData, TableQueryResult
+from .streams import BigqueryDatasets, BigqueryTables, BigqueryStream, BigqueryTable, BigqueryTableData, TableQueryResult, BigqueryResultStream
 from .schema_helpers import SchemaHelpers
 
 """
@@ -91,7 +91,6 @@ class SourceBigquery(AbstractSource):
         """
         auth = self._auth or BigqueryAuth(config)
         streams = config.get("streams", [])
-
         if streams:
             for stream in streams:
                 parent_stream = stream['parent_stream']
@@ -105,7 +104,7 @@ class SourceBigquery(AbstractSource):
                                     f"{stream_name}",
                                     SchemaHelpers.get_json_schema(sub_table),
                                 ),
-                                "table_data": None
+                                "stream_data": sub_tables.request_body_json(stream_state=None)
                             }
                         )
         # list all tables available for authenticated account
@@ -126,7 +125,7 @@ class SourceBigquery(AbstractSource):
                                     f"{dataset_id}/{table_id}",
                                     SchemaHelpers.get_json_schema(table),
                                 ),
-                                "table_data": data_obj
+                                "stream_data": data_obj
                             }
                         )
         return AirbyteCatalog(streams=[stream["stream"] for stream in self.streams_catalog])
@@ -138,19 +137,23 @@ class SourceBigquery(AbstractSource):
         :param config: A Mapping of the user input configuration as defined in the connector spec.
         """
         self._auth = BigqueryAuth(config)
-
         if not self.streams_catalog:
             self.discover(self.logger, config)
-        
         for stream in self.streams_catalog:
-            if "streams" in config.keys():
-                pass
+            if config.get("streams", []):
+                yield BigqueryResultStream(
+                    stream_path=stream["stream_path"],
+                    stream_name=stream["stream"].name,
+                    stream_schema=stream["stream"].json_schema,
+                    stream_request=stream["stream_data"],
+                    authenticator=self._auth,
+                )
             else:
                 yield BigqueryStream(
                     stream_path=stream["stream_path"],
                     stream_name=stream["stream"].name,
                     stream_schema=stream["stream"].json_schema,
-                    stream_data=stream["table_data"],
+                    stream_data=stream["stream_data"],
                     authenticator=self._auth,
                 )
         
