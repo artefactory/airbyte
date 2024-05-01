@@ -196,8 +196,10 @@ class TableQueryResult(BigqueryStream):
     """ 
     name = "query_results"
 
-    def __init__(self, project_id: list, **kwargs):
+    def __init__(self, project_id: list, parent_stream: str, where_clause: str, **kwargs):
         self.project_id = project_id
+        self.parent_stream = parent_stream
+        self.where_clause = where_clause
         super().__init__(self.path(), self.name, self.get_json_schema(), **kwargs)
 
     def path(self, **kwargs) -> str:
@@ -209,14 +211,24 @@ class TableQueryResult(BigqueryStream):
     def get_json_schema(self) -> Mapping[str, Any]:
         return {}
     
+    @property
+    def http_method(self) -> str:
+        return "POST"
+    
     def request_body_json(
         self,
         stream_state: Optional[Mapping[str, Any]],
         stream_slice: Optional[Mapping[str, Any]] = None,
         next_page_token: Optional[Mapping[str, Any]] = None,
     ) -> Optional[Mapping[str, Any]]:
+        query_string = f"select * from {self.parent_stream} where {self.where_clause}"
+        request_body = {
+            "kind": "bigquery#queryRequest",
+            "query": query_string,
+            "useLegacySql": False
+            }
         
-        return {}
+        return request_body
     
     def parse_response(self, response: requests.Response, **kwargs) -> Iterable[Mapping]:
         """
