@@ -191,7 +191,39 @@ class BigqueryTableData(BigqueryTable):
             yield record
     
 
-class TableQueryResult(BigqueryStream):
+class BigqueryResultStream(BigqueryStream):
+    """
+    """ 
+    def __init__(self, stream_path: str, stream_name: str, stream_schema, stream_request=None, stream_data=None, **kwargs):
+        self.request_body = stream_request
+        super().__init__(stream_path, stream_name, stream_schema, stream_data, **kwargs)
+
+    @property
+    def http_method(self) -> str:
+        return "POST"
+
+    def request_body_json(
+        self,
+        stream_state: Optional[Mapping[str, Any]],
+        stream_slice: Optional[Mapping[str, Any]] = None,
+        next_page_token: Optional[Mapping[str, Any]] = None,
+    ) -> Optional[Mapping[str, Any]]:
+        return self.request_body
+    
+    def process_records(self, record) -> Iterable[Mapping[str, Any]]:
+        fields = record.get("schema")["fields"]
+        stream_data = record.get("rows")
+
+        for data in stream_data:
+            rows = data.get("f")
+            yield {
+                "_bigquery_table_id": record.get("jobReference")["jobId"],
+                "_bigquery_created_time": None, #TODO: Update this to row insertion time
+                **{element["name"]: SchemaHelpers.format_field(rows[fields.index(element)]["v"], element["type"]) for element in fields},
+            }
+    
+
+class TableQueryResult(BigqueryResultStream):
     """  
     """ 
     name = "query_results"
@@ -210,10 +242,6 @@ class TableQueryResult(BigqueryStream):
 
     def get_json_schema(self) -> Mapping[str, Any]:
         return {}
-    
-    @property
-    def http_method(self) -> str:
-        return "POST"
     
     def request_body_json(
         self,
