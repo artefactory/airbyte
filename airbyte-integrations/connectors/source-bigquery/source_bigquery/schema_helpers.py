@@ -62,7 +62,7 @@ class SchemaHelpers:
             "_bigquery_created_time": SchemaTypes.string
         }
 
-        fields: Dict = table.get("schema", {})["fields"]
+        fields: Dict = table.get("schema")["fields"]
 
         for field in fields:
             name: str = field.get("name")
