@@ -209,6 +209,15 @@ class TableQueryResult(BigqueryStream):
     def get_json_schema(self) -> Mapping[str, Any]:
         return {}
     
+    def request_body_json(
+        self,
+        stream_state: Optional[Mapping[str, Any]],
+        stream_slice: Optional[Mapping[str, Any]] = None,
+        next_page_token: Optional[Mapping[str, Any]] = None,
+    ) -> Optional[Mapping[str, Any]]:
+        
+        return {}
+    
     def parse_response(self, response: requests.Response, **kwargs) -> Iterable[Mapping]:
         """
         Override this method to define how a response is parsed.
