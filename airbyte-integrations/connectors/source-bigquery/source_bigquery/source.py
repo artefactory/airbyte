@@ -121,7 +121,7 @@ class SourceBigquery(AbstractSource):
         self._auth = BigqueryAuth(config)
 
         if not self.streams_catalog:
-            self.discover(None, config)
+            self.discover(self.logger, config)
         for stream in self.streams_catalog:
             yield BigqueryStream(
                 stream_path=stream["stream_path"],
