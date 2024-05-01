@@ -19,7 +19,7 @@ from airbyte_cdk.logger import AirbyteLogger
 from airbyte_cdk.utils.traced_exception import AirbyteTracedException, FailureType
 
 from .auth import BigqueryAuth
-from .streams import BigqueryDatasets, BigqueryTables, BigqueryStream, BigqueryTable, BigqueryTableData
+from .streams import BigqueryDatasets, BigqueryTables, BigqueryStream, BigqueryTable, BigqueryTableData, TableQueryResult
 from .schema_helpers import SchemaHelpers
 
 """
@@ -90,26 +90,45 @@ class SourceBigquery(AbstractSource):
         Retrieve: Bases, Tables from each Base, generate JSON Schema for each table.
         """
         auth = self._auth or BigqueryAuth(config)
-        # list all bases available for authenticated account
-        for dataset in BigqueryDatasets(project_id=config["project_id"], authenticator=auth).read_records(sync_mode=SyncMode.full_refresh):
-            dataset_id = dataset.get("datasetReference")["datasetId"]
-            # list and process each table under each base to generate the JSON Schema
-            for table_info in BigqueryTables(dataset_id=dataset_id, project_id=config["project_id"], authenticator=auth).read_records(sync_mode=SyncMode.full_refresh):
-                table_id = table_info.get("tableReference")["tableId"]
-                table_obj = BigqueryTable(dataset_id=dataset_id, project_id=config["project_id"], table_id=table_id, authenticator=auth)
+        streams = config.get("streams", [])
 
-                for table in table_obj.read_records(sync_mode=SyncMode.full_refresh):
-                    data_obj = BigqueryTableData(dataset_id=dataset_id, project_id=config["project_id"], table_id=table_id, authenticator=auth)
+        if streams:
+            for stream in streams:
+                parent_stream = stream['parent_stream']
+                stream_name = stream["name"]
+                sub_tables = TableQueryResult(project_id=config["project_id"], parent_stream=parent_stream, where_clause=stream["where_clause"], authenticator=auth)
+                for sub_table in sub_tables.read_records(sync_mode=SyncMode.full_refresh):
                     self.streams_catalog.append(
-                        {
-                            "stream_path": f"{table_obj.path()}",
-                            "stream": SchemaHelpers.get_airbyte_stream(
-                                f"{dataset_id}/{table_id}",
-                                SchemaHelpers.get_json_schema(table),
-                            ),
-                            "table_data": data_obj
-                        }
-                    )
+                            {
+                                "stream_path": f"{sub_tables.path()}",
+                                "stream": SchemaHelpers.get_airbyte_stream(
+                                    f"{stream_name}",
+                                    SchemaHelpers.get_json_schema(sub_table),
+                                ),
+                                "table_data": None
+                            }
+                        )
+        # list all tables available for authenticated account
+        else:
+            for dataset in BigqueryDatasets(project_id=config["project_id"], authenticator=auth).read_records(sync_mode=SyncMode.full_refresh):
+                dataset_id = dataset.get("datasetReference")["datasetId"]
+                # list and process each table under each base to generate the JSON Schema
+                for table_info in BigqueryTables(dataset_id=dataset_id, project_id=config["project_id"], authenticator=auth).read_records(sync_mode=SyncMode.full_refresh):
+                    table_id = table_info.get("tableReference")["tableId"]
+                    table_obj = BigqueryTable(dataset_id=dataset_id, project_id=config["project_id"], table_id=table_id, authenticator=auth)
+
+                    for table in table_obj.read_records(sync_mode=SyncMode.full_refresh):
+                        data_obj = BigqueryTableData(dataset_id=dataset_id, project_id=config["project_id"], table_id=table_id, authenticator=auth)
+                        self.streams_catalog.append(
+                            {
+                                "stream_path": f"{table_obj.path()}",
+                                "stream": SchemaHelpers.get_airbyte_stream(
+                                    f"{dataset_id}/{table_id}",
+                                    SchemaHelpers.get_json_schema(table),
+                                ),
+                                "table_data": data_obj
+                            }
+                        )
         return AirbyteCatalog(streams=[stream["stream"] for stream in self.streams_catalog])
     
     def streams(self, config: Mapping[str, Any]) -> Iterable[Stream]:
@@ -122,12 +141,16 @@ class SourceBigquery(AbstractSource):
 
         if not self.streams_catalog:
             self.discover(self.logger, config)
+        
         for stream in self.streams_catalog:
-            yield BigqueryStream(
-                stream_path=stream["stream_path"],
-                stream_name=stream["stream"].name,
-                stream_schema=stream["stream"].json_schema,
-                stream_data=stream["table_data"],
-                authenticator=self._auth,
-            )
+            if "streams" in config.keys():
+                pass
+            else:
+                yield BigqueryStream(
+                    stream_path=stream["stream_path"],
+                    stream_name=stream["stream"].name,
+                    stream_schema=stream["stream"].json_schema,
+                    stream_data=stream["table_data"],
+                    authenticator=self._auth,
+                )
         
