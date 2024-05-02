@@ -191,15 +191,49 @@ class BigqueryTableData(BigqueryTable):
             yield record
     
 
-class TableQueryResult(BigqueryStream):
+class BigqueryResultStream(BigqueryStream):
+    """
+    """ 
+    def __init__(self, stream_path: str, stream_name: str, stream_schema, stream_request=None, stream_data=None, **kwargs):
+        self.request_body = stream_request
+        super().__init__(stream_path, stream_name, stream_schema, stream_data, **kwargs)
+
+    @property
+    def http_method(self) -> str:
+        return "POST"
+
+    def request_body_json(
+        self,
+        stream_state: Optional[Mapping[str, Any]],
+        stream_slice: Optional[Mapping[str, Any]] = None,
+        next_page_token: Optional[Mapping[str, Any]] = None,
+    ) -> Optional[Mapping[str, Any]]:
+        return self.request_body
+    
+    def process_records(self, record) -> Iterable[Mapping[str, Any]]:
+        fields = record.get("schema")["fields"]
+        stream_data = record.get("rows")
+
+        for data in stream_data:
+            rows = data.get("f")
+            yield {
+                "_bigquery_table_id": record.get("jobReference")["jobId"],
+                "_bigquery_created_time": None, #TODO: Update this to row insertion time
+                **{element["name"]: SchemaHelpers.format_field(rows[fields.index(element)]["v"], element["type"]) for element in fields},
+            }
+    
+
+class TableAppendsResult(BigqueryResultStream):
     """  
     """ 
     name = "query_results"
 
-    def __init__(self, project_id: list, **kwargs):
+    def __init__(self, project_id: list, parent_stream: str, **kwargs):
         self.project_id = project_id
+        self.parent_stream = parent_stream
+        # self.where_clause = where_clause
         super().__init__(self.path(), self.name, self.get_json_schema(), **kwargs)
-
+    
     def path(self, **kwargs) -> str:
         """
         Documentation: https://cloud.google.com/bigquery/docs/reference/rest/v2/jobs/query
@@ -215,17 +249,22 @@ class TableQueryResult(BigqueryStream):
         stream_slice: Optional[Mapping[str, Any]] = None,
         next_page_token: Optional[Mapping[str, Any]] = None,
     ) -> Optional[Mapping[str, Any]]:
+        query_string = f"select * from APPENDS(TABLE {self.parent_stream},NULL,NULL)"
+        request_body = {
+            "kind": "bigquery#queryRequest",
+            "query": query_string,
+            "useLegacySql": False
+            }
         
-        return {}
-    
+        return request_body
+
     def parse_response(self, response: requests.Response, **kwargs) -> Iterable[Mapping]:
         """
         Override this method to define how a response is parsed.
         :return an iterable containing each record in the response
         """
-        records = response.json().get("rows")
-        for record in records:
-            yield record
+        record = response.json()
+        yield record
 
 
 # Basic incremental stream
