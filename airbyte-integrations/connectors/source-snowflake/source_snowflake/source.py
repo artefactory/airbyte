@@ -77,5 +77,5 @@ class SourceSnowflake(AbstractSource):
                                                   config=config,
                                                   authenticator=authenticator)
 
-        return [TableStream(url_base=url_base, config=config, authenticator=authenticator, table_object=table_object)
+        yield from [TableStream(url_base=url_base, config=config, authenticator=authenticator, table_object=table_object)
                 for table_object in table_catalog_stream.read_records(sync_mode=SyncMode.full_refresh)]
