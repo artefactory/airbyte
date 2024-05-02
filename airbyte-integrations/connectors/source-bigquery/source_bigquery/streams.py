@@ -31,7 +31,8 @@ The approach here is not authoritative, and devs are free to use their own judge
 There are additional required TODOs in the files within the integration_tests folder and the spec.yaml file.
 """
 URL_BASE: str = "https://bigquery.googleapis.com"
-    
+
+CHANGE_FIELDS = {"_CHANGE_TIMESTAMP": "change_timestamp", "_CHANGE_TYPE": "change_type"}
 
 class BigqueryStream(HttpStream, ABC):
     """
@@ -270,15 +271,13 @@ class BigqueryIncrementalStream(BigqueryResultStream, IncrementalMixin):
     """
     """ 
     _state = {}
-    cursor_field = "_CHANGE_TIMESTAMP"
+    cursor_field = "change_timestamp"
     # TODO: Fill in the primary key. Required. This is usually a unique field in the stream, like an ID or a timestamp.
     primary_key = "id"
     state_checkpoint_interval = 3
 
     @property
     def name(self):
-        # import ipdb
-        # ipdb.set_trace()
         return self.stream_name
     
     @property
@@ -288,6 +287,18 @@ class BigqueryIncrementalStream(BigqueryResultStream, IncrementalMixin):
     @state.setter
     def state(self, value):
         self._state[self.cursor_field] = value[self.cursor_field]
+
+    def process_records(self, record) -> Iterable[Mapping[str, Any]]:
+        fields = record.get("schema")["fields"]
+        stream_data = record.get("rows")
+
+        for data in stream_data:
+            rows = data.get("f")
+            yield {
+                "_bigquery_table_id": record.get("jobReference")["jobId"],
+                "_bigquery_created_time": None, #TODO: Update this to row insertion time
+                **{CHANGE_FIELDS.get(element["name"], element["name"]): SchemaHelpers.format_field(rows[fields.index(element)]["v"], element["type"]) for element in fields},
+            }
 
 
 class TableAppendsResult(TableQueryResult):
