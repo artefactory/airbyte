@@ -10,6 +10,7 @@ from airbyte_cdk.models import AirbyteStream
 from airbyte_cdk.models.airbyte_protocol import DestinationSyncMode, SyncMode
 
 logger: logging.Logger = logging.getLogger("airbyte")
+CHANGE_FIELDS = {"_CHANGE_TIMESTAMP": "change_timestamp", "_CHANGE_TYPE": "change_type"}
 
 
 class SchemaTypes:
@@ -62,10 +63,9 @@ class SchemaHelpers:
             "_bigquery_created_time": SchemaTypes.string
         }
 
-        fields: Dict = table.get("schema", {})["fields"]
-
+        fields: Dict = table.get("schema")["fields"]
         for field in fields:
-            name: str = field.get("name")
+            name: str = CHANGE_FIELDS.get(field.get("name"), field.get("name"))
             original_type: str = field.get("type")
             # mode: str = field.get("mode")
             # field_type: str = field.get("type")
@@ -98,7 +98,7 @@ class SchemaHelpers:
         return AirbyteStream(
             name=stream_name,
             json_schema=json_schema,
-            supported_sync_modes=[SyncMode.full_refresh],
+            supported_sync_modes=[SyncMode.full_refresh, SyncMode.incremental],
             supported_destination_sync_modes=[DestinationSyncMode.overwrite, DestinationSyncMode.append, DestinationSyncMode.append_dedup],
         )
     
