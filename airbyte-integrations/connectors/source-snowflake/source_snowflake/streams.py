@@ -139,7 +139,7 @@ class CheckConnectionStream(SnowflakeStream):
         TODO: Validate that the streams in the pushdown filter configuration are available
         """
         database = self.config["database"]
-        schema = self.config["schema"]
+        schema = self.config.get('schema', "")
         if not schema:
             return f"SHOW TABLES IN DATABASE {database}"
 
@@ -158,8 +158,9 @@ class CheckConnectionStream(SnowflakeStream):
             "database": self.config['database'],
             "timeout": "1000",
         }
-        if self.config['schema']:
-            json_payload['schema'] = self.config['schema']
+        schema = self.config.get('schema', '')
+        if schema:
+            json_payload['schema'] = schema
         return json_payload
 
     def parse_response(self, response: requests.Response, **kwargs) -> Iterable[Mapping]:
@@ -196,7 +197,7 @@ class TableCatalogStream(SnowflakeStream):
     @property
     def statement(self):
         database = self.config["database"]
-        schema = self.config["schema"]
+        schema = self.config.get('schema', '')
         if not schema:
             return f"SHOW TABLES IN DATABASE {database}"
 
@@ -215,10 +216,10 @@ class TableCatalogStream(SnowflakeStream):
             "database": self.config['database'],
             "timeout": "1000",
         }
-        if self.config['schema']:
-            json_payload['schema'] = self.config['schema']
+        schema = self.config.get('schema', '')
+        if schema:
+            json_payload['schema'] = schema
         return json_payload
-
     @classmethod
     def get_index_of_columns_from_names(cls, metadata_object: Mapping[Any, any], column_names: Iterable[str]) -> Mapping[str, Any]:
         mapping_column_name_to_index = {column_name: -1 for column_name in column_names}
@@ -293,9 +294,9 @@ class TableSchemaStream(SnowflakeStream):
             "timeout": "1000",
         }
 
-        if self.table_object["schema"]:
-            json_payload['schema'] = self.table_object["schema"]
-
+        schema = self.table_object.get('schema', '')
+        if schema:
+            json_payload['schema'] = schema
         return json_payload
 
     def parse_response(self, response: requests.Response, **kwargs) -> Iterable[Mapping]:
@@ -320,6 +321,11 @@ class TableStream(SnowflakeStream):
         self.config = config
         self.table_object = table_object
         self.table_schema_stream = TableSchemaStream(url_base=url_base, config=config, table_object=table_object, **kwargs)
+
+    @property
+    def name(self):
+        # TODO replace with id
+        return f"{self.table_object['schema']}.{self.table_object['table']}"
 
     def path(
             self, stream_state: Mapping[str, Any] = None, stream_slice: Mapping[str, Any] = None, next_page_token: Mapping[str, Any] = None
@@ -356,8 +362,9 @@ class TableStream(SnowflakeStream):
             "timeout": "1000",
         }
 
-        if self.table_object["schema"]:
-            json_payload['schema'] = self.table_object["schema"]
+        schema = self.table_object.get('schema', '')
+        if schema:
+            json_payload['schema'] = schema
 
         return json_payload
 
@@ -366,8 +373,11 @@ class TableStream(SnowflakeStream):
         :return an iterable containing each record in the response
         """
         response_json = response.json()
+        ordered_column_names = [row_type['name'] for row_type in
+                                response_json.get('resultSetMetaData', {'rowType': []}).get('rowType', [])]
+        response_json.get("data", [])
         for record in response_json.get("data", []):
-            yield record
+            yield {column_name: column_value for column_name, column_value in zip(ordered_column_names, record)}
 
     def __str__(self):
         return f"Current stream has this table object as constructor {self.table_object}"
