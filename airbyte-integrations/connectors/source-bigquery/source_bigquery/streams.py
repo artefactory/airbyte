@@ -10,7 +10,7 @@ from typing import Any, Iterable, List, Mapping, MutableMapping, Optional, Tuple
 import requests
 from datetime import datetime
 from airbyte_cdk.sources import AbstractSource
-from airbyte_cdk.sources.streams import Stream
+from airbyte_cdk.sources.streams import Stream, IncrementalMixin
 from airbyte_cdk.sources.streams.http import HttpStream, HttpSubStream
 from airbyte_cdk.sources.streams.http.auth import TokenAuthenticator
 from airbyte_protocol.models import SyncMode
@@ -189,7 +189,6 @@ class BigqueryTableData(BigqueryTable):
         records = response.json().get("rows", [])
         for record in records:
             yield record
-    
 
 class BigqueryResultStream(BigqueryStream):
     """
@@ -221,17 +220,17 @@ class BigqueryResultStream(BigqueryStream):
                 "_bigquery_created_time": None, #TODO: Update this to row insertion time
                 **{element["name"]: SchemaHelpers.format_field(rows[fields.index(element)]["v"], element["type"]) for element in fields},
             }
-    
 
-class TableAppendsResult(BigqueryResultStream):
+
+class TableQueryResult(BigqueryResultStream):
     """  
     """ 
     name = "query_results"
 
-    def __init__(self, project_id: list, parent_stream: str, **kwargs):
+    def __init__(self, project_id: list, parent_stream: str, where_clause: str, **kwargs):
         self.project_id = project_id
         self.parent_stream = parent_stream
-        # self.where_clause = where_clause
+        self.where_clause = where_clause
         super().__init__(self.path(), self.name, self.get_json_schema(), **kwargs)
     
     def path(self, **kwargs) -> str:
@@ -249,7 +248,7 @@ class TableAppendsResult(BigqueryResultStream):
         stream_slice: Optional[Mapping[str, Any]] = None,
         next_page_token: Optional[Mapping[str, Any]] = None,
     ) -> Optional[Mapping[str, Any]]:
-        query_string = f"select * from APPENDS(TABLE {self.parent_stream},NULL,NULL)"
+        query_string = f"select * from {self.parent_stream} where {self.where_clause}"
         request_body = {
             "kind": "bigquery#queryRequest",
             "query": query_string,
@@ -258,6 +257,75 @@ class TableAppendsResult(BigqueryResultStream):
         
         return request_body
 
+    def parse_response(self, response: requests.Response, **kwargs) -> Iterable[Mapping]:
+        """
+        Override this method to define how a response is parsed.
+        :return an iterable containing each record in the response
+        """
+        record = response.json()
+        yield record
+    
+
+class BigqueryIncrementalStream(BigqueryResultStream, IncrementalMixin):
+    """
+    """ 
+    _state = {}
+    cursor_field = "_CHANGE_TIMESTAMP"
+    # TODO: Fill in the primary key. Required. This is usually a unique field in the stream, like an ID or a timestamp.
+    primary_key = "id"
+    state_checkpoint_interval = 3
+
+    @property
+    def name(self):
+        # import ipdb
+        # ipdb.set_trace()
+        return self.stream_name
+    
+    @property
+    def state(self):
+        return self._state
+    
+    @state.setter
+    def state(self, value):
+        self._state[self.cursor_field] = value[self.cursor_field]
+
+
+class TableAppendsResult(TableQueryResult):
+    """  
+    """ 
+    name = "appends_results"
+    # cursor_field = "_CHANGE_TIMESTAMP"
+    # # TODO: Fill in the primary key. Required. This is usually a unique field in the stream, like an ID or a timestamp.
+    # primary_key = "id"
+    # state_checkpoint_interval = 3
+
+    def __init__(self, project_id: list, dataset_id: str, table_id: str, **kwargs):
+        self.project_id = project_id
+        self.parent_stream = dataset_id + "." + table_id
+        super().__init__(project_id, self.parent_stream, "", **kwargs)
+    
+    # def get_updated_state(self, current_stream_state: MutableMapping[str, Any], latest_record: Mapping[str, Any]) -> Mapping[str, Any]:
+    #     """
+    #     Override to determine the latest state after reading the latest record. This typically compared the cursor_field from the latest record and
+    #     the current state and picks the 'most' recent cursor. This is how a stream's state is determined. Required for incremental.
+    #     """
+    #     return {}
+    
+    def request_body_json(
+        self,
+        stream_state: Optional[Mapping[str, Any]],
+        stream_slice: Optional[Mapping[str, Any]] = None,
+        next_page_token: Optional[Mapping[str, Any]] = None,
+    ) -> Optional[Mapping[str, Any]]:
+        query_string = f"select * from APPENDS(TABLE {self.parent_stream},NULL,NULL)"
+        request_body = {
+            "kind": "bigquery#queryRequest",
+            "query": query_string,
+            "useLegacySql": False
+            }
+        
+        return request_body
+    
     def parse_response(self, response: requests.Response, **kwargs) -> Iterable[Mapping]:
         """
         Override this method to define how a response is parsed.
