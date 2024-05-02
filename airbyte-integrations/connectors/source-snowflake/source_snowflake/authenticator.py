@@ -29,11 +29,13 @@ class SnowflakeJwtAuthenticator(JwtAuthenticator):
     @classmethod
     def from_config(cls, config):
         sub = cls.get_formatted_account(config['host'], config["credentials"]['user_name'])
+        formatted_private_key = cls._format_private_key(config["credentials"]['private_key'])
+        public_key_finger_print = cls.calculate_public_key_fingerprint(formatted_private_key, sub)
         kwargs = {"config": {},
                   "algorithm": JwtAlgorithm.RS256,
-                  "iss": cls.calculate_public_key_fingerprint(config["credentials"]['private_key'], sub),
+                  "iss": public_key_finger_print,
                   "sub": sub,
-                  "secret_key": config["credentials"]['private_key'],
+                  "secret_key": formatted_private_key,
                   'parameters': {},
                   'token_duration': cls.TOKEN_DURATION}
         return cls(**kwargs)
@@ -60,13 +62,12 @@ class SnowflakeJwtAuthenticator(JwtAuthenticator):
         :param private_key: private key string
         :return: public key fingerprint
         """
-
-        private_key = load_pem_private_key(str.encode(private_key),
+        private_key_object = load_pem_private_key(private_key.encode(),
                                            None,
                                            default_backend())
 
         # Get the raw bytes of public key.
-        public_key_raw = private_key.public_key().public_bytes(Encoding.DER, PublicFormat.SubjectPublicKeyInfo)
+        public_key_raw = private_key_object.public_key().public_bytes(Encoding.DER, PublicFormat.SubjectPublicKeyInfo)
 
         # Get the sha256 hash of the raw bytes.
         sha256hash = hashlib.sha256()
@@ -76,3 +77,14 @@ class SnowflakeJwtAuthenticator(JwtAuthenticator):
         public_key_fp = f"{sub}.SHA256:{base64.b64encode(sha256hash.digest()).decode('utf-8')}"
 
         return public_key_fp
+
+    @classmethod
+    def _format_private_key(cls, private_key: Text):
+        start_private_key = "-----BEGIN PRIVATE KEY-----"
+        end_private_key = "-----END PRIVATE KEY-----"
+        content = private_key.split(start_private_key)[1].split(end_private_key)[0]
+        content = content.replace(' ', '\n')
+        return f'{start_private_key}{content}{end_private_key}'
+
+
+
