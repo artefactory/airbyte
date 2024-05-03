@@ -212,7 +212,7 @@ class BigqueryResultStream(BigqueryStream):
     
     def process_records(self, record) -> Iterable[Mapping[str, Any]]:
         fields = record.get("schema")["fields"]
-        stream_data = record.get("rows")
+        stream_data = record.get("rows", [])
 
         for data in stream_data:
             rows = data.get("f")
