@@ -1,6 +1,7 @@
 #
 # Copyright (c) 2024 Airbyte, Inc., all rights reserved.
 #
+import urllib
 import uuid
 from abc import ABC
 from typing import Any, Iterable, List, Mapping, MutableMapping, Optional, Tuple, Union
@@ -41,21 +42,17 @@ class SourceSnowflake(AbstractSource):
 
         check_connection_stream = CheckConnectionStream(url_base=url_base, config=config, authenticator=authenticator)
         try:
-            records = check_connection_stream.read_records(sync_mode=SyncMode.full_refresh)
-            next(records)
-        except StopIteration:
-            error_message = "There is no stream available for the connection specification provided"
-            raise StopIteration(error_message)
+            check_connection_stream.read_records(sync_mode=SyncMode.full_refresh)
         except requests.exceptions.HTTPError as error:
-            error_message = error.__str__()
-            error_code = error.args[0]
-            if error_code == 412:
-                error_message = ("SQL execution error for check.\n"
-                                 "The origin of the error is very likely to be:\n"
-                                 "- The configuration provided does not have enough permissions to access the requested database/schema.\n"
-                                 "- The configuration is not consistent (example: schema not present is database.")
-            raise requests.exceptions.HTTPError(error_message)
+            if error.response.status_code == 400:
+                error_response = error.response.json()
+                error_message = error_response.get('message', '').lower()
+                if error_message.startswith("statement") and error_message.endswith("not found"):
+                    return True, None
 
+            if error.response.status_code == 401:
+                return False, "You have an issue in your configuration or you do not have access to the requested resource"
+            raise error
         return True, None
 
     @classmethod
