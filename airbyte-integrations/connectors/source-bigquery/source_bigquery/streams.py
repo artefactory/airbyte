@@ -13,7 +13,7 @@ from airbyte_cdk.sources import AbstractSource
 from airbyte_cdk.sources.streams import Stream, IncrementalMixin
 from airbyte_cdk.sources.streams.http import HttpStream, HttpSubStream
 from airbyte_cdk.sources.streams.http.auth import TokenAuthenticator
-from airbyte_protocol.models import SyncMode
+from airbyte_protocol.models import SyncMode, Type
 from airbyte_cdk.models import AirbyteCatalog, AirbyteMessage, AirbyteStateMessage, ConfiguredAirbyteCatalog
 from airbyte_cdk.logger import AirbyteLogger
 from airbyte_cdk.utils.traced_exception import AirbyteTracedException, FailureType
@@ -212,7 +212,7 @@ class BigqueryResultStream(BigqueryStream):
     
     def process_records(self, record) -> Iterable[Mapping[str, Any]]:
         fields = record.get("schema")["fields"]
-        stream_data = record.get("rows")
+        stream_data = record.get("rows", [])
 
         for data in stream_data:
             rows = data.get("f")
@@ -270,28 +270,97 @@ class TableQueryResult(BigqueryResultStream):
 class BigqueryIncrementalStream(BigqueryResultStream, IncrementalMixin):
     """
     """ 
-    _state = {}
-    cursor_field = "change_timestamp"
-    # TODO: Fill in the primary key. Required. This is usually a unique field in the stream, like an ID or a timestamp.
+    # _state = {}
+    # cursor_field = "change_timestamp"
     primary_key = "id"
-    state_checkpoint_interval = 3
-
+    state_checkpoint_interval = None
+    
+    def __init__(self, stream_path, stream_name, stream_schema, stream_request, **kwargs):
+        super().__init__(stream_path, stream_name, stream_schema, stream_request, **kwargs)
+        # self.config = config
+        self._cursor = None
+        # self._state = {self.cursor_field: "2024-04-26T10:51:26.154000"}
+        
     @property
     def name(self):
         return self.stream_name
     
     @property
+    def namespace(self):
+        return self.stream_name
+    
+    @property
+    def cursor_field(self) -> str:
+        """
+        Name of the field in the API response body used as cursor.
+        """
+        return "change_timestamp"
+    
+    @property
     def state(self):
-        return self._state
+        return {
+            self.cursor_field: self._cursor,
+        }
+    # @property
+    # def state(self):
+    #     return self._state
     
     @state.setter
     def state(self, value):
-        self._state[self.cursor_field] = value[self.cursor_field]
+        self._cursor = value[self.cursor_field]
+        # self._state[self.cursor_field] = value[self.cursor_field]
 
+    # def get_updated_state(self, current_stream_state: MutableMapping[str, Any], latest_record: Mapping[str, Any]) -> Mapping[str, Any]:
+    #     """
+    #     Override to determine the latest state after reading the latest record. This typically compared the cursor_field from the latest record and
+    #     the current state and picks the 'most' recent cursor. This is how a stream's state is determined. Required for incremental.
+    #     """
+    #     # import ipdb
+    #     # ipdb.set_trace()
+    #     # self._state = {self.cursor_field: "2024-04-26T10:51:26.154000"}
+    #     latest_record_state = latest_record[self.cursor_field]
+    #     stream_state = current_stream_state.get(self.cursor_field)
+    #     # import ipdb
+    #     # ipdb.set_trace()
+    #     if stream_state:
+    #         self._cursor = max(latest_record_state, stream_state)
+    #         return {self.cursor_field: max(latest_record_state, stream_state)}
+    #     # self._state = {self.cursor_field: "2024-04-26T10:51:26.154000"}
+    #     self._cursor = latest_record_state
+    #     return {self.cursor_field: latest_record_state} #latest_record_state
+    
+    def stream_slices(self, stream_state: Mapping[str, Any] = None, **kwargs) -> Iterable[Optional[Mapping[str, any]]]:
+        start_date = None
+        if stream_state:
+            start_date = stream_state.get(self.cursor_field) #or self._state.get(self.cursor_field)
+
+        yield {
+                "start_date" : start_date
+            }
+
+    def request_body_json(
+        self,
+        stream_state: Optional[Mapping[str, Any]],
+        stream_slice: Optional[Mapping[str, Any]] = None,
+        next_page_token: Optional[Mapping[str, Any]] = None,
+    ) -> Optional[Mapping[str, Any]]:
+        query_string = f"select * from APPENDS(TABLE {self.stream_name},NULL,NULL)"
+        if stream_slice:
+            start_date = stream_slice.get("start_date")
+            if start_date:
+                query_string = f"select * from APPENDS(TABLE {self.stream_name},'{start_date}',NULL)"
+    
+        request_body = {
+            "kind": "bigquery#queryRequest",
+            "query": query_string,
+            "useLegacySql": False
+            }
+        
+        return request_body
+    
     def process_records(self, record) -> Iterable[Mapping[str, Any]]:
         fields = record.get("schema")["fields"]
-        stream_data = record.get("rows")
-
+        stream_data = record.get("rows", [])
         for data in stream_data:
             rows = data.get("f")
             yield {
@@ -306,21 +375,14 @@ class TableAppendsResult(TableQueryResult):
     """ 
     name = "appends_results"
     # cursor_field = "_CHANGE_TIMESTAMP"
-    # # TODO: Fill in the primary key. Required. This is usually a unique field in the stream, like an ID or a timestamp.
     # primary_key = "id"
     # state_checkpoint_interval = 3
 
-    def __init__(self, project_id: list, dataset_id: str, table_id: str, **kwargs):
+    def __init__(self, project_id: list, dataset_id: str, table_id: str, start_date='NULL', **kwargs):
         self.project_id = project_id
         self.parent_stream = dataset_id + "." + table_id
+        self.start_date = start_date
         super().__init__(project_id, self.parent_stream, "", **kwargs)
-    
-    # def get_updated_state(self, current_stream_state: MutableMapping[str, Any], latest_record: Mapping[str, Any]) -> Mapping[str, Any]:
-    #     """
-    #     Override to determine the latest state after reading the latest record. This typically compared the cursor_field from the latest record and
-    #     the current state and picks the 'most' recent cursor. This is how a stream's state is determined. Required for incremental.
-    #     """
-    #     return {}
     
     def request_body_json(
         self,
