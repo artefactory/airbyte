@@ -3,8 +3,10 @@
 #
 
 import logging
+import pytz
 from copy import deepcopy
 from typing import Any, Dict
+from datetime import datetime
 
 from airbyte_cdk.models import AirbyteStream
 from airbyte_cdk.models.airbyte_protocol import DestinationSyncMode, SyncMode
@@ -104,6 +106,10 @@ class SchemaHelpers:
     
     @staticmethod
     def format_field(field, field_type):
+        if field_type == "TIMESTAMP":
+            ts=float(field)
+            dt = datetime.fromtimestamp(ts, pytz.timezone("UTC"))
+            return dt.isoformat(timespec='microseconds')
         if SIMPLE_BIGQUERY_TYPES.get(field_type) == SchemaTypes.number and field:
             # TODO: update to handle floats as well
             return int(field)
