@@ -38,7 +38,7 @@ class BigqueryStream(HttpStream, ABC):
     """
     """ 
     url_base = URL_BASE
-    primary_key = "id"
+    primary_key = None
     raise_on_http_errors = True
 
     def __init__(self, stream_path: str, stream_name: str, stream_schema, stream_data=None, **kwargs):
@@ -48,9 +48,6 @@ class BigqueryStream(HttpStream, ABC):
         self.stream_schema = stream_schema
         self.stream_data = stream_data
 
-    @property
-    def namespace(self):
-        return self.stream_name
     
     @property
     def name(self):
@@ -272,10 +269,10 @@ class BigqueryIncrementalStream(BigqueryResultStream, IncrementalMixin):
     """ 
     # _state = {}
     # cursor_field = "change_timestamp"
-    primary_key = "id"
+    primary_key = None
     state_checkpoint_interval = None
     
-    def __init__(self, stream_path, stream_name, stream_schema, stream_request, **kwargs):
+    def __init__(self, stream_path, stream_name, stream_schema, stream_request=None, **kwargs):
         super().__init__(stream_path, stream_name, stream_schema, stream_request, **kwargs)
         # self.config = config
         self._cursor = None
@@ -285,9 +282,6 @@ class BigqueryIncrementalStream(BigqueryResultStream, IncrementalMixin):
     def name(self):
         return self.stream_name
     
-    @property
-    def namespace(self):
-        return self.stream_name
     
     @property
     def cursor_field(self) -> str:
@@ -310,24 +304,20 @@ class BigqueryIncrementalStream(BigqueryResultStream, IncrementalMixin):
         self._cursor = value[self.cursor_field]
         # self._state[self.cursor_field] = value[self.cursor_field]
 
-    # def get_updated_state(self, current_stream_state: MutableMapping[str, Any], latest_record: Mapping[str, Any]) -> Mapping[str, Any]:
-    #     """
-    #     Override to determine the latest state after reading the latest record. This typically compared the cursor_field from the latest record and
-    #     the current state and picks the 'most' recent cursor. This is how a stream's state is determined. Required for incremental.
-    #     """
-    #     # import ipdb
-    #     # ipdb.set_trace()
-    #     # self._state = {self.cursor_field: "2024-04-26T10:51:26.154000"}
-    #     latest_record_state = latest_record[self.cursor_field]
-    #     stream_state = current_stream_state.get(self.cursor_field)
-    #     # import ipdb
-    #     # ipdb.set_trace()
-    #     if stream_state:
-    #         self._cursor = max(latest_record_state, stream_state)
-    #         return {self.cursor_field: max(latest_record_state, stream_state)}
-    #     # self._state = {self.cursor_field: "2024-04-26T10:51:26.154000"}
-    #     self._cursor = latest_record_state
-    #     return {self.cursor_field: latest_record_state} #latest_record_state
+    def get_updated_state(self, current_stream_state: MutableMapping[str, Any], latest_record: Mapping[str, Any]) -> Mapping[str, Any]:
+        """
+        Override to determine the latest state after reading the latest record. This typically compared the cursor_field from the latest record and
+        the current state and picks the 'most' recent cursor. This is how a stream's state is determined. Required for incremental.
+        """
+        latest_record_state = latest_record[self.cursor_field]
+        stream_state = current_stream_state.get(self.cursor_field)
+        if stream_state:
+            self._cursor = max(latest_record_state, stream_state)
+            self.state = {self.cursor_field: self._cursor} 
+            return {self.cursor_field: self._cursor}
+        self._cursor = latest_record_state
+        self.state = {self.cursor_field: self._cursor} 
+        return {self.cursor_field: self._cursor}
     
     def stream_slices(self, stream_state: Mapping[str, Any] = None, **kwargs) -> Iterable[Optional[Mapping[str, any]]]:
         start_date = None
@@ -355,7 +345,6 @@ class BigqueryIncrementalStream(BigqueryResultStream, IncrementalMixin):
             "query": query_string,
             "useLegacySql": False
             }
-        
         return request_body
     
     def process_records(self, record) -> Iterable[Mapping[str, Any]]:
@@ -375,7 +364,7 @@ class TableAppendsResult(TableQueryResult):
     """ 
     name = "appends_results"
     # cursor_field = "_CHANGE_TIMESTAMP"
-    # primary_key = "id"
+    primary_key = None
     # state_checkpoint_interval = 3
 
     def __init__(self, project_id: list, dataset_id: str, table_id: str, start_date='NULL', **kwargs):
@@ -407,6 +396,16 @@ class TableAppendsResult(TableQueryResult):
         record = response.json()
         yield record
 
+    def process_records(self, record) -> Iterable[Mapping[str, Any]]:
+        fields = record.get("schema")["fields"]
+        stream_data = record.get("rows", [])
+        for data in stream_data:
+            rows = data.get("f")
+            yield {
+                "_bigquery_table_id": record.get("jobReference")["jobId"],
+                "_bigquery_created_time": None, #TODO: Update this to row insertion time
+                **{CHANGE_FIELDS.get(element["name"], element["name"]): SchemaHelpers.format_field(rows[fields.index(element)]["v"], element["type"]) for element in fields},
+            }
 
 # Basic incremental stream
 class IncrementalBigqueryDatasets(BigqueryDatasets, ABC):
