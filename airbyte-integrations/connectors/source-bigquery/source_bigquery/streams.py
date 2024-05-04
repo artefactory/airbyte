@@ -270,7 +270,7 @@ class BigqueryIncrementalStream(BigqueryResultStream, IncrementalMixin):
     # _state = {}
     # cursor_field = "change_timestamp"
     primary_key = None
-    state_checkpoint_interval = None
+    state_checkpoint_interval = 1
     
     def __init__(self, stream_path, stream_name, stream_schema, stream_request=None, **kwargs):
         super().__init__(stream_path, stream_name, stream_schema, stream_request, **kwargs)
@@ -282,13 +282,12 @@ class BigqueryIncrementalStream(BigqueryResultStream, IncrementalMixin):
     def name(self):
         return self.stream_name
     
-    
     @property
     def cursor_field(self) -> str:
         """
         Name of the field in the API response body used as cursor.
         """
-        return "change_timestamp"
+        return "id"
     
     @property
     def state(self):
@@ -303,7 +302,15 @@ class BigqueryIncrementalStream(BigqueryResultStream, IncrementalMixin):
     def state(self, value):
         self._cursor = value[self.cursor_field]
         # self._state[self.cursor_field] = value[self.cursor_field]
+    
+    @property
+    def sync_mode(self):
+        return SyncMode.incremental
 
+    @property
+    def supported_sync_modes(self):
+        return [SyncMode.incremental]
+    
     def get_updated_state(self, current_stream_state: MutableMapping[str, Any], latest_record: Mapping[str, Any]) -> Mapping[str, Any]:
         """
         Override to determine the latest state after reading the latest record. This typically compared the cursor_field from the latest record and
@@ -334,11 +341,16 @@ class BigqueryIncrementalStream(BigqueryResultStream, IncrementalMixin):
         stream_slice: Optional[Mapping[str, Any]] = None,
         next_page_token: Optional[Mapping[str, Any]] = None,
     ) -> Optional[Mapping[str, Any]]:
-        query_string = f"select * from APPENDS(TABLE {self.stream_name},NULL,NULL)"
-        if stream_slice:
-            start_date = stream_slice.get("start_date")
-            if start_date:
-                query_string = f"select * from APPENDS(TABLE {self.stream_name},'{start_date}',NULL)"
+        query_string = f"select * from {self.stream_name}"
+        # if stream_slice:
+        #     start_date = stream_slice.get("start_date")
+        #     if start_date:
+        #         query_string = f"select * from APPENDS(TABLE {self.stream_name},'{start_date}',NULL)"
+        
+        start_date = stream_state.get(self.cursor_field, None)
+        if start_date:
+            # query_string = f"select * from APPENDS(TABLE {self.stream_name},'{start_date}',NULL)"
+            query_string = f"select * from {self.stream_name} where id>={start_date}"
     
         request_body = {
             "kind": "bigquery#queryRequest",
@@ -359,34 +371,55 @@ class BigqueryIncrementalStream(BigqueryResultStream, IncrementalMixin):
             }
 
 
-class TableAppendsResult(TableQueryResult):
+class TableAppendsResult(BigqueryIncrementalStream):
     """  
     """ 
-    name = "appends_results"
+    # name = "appends_results"
     # cursor_field = "_CHANGE_TIMESTAMP"
     primary_key = None
-    # state_checkpoint_interval = 3
-
-    def __init__(self, project_id: list, dataset_id: str, table_id: str, start_date='NULL', **kwargs):
+    state_checkpoint_interval = 1
+    
+    def __init__(self, project_id: list, dataset_id: str, table_id: str, **kwargs):
         self.project_id = project_id
         self.parent_stream = dataset_id + "." + table_id
-        self.start_date = start_date
-        super().__init__(project_id, self.parent_stream, "", **kwargs)
+        # self.start_date = start_date
+        super().__init__(self.path(), self.parent_stream, self.get_json_schema(), **kwargs)
     
-    def request_body_json(
-        self,
-        stream_state: Optional[Mapping[str, Any]],
-        stream_slice: Optional[Mapping[str, Any]] = None,
-        next_page_token: Optional[Mapping[str, Any]] = None,
-    ) -> Optional[Mapping[str, Any]]:
-        query_string = f"select * from APPENDS(TABLE {self.parent_stream},NULL,NULL)"
-        request_body = {
-            "kind": "bigquery#queryRequest",
-            "query": query_string,
-            "useLegacySql": False
-            }
+    @property
+    def name(self):
+        return self.parent_stream
+    
+    @property
+    def sync_mode(self):
+        return SyncMode.incremental
+
+    @property
+    def supported_sync_modes(self):
+        return [SyncMode.incremental]
+    
+    def path(self, **kwargs) -> str:
+        """
+        Documentation: https://cloud.google.com/bigquery/docs/reference/rest/v2/jobs/query
+        """
+        return f"/bigquery/v2/projects/{self.project_id}/queries"
+
+    def get_json_schema(self) -> Mapping[str, Any]:
+        return {}
+    
+    # def request_body_json(
+    #     self,
+    #     stream_state: Optional[Mapping[str, Any]],
+    #     stream_slice: Optional[Mapping[str, Any]] = None,
+    #     next_page_token: Optional[Mapping[str, Any]] = None,
+    # ) -> Optional[Mapping[str, Any]]:
+    #     query_string = f"select * from APPENDS(TABLE {self.parent_stream},NULL,NULL)"
+    #     request_body = {
+    #         "kind": "bigquery#queryRequest",
+    #         "query": query_string,
+    #         "useLegacySql": False
+    #         }
         
-        return request_body
+    #     return request_body
     
     def parse_response(self, response: requests.Response, **kwargs) -> Iterable[Mapping]:
         """
@@ -396,16 +429,16 @@ class TableAppendsResult(TableQueryResult):
         record = response.json()
         yield record
 
-    def process_records(self, record) -> Iterable[Mapping[str, Any]]:
-        fields = record.get("schema")["fields"]
-        stream_data = record.get("rows", [])
-        for data in stream_data:
-            rows = data.get("f")
-            yield {
-                "_bigquery_table_id": record.get("jobReference")["jobId"],
-                "_bigquery_created_time": None, #TODO: Update this to row insertion time
-                **{CHANGE_FIELDS.get(element["name"], element["name"]): SchemaHelpers.format_field(rows[fields.index(element)]["v"], element["type"]) for element in fields},
-            }
+    # def process_records(self, record) -> Iterable[Mapping[str, Any]]:
+    #     fields = record.get("schema")["fields"]
+    #     stream_data = record.get("rows", [])
+    #     for data in stream_data:
+    #         rows = data.get("f")
+    #         yield {
+    #             "_bigquery_table_id": record.get("jobReference")["jobId"],
+    #             "_bigquery_created_time": None, #TODO: Update this to row insertion time
+    #             **{CHANGE_FIELDS.get(element["name"], element["name"]): SchemaHelpers.format_field(rows[fields.index(element)]["v"], element["type"]) for element in fields},
+    #         }
 
 # Basic incremental stream
 class IncrementalBigqueryDatasets(BigqueryDatasets, ABC):
