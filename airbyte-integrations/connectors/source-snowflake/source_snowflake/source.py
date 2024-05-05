@@ -4,7 +4,7 @@
 import uuid
 from abc import ABC
 from typing import Any, Iterable, List, Mapping, MutableMapping, Optional, Tuple, Union
-from .streams import SnowflakeStream, CheckConnectionStream, TableCatalogStream, TableStream
+from .streams import SnowflakeStream, CheckConnectionStream, TableCatalogStream, TableStream, PushDownFilterStream
 import requests
 from airbyte_cdk.sources import AbstractSource
 from airbyte_cdk.sources.streams import Stream
@@ -34,6 +34,12 @@ class SourceSnowflake(AbstractSource):
         if not host.endswith(self.SNOWFLAKE_URL_SUFFIX):
             error_message = f"your host is not ending with {self.SNOWFLAKE_URL_SUFFIX}"
             return False, error_message
+
+        # TODO: ask of unicity of name in pushdown filters otherwise change the way we set the name
+        if 'streams' in config and config['streams']:
+            push_down_filters_names = [stream['name'] for stream in config['streams']]
+            if len(push_down_filters_names) != len(set(push_down_filters_names)):
+                raise ValueError('There are pushdown filters with same name which is not possible')
 
         url_base = self.format_url_base(host)
 
@@ -76,6 +82,35 @@ class SourceSnowflake(AbstractSource):
         table_catalog_stream = TableCatalogStream(url_base=url_base,
                                                   config=config,
                                                   authenticator=authenticator)
+        standard_streams = {}
+        for table_object in table_catalog_stream.read_records(sync_mode=SyncMode.full_refresh):
+            standard_stream = TableStream(url_base=url_base,
+                                          config=config,
+                                          authenticator=authenticator,
+                                          table_object=table_object)
+            standard_streams[standard_stream.name] = standard_stream
 
-        yield from [TableStream(url_base=url_base, config=config, authenticator=authenticator, table_object=table_object)
-                for table_object in table_catalog_stream.read_records(sync_mode=SyncMode.full_refresh)]
+        push_down_filters_streams = []
+        if 'streams' in config and config['streams']:
+            for stream in config['streams']:
+                parent_stream_name = stream['parent_stream']
+                if parent_stream_name not in standard_streams:
+                    continue
+                parent_stream = standard_streams[parent_stream_name]
+                parent_namespace = stream['parent_namespace']
+                if parent_stream:
+                    # should we set prent namespace ?
+                    parent_stream.namespace = parent_namespace
+
+                push_down_filter_stream = PushDownFilterStream(name=stream['name'],
+                                                               url_base=url_base,
+                                                               config=config,
+                                                               where_clause=stream['where_clause'],
+                                                               parent_stream=parent_stream,
+                                                               namespace=stream['namespace'],
+                                                               authenticator=authenticator,)
+                push_down_filters_streams.append(push_down_filter_stream)
+
+        streams = [stream for stream in standard_streams.values()] + push_down_filters_streams
+
+        return streams

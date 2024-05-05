@@ -4,10 +4,9 @@ from abc import ABC
 from typing import Any, Iterable, List, Mapping, MutableMapping, Optional, Tuple, Union
 
 import requests
-from airbyte_cdk.sources.streams.http import HttpStream
+from airbyte_cdk.sources.streams.http import HttpStream, HttpSubStream
 from airbyte_protocol.models import SyncMode
 from .schema_builder import mapping_snowflake_type_airbyte_type
-
 
 """
 TODO: Most comments in this class are instructive and should be deleted after the source is implemented.
@@ -220,6 +219,7 @@ class TableCatalogStream(SnowflakeStream):
         if schema:
             json_payload['schema'] = schema
         return json_payload
+
     @classmethod
     def get_index_of_columns_from_names(cls, metadata_object: Mapping[Any, any], column_names: Iterable[str]) -> Mapping[str, Any]:
         mapping_column_name_to_index = {column_name: -1 for column_name in column_names}
@@ -316,15 +316,25 @@ class TableSchemaStream(SnowflakeStream):
 
 class TableStream(SnowflakeStream):
     def __init__(self, url_base, config, table_object, **kwargs):
-        super().__init__(**kwargs)
+        stream_filtered_kwargs = {k: v for k, v in kwargs.items() if k in SnowflakeStream.__init__.__annotations__}
+        super().__init__(**stream_filtered_kwargs)
         self._url_base = url_base
         self.config = config
         self.table_object = table_object
-        self.table_schema_stream = TableSchemaStream(url_base=url_base, config=config, table_object=table_object, **kwargs)
+        self.table_schema_stream = TableSchemaStream(url_base=url_base, config=config, table_object=table_object,
+                                                     **stream_filtered_kwargs)
+        self._namespace = None
+
+    @property
+    def namespace(self):
+        return self._namespace
+
+    @namespace.setter
+    def namespace(self, namespace):
+        self._namespace = namespace
 
     @property
     def name(self):
-        # TODO replace with id
         return f"{self.table_object['schema']}.{self.table_object['table']}"
 
     def path(
@@ -375,7 +385,6 @@ class TableStream(SnowflakeStream):
         response_json = response.json()
         ordered_column_names = [row_type['name'] for row_type in
                                 response_json.get('resultSetMetaData', {'rowType': []}).get('rowType', [])]
-        response_json.get("data", [])
         for record in response_json.get("data", []):
             yield {column_name: column_value for column_name, column_value in zip(ordered_column_names, record)}
 
@@ -394,7 +403,52 @@ class TableStream(SnowflakeStream):
         for column_object in self.table_schema_stream.read_records(sync_mode=SyncMode.full_refresh):
             column_name = column_object['column_name']
             snowflake_column_type = column_object['type'].lower()
-            # TODO: ask the answer for the default type
             airbyte_column_type_object = mapping_snowflake_type_airbyte_type.get(snowflake_column_type, )
             properties[column_name] = airbyte_column_type_object
         return json_schema
+
+
+class PushDownFilterStream(TableStream):
+    # Remark maybe change the class name
+
+    def __init__(self, name, url_base, config, where_clause, parent_stream, namespace=None, **kwargs):
+        kwargs['url_base'] = url_base
+        kwargs['config'] = config
+        kwargs['table_object'] = parent_stream.table_object
+        kwargs['table_schema_stream'] = parent_stream.table_schema_stream
+        TableStream.__init__(self, **kwargs)
+        self._name = name
+        self._namespace = namespace
+        self._url_base = url_base
+        self.config = config
+        self._table_object = parent_stream.table_object
+        self.where_clause = where_clause
+        self.table_schema_stream = parent_stream.table_schema_stream
+
+    @property
+    def name(self):
+        return f"{self._name}"
+
+    def path(
+            self, stream_state: Mapping[str, Any] = None, stream_slice: Mapping[str, Any] = None, next_page_token: Mapping[str, Any] = None
+    ) -> str:
+        """
+            path of request
+        """
+
+        return f"{self.url_base}/{self.url_suffix}"
+
+    @property
+    def url_base(self):
+        return self._url_base
+
+    @property
+    def statement(self):
+        database = self.config["database"]
+        schema = self.table_object["schema"]
+        table = self.table_object["table"]
+
+        return f"SELECT * FROM {database}.{schema}.{table} WHERE {self.where_clause}"
+
+    def __str__(self):
+        return f"Current stream has this table object as constructor: {self.table_object} and as where clause: {self.where_clause}"
