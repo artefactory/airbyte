@@ -270,7 +270,7 @@ class BigqueryIncrementalStream(BigqueryResultStream, IncrementalMixin):
     # _state = {}
     # cursor_field = "change_timestamp"
     primary_key = None
-    state_checkpoint_interval = 1
+    state_checkpoint_interval = None
     
     def __init__(self, stream_path, stream_name, stream_schema, stream_request=None, **kwargs):
         super().__init__(stream_path, stream_name, stream_schema, stream_request, **kwargs)
@@ -287,7 +287,7 @@ class BigqueryIncrementalStream(BigqueryResultStream, IncrementalMixin):
         """
         Name of the field in the API response body used as cursor.
         """
-        return "id"
+        return "_bigquery_created_time"
     
     @property
     def state(self):
@@ -304,12 +304,20 @@ class BigqueryIncrementalStream(BigqueryResultStream, IncrementalMixin):
         # self._state[self.cursor_field] = value[self.cursor_field]
     
     @property
-    def sync_mode(self):
-        return SyncMode.incremental
+    def source_defined_cursor(self) -> bool:
+        return False
 
     @property
-    def supported_sync_modes(self):
-        return [SyncMode.incremental]
+    def supports_incremental(self) -> bool:
+        return True
+    
+    # @property
+    # def sync_mode(self):
+    #     return SyncMode.incremental
+
+    # @property
+    # def supported_sync_modes(self):
+    #     return [SyncMode.incremental]
     
     def get_updated_state(self, current_stream_state: MutableMapping[str, Any], latest_record: Mapping[str, Any]) -> Mapping[str, Any]:
         """
@@ -377,7 +385,7 @@ class TableAppendsResult(BigqueryIncrementalStream):
     # name = "appends_results"
     # cursor_field = "_CHANGE_TIMESTAMP"
     primary_key = None
-    state_checkpoint_interval = 1
+    state_checkpoint_interval = None
     
     def __init__(self, project_id: list, dataset_id: str, table_id: str, **kwargs):
         self.project_id = project_id
