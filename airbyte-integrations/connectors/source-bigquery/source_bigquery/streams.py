@@ -268,35 +268,28 @@ class BigqueryIncrementalStream(BigqueryResultStream, IncrementalMixin):
     """
     """ 
     # _state = {}
-    cursor_field = "_bigquery_created_time"
+    cursor_field = "_bigquery_created_time" # TODO: test when field does not exist?
     primary_key = None
     state_checkpoint_interval = None
     
     def __init__(self, stream_path, stream_name, stream_schema, stream_request=None, **kwargs):
         super().__init__(stream_path, stream_name, stream_schema, stream_request, **kwargs)
-        # self.config = config
         self._cursor = None
-        # self._state = {self.cursor_field: "2024-04-26T10:51:26.154000"}
         
     @property
     def name(self):
         return self.stream_name
-    
     
     @property
     def state(self):
         return {
             self.cursor_field: self._cursor,
         }
-    # @property
-    # def state(self):
-    #     return self._state
     
     @state.setter
     def state(self, value):
         self.cursor_field = list(value.keys())[0]
         self._cursor = value[self.cursor_field]
-        # self._state[self.cursor_field] = value[self.cursor_field]
     
     @property
     def source_defined_cursor(self) -> bool:
@@ -305,14 +298,6 @@ class BigqueryIncrementalStream(BigqueryResultStream, IncrementalMixin):
     @property
     def supports_incremental(self) -> bool:
         return True
-    
-    # @property
-    # def sync_mode(self):
-    #     return SyncMode.incremental
-
-    # @property
-    # def supported_sync_modes(self):
-    #     return [SyncMode.incremental]
     
     def get_updated_state(self, current_stream_state: MutableMapping[str, Any], latest_record: Mapping[str, Any]) -> Mapping[str, Any]:
         """
@@ -359,7 +344,7 @@ class BigqueryIncrementalStream(BigqueryResultStream, IncrementalMixin):
         if stream_slice:
             cursor_value = stream_slice.get(self.cursor_field, None)
             if cursor_value:
-                query_string = f"select * from {self.stream_name} where {self.cursor_field}>={cursor_value}"
+                query_string = f"select * from {self.stream_name} where {self.cursor_field}>={cursor_value}" #TODO: add order by cursor_field
         # try:
         #     cursor_value = stream_state.get(self.cursor_field, None)
         #     if cursor_value:
@@ -393,7 +378,6 @@ class TableAppendsResult(BigqueryIncrementalStream):
     # name = "appends_results"
     # cursor_field = "_CHANGE_TIMESTAMP"
     primary_key = None
-    state_checkpoint_interval = None
     
     def __init__(self, project_id: list, dataset_id: str, table_id: str, **kwargs):
         self.project_id = project_id
