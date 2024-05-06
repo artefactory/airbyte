@@ -326,12 +326,11 @@ class BigqueryIncrementalStream(BigqueryResultStream, IncrementalMixin):
         elif cursor_field:
             self.cursor_field = cursor_field
 
-        cursor_value = None
         if stream_state:
-            cursor_value = stream_state.get(self.cursor_field) #or self._state.get(self.cursor_field)
+            self._cursor = stream_state.get(self.cursor_field) #or self._state.get(self.cursor_field)
 
         yield {
-                self.cursor_field : cursor_value
+                self.cursor_field : self._cursor
             }
 
     def request_body_json(
@@ -342,9 +341,9 @@ class BigqueryIncrementalStream(BigqueryResultStream, IncrementalMixin):
     ) -> Optional[Mapping[str, Any]]:
         query_string = f"select * from {self.stream_name}"
         if stream_slice:
-            cursor_value = stream_slice.get(self.cursor_field, None)
-            if cursor_value:
-                query_string = f"select * from {self.stream_name} where {self.cursor_field}>={cursor_value}" #TODO: add order by cursor_field
+            self._cursor = stream_slice.get(self.cursor_field, None)
+            if self._cursor:
+                query_string = f"select * from {self.stream_name} where {self.cursor_field}>={self._cursor}" #TODO: add order by cursor_field
         # try:
         #     cursor_value = stream_state.get(self.cursor_field, None)
         #     if cursor_value:
