@@ -268,7 +268,7 @@ class BigqueryIncrementalStream(BigqueryResultStream, IncrementalMixin):
     """
     """ 
     # _state = {}
-    # cursor_field = "change_timestamp"
+    cursor_field = "_bigquery_created_time"
     primary_key = None
     state_checkpoint_interval = None
     
@@ -282,12 +282,6 @@ class BigqueryIncrementalStream(BigqueryResultStream, IncrementalMixin):
     def name(self):
         return self.stream_name
     
-    @property
-    def cursor_field(self) -> str:
-        """
-        Name of the field in the API response body used as cursor.
-        """
-        return "_bigquery_created_time"
     
     @property
     def state(self):
@@ -300,6 +294,7 @@ class BigqueryIncrementalStream(BigqueryResultStream, IncrementalMixin):
     
     @state.setter
     def state(self, value):
+        self.cursor_field = list(value.keys())[0]
         self._cursor = value[self.cursor_field]
         # self._state[self.cursor_field] = value[self.cursor_field]
     
@@ -333,14 +328,20 @@ class BigqueryIncrementalStream(BigqueryResultStream, IncrementalMixin):
         self._cursor = latest_record_state
         self.state = {self.cursor_field: self._cursor} 
         return {self.cursor_field: self._cursor}
-    
-    def stream_slices(self, stream_state: Mapping[str, Any] = None, **kwargs) -> Iterable[Optional[Mapping[str, any]]]:
-        start_date = None
+
+    def stream_slices(self, stream_state: Mapping[str, Any] = None, cursor_field=None, sync_mode=None, **kwargs) -> Iterable[Optional[Mapping[str, any]]]:
+        # TODO check sync mode
+        if isinstance(cursor_field,list) and cursor_field:
+            self.cursor_field = cursor_field[0]
+        elif cursor_field:
+            self.cursor_field = cursor_field
+
+        cursor_value = None
         if stream_state:
-            start_date = stream_state.get(self.cursor_field) #or self._state.get(self.cursor_field)
+            cursor_value = stream_state.get(self.cursor_field) #or self._state.get(self.cursor_field)
 
         yield {
-                "start_date" : start_date
+                self.cursor_field : cursor_value
             }
 
     def request_body_json(
@@ -350,15 +351,17 @@ class BigqueryIncrementalStream(BigqueryResultStream, IncrementalMixin):
         next_page_token: Optional[Mapping[str, Any]] = None,
     ) -> Optional[Mapping[str, Any]]:
         query_string = f"select * from {self.stream_name}"
-        # if stream_slice:
-        #     start_date = stream_slice.get("start_date")
-        #     if start_date:
-        #         query_string = f"select * from APPENDS(TABLE {self.stream_name},'{start_date}',NULL)"
-        
-        start_date = stream_state.get(self.cursor_field, None)
-        if start_date:
-            # query_string = f"select * from APPENDS(TABLE {self.stream_name},'{start_date}',NULL)"
-            query_string = f"select * from {self.stream_name} where id>={start_date}"
+        if stream_slice:
+            cursor_value = stream_slice.get(self.cursor_field, None)
+            if cursor_value:
+                query_string = f"select * from {self.stream_name} where {self.cursor_field}>={cursor_value}"
+        # try:
+        #     cursor_value = stream_state.get(self.cursor_field, None)
+        #     if cursor_value:
+        #         # query_string = f"select * from APPENDS(TABLE {self.stream_name},'{cursor_value}',NULL)"
+        #         query_string = f"select * from {self.stream_name} where {self.cursor_field}>={cursor_value}"
+        # except Exception as e:
+        #     print(str(e))
     
         request_body = {
             "kind": "bigquery#queryRequest",
@@ -396,14 +399,6 @@ class TableAppendsResult(BigqueryIncrementalStream):
     @property
     def name(self):
         return self.parent_stream
-    
-    @property
-    def sync_mode(self):
-        return SyncMode.incremental
-
-    @property
-    def supported_sync_modes(self):
-        return [SyncMode.incremental]
     
     def path(self, **kwargs) -> str:
         """
