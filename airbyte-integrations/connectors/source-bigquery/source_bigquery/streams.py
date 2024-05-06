@@ -330,7 +330,12 @@ class BigqueryIncrementalStream(BigqueryResultStream, IncrementalMixin):
         return {self.cursor_field: self._cursor}
 
     def stream_slices(self, stream_state: Mapping[str, Any] = None, cursor_field=None, sync_mode=None, **kwargs) -> Iterable[Optional[Mapping[str, any]]]:
-        # TODO check sync mode
+        if sync_mode != SyncMode.incremental:#
+            #super().stream_slices(sync_mode=sync_mode, cursor_field=cursor_field, stream_state=stream_state)
+            yield {
+                self.cursor_field : None
+            } 
+        
         if isinstance(cursor_field,list) and cursor_field:
             self.cursor_field = cursor_field[0]
         elif cursor_field:
