@@ -376,13 +376,11 @@ class TableAppendsResult(BigqueryIncrementalStream):
     """  
     """ 
     # name = "appends_results"
-    # cursor_field = "_CHANGE_TIMESTAMP"
     primary_key = None
     
     def __init__(self, project_id: list, dataset_id: str, table_id: str, **kwargs):
         self.project_id = project_id
         self.parent_stream = dataset_id + "." + table_id
-        # self.start_date = start_date
         super().__init__(self.path(), self.parent_stream, self.get_json_schema(), **kwargs)
     
     @property
