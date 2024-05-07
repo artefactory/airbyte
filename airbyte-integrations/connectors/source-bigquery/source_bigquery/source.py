@@ -19,7 +19,7 @@ from airbyte_cdk.logger import AirbyteLogger
 from airbyte_cdk.utils.traced_exception import AirbyteTracedException, FailureType
 
 from .auth import BigqueryAuth
-from .streams import BigqueryDatasets, BigqueryTables, BigqueryStream, BigqueryTable, BigqueryTableData, BigqueryIncrementalStream, TableAppendsResult
+from .streams import BigqueryDatasets, BigqueryTables, BigqueryStream, BigqueryTable, BigqueryTableData, BigqueryIncrementalStream, IncrementalQueryResult
 from .schema_helpers import SchemaHelpers
 
 """
@@ -94,7 +94,7 @@ class SourceBigquery(AbstractSource):
         if streams:
             for stream in streams:
                 dataset_id, table_id = stream["parent_stream"].split(".")
-                table_obj = TableAppendsResult(config["project_id"], dataset_id, table_id, authenticator=self._auth)
+                table_obj = IncrementalQueryResult(config["project_id"], dataset_id, table_id, authenticator=self._auth)
                 for table in table_obj.read_records(sync_mode=SyncMode.incremental):
                         self.streams_catalog.append(
                             {
@@ -113,7 +113,7 @@ class SourceBigquery(AbstractSource):
                 # list and process each table under each base to generate the JSON Schema
                 for table_info in BigqueryTables(dataset_id=dataset_id, project_id=config["project_id"], authenticator=self._auth).read_records(sync_mode=SyncMode.full_refresh):
                     table_id = table_info.get("tableReference")["tableId"]
-                    table_obj = TableAppendsResult(config["project_id"], dataset_id, table_id, authenticator=self._auth)
+                    table_obj = IncrementalQueryResult(config["project_id"], dataset_id, table_id, authenticator=self._auth)
                     for table in table_obj.read_records(sync_mode=SyncMode.incremental):
                         self.streams_catalog.append(
                             {
