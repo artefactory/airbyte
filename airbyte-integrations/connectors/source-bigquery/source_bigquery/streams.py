@@ -274,6 +274,7 @@ class BigqueryIncrementalStream(BigqueryResultStream, IncrementalMixin):
     
     def __init__(self, stream_path, stream_name, stream_schema, stream_request=None, **kwargs):
         super().__init__(stream_path, stream_name, stream_schema, stream_request, **kwargs)
+        self.request_body = stream_request
         self._cursor = None
         
     @property
@@ -329,25 +330,6 @@ class BigqueryIncrementalStream(BigqueryResultStream, IncrementalMixin):
                 } 
         else:
             yield
-
-    def request_body_json(
-        self,
-        stream_state: Optional[Mapping[str, Any]],
-        stream_slice: Optional[Mapping[str, Any]] = None,
-        next_page_token: Optional[Mapping[str, Any]] = None,
-    ) -> Optional[Mapping[str, Any]]:
-        query_string = f"select * from {self.stream_name}"
-        if stream_slice:
-            self._cursor = stream_slice.get(self.cursor_field, None)
-            if self._cursor:
-                query_string = f"select * from {self.stream_name} where {self.cursor_field}>={self._cursor}" #TODO: add order by cursor_field
-    
-        request_body = {
-            "kind": "bigquery#queryRequest",
-            "query": query_string,
-            "useLegacySql": False
-            }
-        return request_body
     
     def request_body_json(
         self,
@@ -402,6 +384,25 @@ class IncrementalQueryResult(BigqueryIncrementalStream):
 
     def get_json_schema(self) -> Mapping[str, Any]:
         return {}
+    
+    def request_body_json(
+        self,
+        stream_state: Optional[Mapping[str, Any]],
+        stream_slice: Optional[Mapping[str, Any]] = None,
+        next_page_token: Optional[Mapping[str, Any]] = None,
+    ) -> Optional[Mapping[str, Any]]:
+        query_string = f"select * from {self.stream_name}"
+        if stream_slice:
+            self._cursor = stream_slice.get(self.cursor_field, None)
+            if self._cursor:
+                query_string = f"select * from {self.stream_name} where {self.cursor_field}>={self._cursor}" #TODO: add order by cursor_field
+    
+        request_body = {
+            "kind": "bigquery#queryRequest",
+            "query": query_string,
+            "useLegacySql": False
+            }
+        return request_body
     
     def parse_response(self, response: requests.Response, **kwargs) -> Iterable[Mapping]:
         """
