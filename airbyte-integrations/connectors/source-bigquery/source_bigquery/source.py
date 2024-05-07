@@ -109,7 +109,7 @@ class SourceBigquery(AbstractSource):
                                     f"{dataset_id}.{table_id}",
                                     SchemaHelpers.get_json_schema(table),
                                 ),
-                                "table_data": table_obj.request_body_json(stream_state=None),
+                                "table_data": None,
                                 "type": incremental_type
                             }
                         )
@@ -139,7 +139,7 @@ class SourceBigquery(AbstractSource):
                                     f"{dataset_id}.{table_id}",
                                     SchemaHelpers.get_json_schema(table),
                                 ),
-                                "table_data": table_obj.request_body_json(stream_state=None),
+                                "table_data": None,
                                 "type": incremental_type
                             }
                         )
