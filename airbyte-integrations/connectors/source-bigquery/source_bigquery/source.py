@@ -95,7 +95,7 @@ class SourceBigquery(AbstractSource):
             for stream in streams:
                 dataset_id, table_id = stream["parent_stream"].split(".")
                 table_obj = IncrementalQueryResult(config["project_id"], dataset_id, table_id, authenticator=self._auth)
-                for table in table_obj.read_records(sync_mode=SyncMode.incremental):
+                for table in table_obj.read_records(sync_mode=SyncMode.full_refresh):
                         self.streams_catalog.append(
                             {
                                 "stream_path": f"{table_obj.path()}",
@@ -114,7 +114,7 @@ class SourceBigquery(AbstractSource):
                 for table_info in BigqueryTables(dataset_id=dataset_id, project_id=config["project_id"], authenticator=self._auth).read_records(sync_mode=SyncMode.full_refresh):
                     table_id = table_info.get("tableReference")["tableId"]
                     table_obj = IncrementalQueryResult(config["project_id"], dataset_id, table_id, authenticator=self._auth)
-                    for table in table_obj.read_records(sync_mode=SyncMode.incremental):
+                    for table in table_obj.read_records(sync_mode=SyncMode.full_refresh):
                         self.streams_catalog.append(
                             {
                                 "stream_path": f"{table_obj.path()}",
