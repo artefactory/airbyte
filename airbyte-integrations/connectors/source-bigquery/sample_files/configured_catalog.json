@@ -2,7 +2,7 @@
     "streams": [
       {
         "stream": {
-          "name": "airbyte_tests_compr_otzwknbj/airbyte_tests_compr_otzwknbj_1_bigint",
+          "name": "airbyte_tests_compr_otzwknbj.airbyte_tests_compr_otzwknbj_1_bigint",
           "json_schema": {
             "$schema": "http://json-schema.org/draft-07/schema#",
             "type": "object",
