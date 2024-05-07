@@ -5,6 +5,7 @@ from collections import OrderedDict
 from typing import Any, Iterable, List, Mapping, MutableMapping, Optional, Tuple, Union
 
 import requests
+from airbyte_cdk.sources.streams import IncrementalMixin
 from airbyte_cdk.sources.streams.http import HttpStream, HttpSubStream
 from airbyte_protocol.models import SyncMode
 from .schema_builder import mapping_snowflake_type_airbyte_type, format_field
@@ -315,7 +316,10 @@ class TableSchemaStream(SnowflakeStream):
         return f"Current stream has this table object as constructor {self.table_object}"
 
 
-class TableStream(SnowflakeStream):
+class TableStream(SnowflakeStream, IncrementalMixin):
+    primary_key = None
+    state_checkpoint_interval = None
+
     def __init__(self, url_base, config, table_object, **kwargs):
         stream_filtered_kwargs = {k: v for k, v in kwargs.items() if k in SnowflakeStream.__init__.__annotations__}
         super().__init__(**stream_filtered_kwargs)
@@ -325,6 +329,49 @@ class TableStream(SnowflakeStream):
         self.table_schema_stream = TableSchemaStream(url_base=url_base, config=config, table_object=table_object,
                                                      **stream_filtered_kwargs)
         self._namespace = None
+        self._cursor = None
+        self._cursor_field = None
+
+    @property
+    def cursor_field(self):
+        return self._cursor_field
+
+    @cursor_field.setter
+    def cursor_field(self, new_cursor_field):
+        self._cursor_field = new_cursor_field
+
+    @property
+    def state(self):
+        return {self.cursor_field: self._cursor}
+
+    @state.setter
+    def state(self, new_state):
+        self.cursor_field = list(new_state.keys())[0]
+        self._cursor = new_state[self.cursor_field]
+
+    @property
+    def source_defined_cursor(self) -> bool:
+        return False
+
+    @property
+    def supports_incremental(self) -> bool:
+        return True
+
+    def get_updated_state(self, current_stream_state: MutableMapping[str, Any], latest_record: Mapping[str, Any]) -> Mapping[str, Any]:
+        """
+        Override to determine the latest state after reading the latest record. This typically compared the cursor_field from the latest record and
+        the current state and picks the 'most' recent cursor. This is how a stream's state is determined. Required for incremental.
+        """
+        latest_record_state = latest_record[self.cursor_field]
+        stream_state = current_stream_state.get(self.cursor_field)
+        if stream_state:
+            self._cursor = max(latest_record_state, stream_state)
+            self.state = {self.cursor_field: self._cursor}
+            return {self.cursor_field: self._cursor}
+        self._cursor = latest_record_state
+        self.state = {self.cursor_field: self._cursor}
+        return {self.cursor_field: self._cursor}
+
 
     @property
     def namespace(self):
@@ -359,14 +406,54 @@ class TableStream(SnowflakeStream):
 
         return f"SELECT * FROM {database}.{schema}.{table}"
 
+    def stream_slices(self, stream_state: Mapping[str, Any] = None, cursor_field=None, sync_mode=None, **kwargs) -> Iterable[Optional[Mapping[str, any]]]:
+        if sync_mode == SyncMode.incremental:
+            if isinstance(cursor_field, list) and cursor_field:
+                self.cursor_field = cursor_field[0]
+            elif cursor_field:
+                self.cursor_field = cursor_field
+
+            if stream_state:
+                self._cursor = stream_state.get(self.cursor_field)
+
+            yield {self.cursor_field: self._cursor}
+        else:
+            yield
+
+    def get_updated_statement(self, stream_slice):
+        """
+        Can be used consistently only in request_body_json
+        otherwise we are not sure stream slice is the next slice and _cursor is updated with the correct data
+        """
+
+        updated_statement = self.statement
+
+        if stream_slice:
+            # TODO MAKE SURE THE CURSOR IS SINGLE VALUE AND NOT A STARTING AND ENDING VALUE (ex: window)
+            self._cursor = stream_slice.get(self.cursor_field, None)
+
+        if self._cursor:
+            condition_of_state = f"{self.cursor_field}>={self._cursor}"
+            key_word_where = " where "  # spaces in case there is a where in a table name
+            if key_word_where in self.statement.lower():
+                updated_statement = f"{self.statement} AND {condition_of_state}"
+            else:
+                updated_statement = f"{self.statement} WHERE {condition_of_state}"
+
+            updated_statement = f"{updated_statement} ORDER BY {self.cursor_field} ASC"
+
+        return updated_statement
+
     def request_body_json(
             self,
             stream_state: Optional[Mapping[str, Any]],
             stream_slice: Optional[Mapping[str, Any]] = None,
             next_page_token: Optional[Mapping[str, Any]] = None,
     ) -> Optional[Mapping[str, Any]]:
+
+        current_statement = self.get_updated_statement(stream_slice)
         json_payload = {
-            "statement": self.statement,
+            "statement": current_statement,
             "role": self.config['role'],
             "warehouse": self.config['warehouse'],
             "database": self.config['database'],
