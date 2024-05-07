@@ -349,6 +349,25 @@ class BigqueryIncrementalStream(BigqueryResultStream, IncrementalMixin):
             }
         return request_body
     
+    def request_body_json(
+        self,
+        stream_state: Optional[Mapping[str, Any]],
+        stream_slice: Optional[Mapping[str, Any]] = None,
+        next_page_token: Optional[Mapping[str, Any]] = None,
+    ) -> Optional[Mapping[str, Any]]:
+        query_string = f"select * from {self.name}"
+        if stream_slice:
+            self._cursor = stream_slice.get(self.cursor_field, None)
+            if self._cursor:
+                query_string = f"select * from {self.name} where {self.cursor_field}>={self._cursor}" #TODO: maybe add order by cursor_field
+    
+        request_body = {
+            "kind": "bigquery#queryRequest",
+            "query": query_string,
+            "useLegacySql": False
+            }
+        return request_body
+    
     def process_records(self, record) -> Iterable[Mapping[str, Any]]:
         fields = record.get("schema")["fields"]
         stream_data = record.get("rows", [])
