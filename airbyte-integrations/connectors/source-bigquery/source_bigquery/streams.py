@@ -363,10 +363,9 @@ class BigqueryIncrementalStream(BigqueryResultStream, IncrementalMixin):
             }
 
 
-class TableAppendsResult(BigqueryIncrementalStream):
+class IncrementalQueryResult(BigqueryIncrementalStream):
     """  
     """ 
-    # name = "appends_results"
     primary_key = None
     
     def __init__(self, project_id: list, dataset_id: str, table_id: str, **kwargs):
@@ -394,4 +393,3 @@ class TableAppendsResult(BigqueryIncrementalStream):
         """
         record = response.json()
         yield record
-
