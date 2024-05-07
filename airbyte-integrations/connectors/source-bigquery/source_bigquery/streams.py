@@ -268,7 +268,7 @@ class BigqueryIncrementalStream(BigqueryResultStream, IncrementalMixin):
     """
     """ 
     # _state = {}
-    cursor_field = "_bigquery_created_time" # TODO: test when field does not exist?
+    cursor_field = "_bigquery_created_time"
     primary_key = None
     state_checkpoint_interval = None
     
@@ -316,7 +316,6 @@ class BigqueryIncrementalStream(BigqueryResultStream, IncrementalMixin):
 
     def stream_slices(self, stream_state: Mapping[str, Any] = None, cursor_field=None, sync_mode=None, **kwargs) -> Iterable[Optional[Mapping[str, any]]]:
         if sync_mode != SyncMode.incremental:#
-            #super().stream_slices(sync_mode=sync_mode, cursor_field=cursor_field, stream_state=stream_state)
             yield {
                 self.cursor_field : None
             } 
@@ -344,13 +343,6 @@ class BigqueryIncrementalStream(BigqueryResultStream, IncrementalMixin):
             self._cursor = stream_slice.get(self.cursor_field, None)
             if self._cursor:
                 query_string = f"select * from {self.stream_name} where {self.cursor_field}>={self._cursor}" #TODO: add order by cursor_field
-        # try:
-        #     cursor_value = stream_state.get(self.cursor_field, None)
-        #     if cursor_value:
-        #         # query_string = f"select * from APPENDS(TABLE {self.stream_name},'{cursor_value}',NULL)"
-        #         query_string = f"select * from {self.stream_name} where {self.cursor_field}>={cursor_value}"
-        # except Exception as e:
-        #     print(str(e))
     
         request_body = {
             "kind": "bigquery#queryRequest",
@@ -395,21 +387,6 @@ class TableAppendsResult(BigqueryIncrementalStream):
     def get_json_schema(self) -> Mapping[str, Any]:
         return {}
     
-    # def request_body_json(
-    #     self,
-    #     stream_state: Optional[Mapping[str, Any]],
-    #     stream_slice: Optional[Mapping[str, Any]] = None,
-    #     next_page_token: Optional[Mapping[str, Any]] = None,
-    # ) -> Optional[Mapping[str, Any]]:
-    #     query_string = f"select * from APPENDS(TABLE {self.parent_stream},NULL,NULL)"
-    #     request_body = {
-    #         "kind": "bigquery#queryRequest",
-    #         "query": query_string,
-    #         "useLegacySql": False
-    #         }
-        
-    #     return request_body
-    
     def parse_response(self, response: requests.Response, **kwargs) -> Iterable[Mapping]:
         """
         Override this method to define how a response is parsed.
@@ -418,41 +395,3 @@ class TableAppendsResult(BigqueryIncrementalStream):
         record = response.json()
         yield record
 
-    # def process_records(self, record) -> Iterable[Mapping[str, Any]]:
-    #     fields = record.get("schema")["fields"]
-    #     stream_data = record.get("rows", [])
-    #     for data in stream_data:
-    #         rows = data.get("f")
-    #         yield {
-    #             "_bigquery_table_id": record.get("jobReference")["jobId"],
-    #             "_bigquery_created_time": None, #TODO: Update this to row insertion time
-    #             **{CHANGE_FIELDS.get(element["name"], element["name"]): SchemaHelpers.format_field(rows[fields.index(element)]["v"], element["type"]) for element in fields},
-    #         }
-
-# Basic incremental stream
-class IncrementalBigqueryDatasets(BigqueryDatasets, ABC):
-    """
-    TODO fill in details of this class to implement functionality related to incremental syncs for your connector.
-         if you do not need to implement incremental sync for any streams, remove this class.
-    """
-
-    # TODO: Fill in to checkpoint stream reads after N records. This prevents re-reading of data if the stream fails for any reason.
-    state_checkpoint_interval = None
-
-    @property
-    def cursor_field(self) -> str:
-        """
-        TODO
-        Override to return the cursor field used by this stream e.g: an API entity might always use created_at as the cursor field. This is
-        usually id or date based. This field's presence tells the framework this in an incremental stream. Required for incremental.
-
-        :return str: The name of the cursor field.
-        """
-        return []
-
-    def get_updated_state(self, current_stream_state: MutableMapping[str, Any], latest_record: Mapping[str, Any]) -> Mapping[str, Any]:
-        """
-        Override to determine the latest state after reading the latest record. This typically compared the cursor_field from the latest record and
-        the current state and picks the 'most' recent cursor. This is how a stream's state is determined. Required for incremental.
-        """
-        return {}
