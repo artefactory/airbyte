@@ -342,6 +342,8 @@ class TableStream(SnowflakeStream, IncrementalMixin):
 
     @property
     def state(self):
+        if not self.cursor_field:
+            return {}
         return {self.cursor_field: self._cursor}
 
     @state.setter
@@ -418,7 +420,7 @@ class TableStream(SnowflakeStream, IncrementalMixin):
 
             yield {self.cursor_field: self._cursor}
         else:
-            yield
+            yield None
 
     def get_updated_statement(self, stream_slice):
         """
