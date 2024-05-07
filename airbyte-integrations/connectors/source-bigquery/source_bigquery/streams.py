@@ -392,3 +392,151 @@ class IncrementalQueryResult(BigqueryIncrementalStream):
         """
         record = response.json()
         yield record
+
+
+class BigqueryCDCStream(BigqueryResultStream, IncrementalMixin):
+    """  
+    """ 
+    primary_key = None
+    state_checkpoint_interval = None
+
+    def __init__(self, stream_path, stream_name, stream_schema, stream_request=None, **kwargs):
+        super().__init__(stream_path, stream_name, stream_schema, stream_request, **kwargs)
+        self.request_body = stream_request
+        self._cursor = None
+    
+    @property
+    def name(self):
+        return self.stream_name
+    
+    @property
+    def cursor_field(self) -> str:
+        """
+        Name of the field in the API response body used as cursor.
+        """
+        return "change_timestamp"
+    
+    @property
+    def state(self):
+        return {
+            self.cursor_field: self._cursor,
+        }
+    
+    @state.setter
+    def state(self, value):
+        self._cursor = value[self.cursor_field]
+    
+    @property
+    def source_defined_cursor(self) -> bool:
+        return True
+
+    @property
+    def supports_incremental(self) -> bool:
+        return True
+    
+    def get_updated_state(self, current_stream_state: MutableMapping[str, Any], latest_record: Mapping[str, Any]) -> Mapping[str, Any]:
+        """
+        Override to determine the latest state after reading the latest record. This typically compared the cursor_field from the latest record and
+        the current state and picks the 'most' recent cursor. This is how a stream's state is determined. Required for incremental.
+        """
+        latest_record_state = latest_record[self.cursor_field]
+        stream_state = current_stream_state.get(self.cursor_field)
+        if stream_state:
+            self._cursor = max(latest_record_state, stream_state)
+            self.state = {self.cursor_field: self._cursor} 
+            return {self.cursor_field: self._cursor}
+        self._cursor = latest_record_state
+        self.state = {self.cursor_field: self._cursor} 
+        return {self.cursor_field: self._cursor}
+
+    def stream_slices(self, stream_state: Mapping[str, Any] = None, cursor_field=None, sync_mode=None, **kwargs) -> Iterable[Optional[Mapping[str, any]]]:
+        if sync_mode == SyncMode.incremental:
+            if stream_state:
+                self._cursor = stream_state.get(self.cursor_field) #or self._state.get(self.cursor_field)
+            yield {
+                    self.cursor_field : self._cursor
+                } 
+        else:
+            yield
+
+    def request_body_json(
+        self,
+        stream_state: Optional[Mapping[str, Any]],
+        stream_slice: Optional[Mapping[str, Any]] = None,
+        next_page_token: Optional[Mapping[str, Any]] = None,
+    ) -> Optional[Mapping[str, Any]]:
+        query_string = f"select * from APPENDS(TABLE {self.stream_name},NULL,NULL)"
+        if stream_slice:
+            self._cursor = stream_slice.get(self.cursor_field, None)
+            if self._cursor:
+                query_string = f"select * from APPENDS(TABLE {self.stream_name},'{self._cursor}',NULL)"
+
+        request_body = {
+            "kind": "bigquery#queryRequest",
+            "query": query_string,
+            "useLegacySql": False
+            }
+        return request_body
+    
+    def process_records(self, record) -> Iterable[Mapping[str, Any]]:
+        fields = record.get("schema")["fields"]
+        stream_data = record.get("rows", [])
+        for data in stream_data:
+            rows = data.get("f")
+            yield {
+                "_bigquery_table_id": record.get("jobReference")["jobId"],
+                "_bigquery_created_time": None, #TODO: Update this to row insertion time
+                **{CHANGE_FIELDS.get(element["name"], element["name"]): SchemaHelpers.format_field(rows[fields.index(element)]["v"], element["type"]) for element in fields},
+            }
+
+
+class TableChangeHistory(BigqueryCDCStream):
+    """  
+    """ 
+    primary_key = None
+    
+    def __init__(self, project_id: list, dataset_id: str, table_id: str, **kwargs):
+        self.project_id = project_id
+        self.parent_stream = dataset_id + "." + table_id
+        super().__init__(self.path(), self.parent_stream, self.get_json_schema(), **kwargs)
+    
+    @property
+    def name(self):
+        return self.parent_stream
+    
+    def path(self, **kwargs) -> str:
+        """
+        Documentation: https://cloud.google.com/bigquery/docs/reference/rest/v2/jobs/query
+        """
+        return f"/bigquery/v2/projects/{self.project_id}/queries"
+
+    def get_json_schema(self) -> Mapping[str, Any]:
+        return {}
+
+    def request_body_json(
+        self,
+        stream_state: Optional[Mapping[str, Any]],
+        stream_slice: Optional[Mapping[str, Any]] = None,
+        next_page_token: Optional[Mapping[str, Any]] = None,
+    ) -> Optional[Mapping[str, Any]]:
+        query_string = f"select * from APPENDS(TABLE {self.name},NULL,NULL)"
+        if stream_slice:
+            self._cursor = stream_slice.get(self.cursor_field, None)
+            if self._cursor:
+                query_string = f"select * from APPENDS(TABLE {self.name},'{self._cursor}',NULL)"
+
+        request_body = {
+            "kind": "bigquery#queryRequest",
+            "query": query_string,
+            "useLegacySql": False
+            }
+        return request_body
+
+    def parse_response(self, response: requests.Response, **kwargs) -> Iterable[Mapping]:
+        """
+        Override this method to define how a response is parsed.
+        :return an iterable containing each record in the response
+        """
+        record = response.json()
+        yield record
+    
