@@ -19,7 +19,7 @@ from airbyte_cdk.logger import AirbyteLogger
 from airbyte_cdk.utils.traced_exception import AirbyteTracedException, FailureType
 
 from .auth import BigqueryAuth
-from .streams import BigqueryDatasets, BigqueryTables, BigqueryStream, BigqueryTable, BigqueryTableData, BigqueryIncrementalStream, IncrementalQueryResult
+from .streams import BigqueryDatasets, BigqueryTables, BigqueryStream, BigqueryTable, BigqueryTableData, BigqueryIncrementalStream, IncrementalQueryResult, TableChangeHistory, BigqueryCDCStream
 from .schema_helpers import SchemaHelpers
 
 """
@@ -94,7 +94,10 @@ class SourceBigquery(AbstractSource):
         if streams:
             for stream in streams:
                 dataset_id, table_id = stream["parent_stream"].split(".")
-                table_obj = IncrementalQueryResult(config["project_id"], dataset_id, table_id, authenticator=self._auth)
+                if config["replication_method"]["method"] == "Standard":
+                    table_obj = IncrementalQueryResult(config["project_id"], dataset_id, table_id, authenticator=self._auth)
+                else:
+                    table_obj = TableChangeHistory(config["project_id"], dataset_id, table_id, authenticator=self._auth)
                 for table in table_obj.read_records(sync_mode=SyncMode.full_refresh):
                         self.streams_catalog.append(
                             {
@@ -113,7 +116,10 @@ class SourceBigquery(AbstractSource):
                 # list and process each table under each base to generate the JSON Schema
                 for table_info in BigqueryTables(dataset_id=dataset_id, project_id=config["project_id"], authenticator=self._auth).read_records(sync_mode=SyncMode.full_refresh):
                     table_id = table_info.get("tableReference")["tableId"]
-                    table_obj = IncrementalQueryResult(config["project_id"], dataset_id, table_id, authenticator=self._auth)
+                    if config["replication_method"]["method"] == "Standard":
+                        table_obj = IncrementalQueryResult(config["project_id"], dataset_id, table_id, authenticator=self._auth)
+                    else:
+                        table_obj = TableChangeHistory(config["project_id"], dataset_id, table_id, authenticator=self._auth)
                     for table in table_obj.read_records(sync_mode=SyncMode.full_refresh):
                         self.streams_catalog.append(
                             {
@@ -122,16 +128,25 @@ class SourceBigquery(AbstractSource):
                                     f"{dataset_id}.{table_id}",
                                     SchemaHelpers.get_json_schema(table),
                                 ),
-                                "table_data": None,
+                                "table_data": table_obj.request_body_json(stream_state=None),
                                 "type": "incremental"
                             }
                         )
                     
         for stream in self.streams_catalog:
-            yield BigqueryIncrementalStream(
-                stream_path=stream["stream_path"],
-                stream_name=stream["stream"].name,
-                stream_schema=stream["stream"].json_schema,
-                stream_request=stream["table_data"],
-                authenticator=self._auth,
-            )
+            if config["replication_method"]["method"] == "Standard":
+                yield BigqueryIncrementalStream(
+                    stream_path=stream["stream_path"],
+                    stream_name=stream["stream"].name,
+                    stream_schema=stream["stream"].json_schema,
+                    stream_request=stream["table_data"],
+                    authenticator=self._auth,
+                )
+            else:
+                yield BigqueryCDCStream(
+                    stream_path=stream["stream_path"],
+                    stream_name=stream["stream"].name,
+                    stream_schema=stream["stream"].json_schema,
+                    stream_request=stream["table_data"],
+                    authenticator=self._auth,
+                )
