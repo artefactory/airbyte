@@ -67,7 +67,7 @@ class SnowflakeStream(HttpStream, ABC):
         Usually contains common params e.g. pagination size etc.
         """
         params = {
-            "requestId": uuid.uuid4(),
+            "requestId": str(uuid.uuid4()),
             "async": "false"
         }
         return params
@@ -220,6 +220,7 @@ class TableCatalogStream(SnowflakeStream):
         schema = self.config.get('schema', '')
         if schema:
             json_payload['schema'] = schema
+        print('json payload', json_payload, flush=True)
         return json_payload
 
     @classmethod
