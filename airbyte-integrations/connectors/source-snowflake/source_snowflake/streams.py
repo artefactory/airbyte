@@ -402,7 +402,7 @@ class TableStream(SnowflakeStream):
 
         for column_object in self.table_schema_stream.read_records(sync_mode=SyncMode.full_refresh):
             column_name = column_object['column_name']
-            snowflake_column_type = column_object['type'].lower()
+            snowflake_column_type = column_object['type'].upper()
             if snowflake_column_type not in mapping_snowflake_type_airbyte_type:
                 raise ValueError(f"The type {snowflake_column_type} is not recognized. "
                                  f"You should update the mapping to consider this unknown type")
