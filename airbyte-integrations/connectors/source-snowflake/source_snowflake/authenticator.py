@@ -30,7 +30,8 @@ class SnowflakeJwtAuthenticator(JwtAuthenticator):
     def from_config(cls, config):
         sub = cls.get_formatted_account(config['host'], config["credentials"]['user_name'])
         formatted_private_key = cls._format_private_key(config["credentials"]['private_key'])
-        public_key_finger_print = cls.calculate_public_key_fingerprint(formatted_private_key, sub)
+        password = cls.get_formatted_password_from_config(config)
+        public_key_finger_print = cls.calculate_public_key_fingerprint(formatted_private_key, password,sub)
         kwargs = {"config": {},
                   "algorithm": JwtAlgorithm.RS256,
                   "iss": public_key_finger_print,
@@ -39,6 +40,15 @@ class SnowflakeJwtAuthenticator(JwtAuthenticator):
                   'parameters': {},
                   'token_duration': cls.TOKEN_DURATION}
         return cls(**kwargs)
+
+    @classmethod
+    def get_formatted_password_from_config(cls, config):
+        password = None
+        if ('password' in config["credentials"] and
+                (config["credentials"]['password'] is not None or not len(config["credentials"]['password']))):
+            password = config["credentials"]['password']
+
+        return password
 
     @classmethod
     def get_formatted_account(cls, account: str, user_name: str) -> str:
@@ -56,15 +66,17 @@ class SnowflakeJwtAuthenticator(JwtAuthenticator):
         return f"{processed_account}.{user_name.upper()}"
 
     @classmethod
-    def calculate_public_key_fingerprint(cls, private_key: Text, sub: Text) -> Text:
+    def calculate_public_key_fingerprint(cls, private_key: Text, password: Text, sub: Text) -> Text:
         """
         Given a private key in string format, return the public key fingerprint.
         :param private_key: private key string
+        :param password: password of private key
+        :param sub: account name in the correct format
         :return: public key fingerprint
         """
         private_key_object = load_pem_private_key(private_key.encode(),
-                                           None,
-                                           default_backend())
+                                                  password.encode(),
+                                                  default_backend())
 
         # Get the raw bytes of public key.
         public_key_raw = private_key_object.public_key().public_bytes(Encoding.DER, PublicFormat.SubjectPublicKeyInfo)
@@ -85,6 +97,3 @@ class SnowflakeJwtAuthenticator(JwtAuthenticator):
         content = private_key.split(start_private_key)[1].split(end_private_key)[0]
         content = content.replace(' ', '\n')
         return f'{start_private_key}{content}{end_private_key}'
-
-
-

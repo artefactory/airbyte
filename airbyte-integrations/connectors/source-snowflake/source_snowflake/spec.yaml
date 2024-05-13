@@ -65,6 +65,12 @@ connectionSpecification:
             order: 2
             title: Private key
             type: string
+          password:
+            airbyte_secret: true
+            description: The pass of your private key
+            order: 2
+            title: Password
+            type: string
         required:
         - private_key
         - user_name

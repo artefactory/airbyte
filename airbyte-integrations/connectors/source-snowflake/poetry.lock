@@ -2,13 +2,13 @@
 
 [[package]]
 name = "airbyte-cdk"
-version = "0.86.3"
+version = "0.88.2"
 description = "A framework for writing Airbyte Connectors."
 optional = false
 python-versions = "<4.0,>=3.9"
 files = [
-    {file = "airbyte_cdk-0.86.3-py3-none-any.whl", hash = "sha256:2616946d1b9f762d627bbbd34a4fdc5ff7d63c97a9a0eef68b32c3b6992a9721"},
-    {file = "airbyte_cdk-0.86.3.tar.gz", hash = "sha256:0f0239f41f4b20654448e179fb5a1e89f56c6794e5c4ff27d3c2fda77cd29bfa"},
+    {file = "airbyte_cdk-0.88.2-py3-none-any.whl", hash = "sha256:f6fe52cb854a82f6822ac90516ffe11d4a49159213ce5938fcfe0016f0af3116"},
+    {file = "airbyte_cdk-0.88.2.tar.gz", hash = "sha256:30253e7ad0ab9716da84bed71cc6f7458ba79c6f05d6c35cef0e2ace1372f470"},
 ]
 
 [package.dependencies]
@@ -29,6 +29,7 @@ pydantic = ">=1.10.8,<2.0.0"
 pyjwt = ">=2.8.0,<3.0.0"
 pyrate-limiter = ">=3.1.0,<3.2.0"
 python-dateutil = "*"
+pytz = "2024.1"
 PyYAML = ">=6.0.1,<7.0.0"
 requests = "*"
 requests_cache = "*"
@@ -555,13 +556,13 @@ extended-testing = ["jinja2 (>=3,<4)"]
 
 [[package]]
 name = "langsmith"
-version = "0.1.54"
+version = "0.1.57"
 description = "Client library to connect to the LangSmith LLM Tracing and Evaluation Platform."
 optional = false
 python-versions = "<4.0,>=3.8.1"
 files = [
-    {file = "langsmith-0.1.54-py3-none-any.whl", hash = "sha256:e8ba2758dbdff0fccb35337c28a5ab641dd980b22e178d390b72a15c9ae9caff"},
-    {file = "langsmith-0.1.54.tar.gz", hash = "sha256:86f5a90e48303de897f37a893f8bb635eabdaf23e674099e8bc0f2e9ca2f8faf"},
+    {file = "langsmith-0.1.57-py3-none-any.whl", hash = "sha256:dbd83b0944a2fbea4151f0aa053530d93fcf6784a580621bc60633cb890b57dc"},
+    {file = "langsmith-0.1.57.tar.gz", hash = "sha256:4682204de19f0218029c2b8445ce2cc3485c8d0df9796b31e2ce4c9051fce365"},
 ]
 
 [package.dependencies]
@@ -957,6 +958,17 @@ files = [
 
 [package.dependencies]
 six = ">=1.5"
+
+[[package]]
+name = "pytz"
+version = "2024.1"
+description = "World timezone definitions, modern and historical"
+optional = false
+python-versions = "*"
+files = [
+    {file = "pytz-2024.1-py2.py3-none-any.whl", hash = "sha256:328171f4e3623139da4983451950b28e95ac706e13f3f2630a879749e7a8b319"},
+    {file = "pytz-2024.1.tar.gz", hash = "sha256:2a29735ea9c18baf14b448846bde5a48030ed267578472d8955cd0e7443a9812"},
+]
 
 [[package]]
 name = "pytzdata"
