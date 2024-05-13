@@ -23,28 +23,100 @@ The Snowflake source does not alter the schema present in your warehouse. Depend
 ### Requirements
 
 1. You'll need the following information to configure the Snowflake source:
-2. **Host**
+2. **Host (account name)**
 3. **Role**
 4. **Warehouse**
 5. **Database**
 6. **Schema**
 7. **Username**
-8. **Password**
-9. **Private key**
+8. **Private key**
+9. **Password** 
 10. Create a dedicated read-only Airbyte user and role with access to all schemas needed for replication and add key-pair authentication 
 ### Setup guide
 
-#### 1. Additional information about Snowflake connection parameters could be found [here](https://docs.snowflake.com/en/user-guide/key-pair-auth).
-
-#### 2. Create a dedicated read-only user with access to the relevant schemas \(Recommended but optional\)
+#### 1. Create a dedicated read-only user with access to the relevant schemas \(Recommended but optional\)
 
 This step is optional but highly recommended to allow for better permission control and auditing. Alternatively, you can use Airbyte with an existing user in your database.
 
-Create a dedicated database user and follow these [steps](https://docs.snowflake.com/en/user-guide/key-pair-auth)
+Create a dedicated database user.
 
 You can limit this grant down to specific schemas instead of the whole database. Note that to replicate data from multiple Snowflake databases, you can re-run the command above to grant access to all the relevant schemas, but you'll need to set up multiple sources connecting to the same db on multiple schemas.
 
 Your database user should now be ready for use with Airbyte.
+
+#### 2.Create key pair for authentication 
+You have to follow these steps to create your public and private key to authenticate to the application:
+
+##### A. create a private key
+You have 2 choices for private key creation, either with password or without password
+
+No password will be asked since you are using the the nocrypt argument. Use this command:
+```bash
+openssl genrsa 2048 | openssl pkcs8 -topk8 -inform PEM -out rsa_key.p8 -nocrypt
+```
+
+If you want to set a password, run this command:
+```bash
+openssl genrsa 2048 | openssl pkcs8 -topk8 -inform PEM -out rsa_key.p8 -nocrypt
+```
+
+Note: You will need this password later if you want to authenticate. So store it securely.
+
+The commands generate a private key in PEM format. A file named rsa_key.p8 will be generated in your current working directory.
+
+-----BEGIN ENCRYPTED PRIVATE KEY-----   
+MIIE6T...   
+-----END ENCRYPTED PRIVATE KEY----   
+
+##### B. create a public key
+
+Run this command in the same directory as your private key:
+
+```bash
+openssl rsa -in rsa_key.p8 -pubout -out rsa_key.pub
+```
+
+Ii will generate a file rsa_key.pub containing your public key.
+The command generates the public key in PEM format.
+
+-----BEGIN PUBLIC KEY-----  
+MIIBIj...  
+-----END PUBLIC KEY-----  
+
+##### C. Assign the public key to a user
+Store the content of your public key with this SQL statement.
+
+```sql
+ALTER USER jsmith SET RSA_PUBLIC_KEY='MIIBIjANBgkqh...';
+```
+Note:  
+Only owners of a user, or users with the SECURITYADMIN role or higher can alter a user.  
+Exclude the public key delimiters in the SQL statement.  
+
+
+##### D. Verify the upload of the key 
+To achieve that, we will compare the public key fingerprint. 
+
+Generate the public key fingerprint in snowflake with this command
+
+```sql
+ALTER USER jsmith SET RSA_PUBLIC_KEY='MIIBIjANBgkqh...';
+```
+Output:  
+Azk1Pq...
+
+Generate the public key fingerprint in your terminal with this command
+
+```bash
+openssl rsa -pubin -in rsa_key.pub -outform DER | openssl dgst -sha256 -binary | openssl enc -base64
+```
+Output:  
+Azk1Pq...
+
+Make sure they are the same, if not repeat step C.
+
+That was the last step if you want more details, look at the following link [here](https://docs.snowflake.com/en/user-guide/key-pair-auth).
+
 
 ###Authentication
 
@@ -61,6 +133,7 @@ Your database user should now be ready for use with Airbyte.
 | [Schema](https://docs.snowflake.com/en/sql-reference/ddl-database.html#database-schema-share-ddl)     | The schema whose tables this replication is targeting. If no schema is specified, all tables with permission will be presented regardless of their schema.                                        |
 | Username                                                                                              | The username you created in Step 2 to allow Airbyte to access the database. Example: `AIRBYTE_USER`                                                                                               |
 | Private key                                                                                           | The secret key used when creating the key pair authentication                                                                                                                                     |
+| Password                                                                                              | The password of you secret key (optional)                                                                                                                                                         |
 
 ### OAuth 2.0 TO BE UPDATED
 
@@ -98,7 +171,7 @@ To read more please check official [Snowflake documentation](https://docs.snowfl
 
 | Version | Date       | Pull Request                                             | Subject                                                                                                                                   |
 |:--------|:-----------|:---------------------------------------------------------|:------------------------------------------------------------------------------------------------------------------------------------------|
-| 0.3.2   | 2024-05-30 | Fill with right pr                                       | Implement connector in python                                                                                                             |
+| 0.3.2   | 2024-05-30 | Fill with right pull request                             | Implement connector in python                                                                                                             |
 | 0.3.1   | 2024-02-13 | [35220](https://github.com/airbytehq/airbyte/pull/35220) | Adopt CDK 0.20.4                                                                                                                          |
 | 0.3.1   | 2024-01-24 | [34453](https://github.com/airbytehq/airbyte/pull/34453) | bump CDK version                                                                                                                          |
 | 0.3.0   | 2023-12-18 | [33484](https://github.com/airbytehq/airbyte/pull/33484) | Remove LEGACY state                                                                                                                       |
