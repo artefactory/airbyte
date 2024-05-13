@@ -463,10 +463,11 @@ class BigqueryCDCStream(BigqueryResultStream, IncrementalMixin):
         if stream_state:
             self._cursor = max(latest_record_state, stream_state)
             self.state = {self.cursor_field: self._cursor} 
-            return {self.cursor_field: self._cursor}
-        self._cursor = latest_record_state
-        self.state = {self.cursor_field: self._cursor} 
-        return {self.cursor_field: self._cursor}
+        else:
+            self._cursor = latest_record_state
+            self.state = {self.cursor_field: self._cursor} 
+        
+        return self.state
 
     def stream_slices(self, stream_state: Mapping[str, Any] = None, cursor_field=None, sync_mode=None, **kwargs) -> Iterable[Optional[Mapping[str, any]]]:
         if sync_mode == SyncMode.incremental:
