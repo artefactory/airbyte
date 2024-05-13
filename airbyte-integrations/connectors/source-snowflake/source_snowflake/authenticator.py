@@ -74,8 +74,9 @@ class SnowflakeJwtAuthenticator(JwtAuthenticator):
         :param sub: account name in the correct format
         :return: public key fingerprint
         """
+        encoded_password = password.encode() if password is not None else None
         private_key_object = load_pem_private_key(private_key.encode(),
-                                                  password.encode(),
+                                                  encoded_password,
                                                   default_backend())
 
         # Get the raw bytes of public key.
