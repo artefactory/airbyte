@@ -97,8 +97,8 @@ class SourceSnowflake(AbstractSource):
                 if parent_stream_name not in standard_streams:
                     continue
                 parent_stream = standard_streams[parent_stream_name]
-                parent_namespace = stream['parent_namespace']
-                if parent_stream:
+                parent_namespace = stream.get('parent_namespace', False)
+                if parent_stream and parent_namespace:
                     # should we set prent namespace ?
                     parent_stream.namespace = parent_namespace
 
