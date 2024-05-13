@@ -4,17 +4,18 @@
 
 
 import logging
+import sys
 from abc import ABC
 from typing import Any, Iterable, List, Mapping, MutableMapping, Optional, Tuple
 
 import requests
-from datetime import datetime
+from datetime import datetime, timedelta
 from airbyte_cdk.sources import AbstractSource
 from airbyte_cdk.sources.streams import Stream, IncrementalMixin
 from airbyte_cdk.sources.streams.http import HttpStream, HttpSubStream
 from airbyte_cdk.sources.streams.http.auth import TokenAuthenticator
 from airbyte_protocol.models import SyncMode, Type
-from airbyte_cdk.models import AirbyteCatalog, AirbyteMessage, AirbyteStateMessage, ConfiguredAirbyteCatalog
+from airbyte_cdk.models import AirbyteCatalog, AirbyteMessage, AirbyteStateMessage, ConfiguredAirbyteCatalog, AirbyteStateType, AirbyteStreamState, StreamDescriptor, AirbyteStateBlob
 from airbyte_cdk.logger import AirbyteLogger
 from airbyte_cdk.utils.traced_exception import AirbyteTracedException, FailureType
 from .schema_helpers import SchemaHelpers
@@ -218,6 +219,23 @@ class BigqueryResultStream(BigqueryStream):
                 "_bigquery_created_time": None, #TODO: Update this to row insertion time
                 **{element["name"]: SchemaHelpers.format_field(rows[fields.index(element)]["v"], element["type"]) for element in fields},
             }
+
+    def checkpoint(self, stream_name, stream_state, stream_namespace):
+        """
+        Checkpoint state.
+        """
+        state = AirbyteMessage(
+            type=Type.STATE,
+            state=AirbyteStateMessage(
+                type= AirbyteStateType.STREAM,
+                stream=AirbyteStreamState(
+                    stream_descriptor=StreamDescriptor(name=stream_name, namespace=stream_namespace),
+                    stream_state=AirbyteStateBlob.parse_obj(stream_state),
+                    )
+            ),
+        )
+        self.logger.info(f"Checkpoint state of {self.name} is {stream_state}")
+        print(state.json(exclude_unset=True))  # Emit state
 
 
 class TableQueryResult(BigqueryResultStream):
@@ -423,6 +441,7 @@ class BigqueryCDCStream(BigqueryResultStream, IncrementalMixin):
         super().__init__(stream_path, stream_name, stream_schema, stream_request, **kwargs)
         self.request_body = stream_request
         self._cursor = None
+        self.checkpoint_time = datetime.now()
     
     @property
     def name(self):
@@ -453,7 +472,7 @@ class BigqueryCDCStream(BigqueryResultStream, IncrementalMixin):
     def supports_incremental(self) -> bool:
         return True
     
-    def get_updated_state(self, current_stream_state: MutableMapping[str, Any], latest_record: Mapping[str, Any]) -> Mapping[str, Any]:
+    def get_updated_state(self, current_stream_state: MutableMapping[str, Any], latest_record: Mapping[str, Any], **kwargs) -> Mapping[str, Any]:
         """
         Override to determine the latest state after reading the latest record. This typically compared the cursor_field from the latest record and
         the current state and picks the 'most' recent cursor. This is how a stream's state is determined. Required for incremental.
@@ -466,7 +485,10 @@ class BigqueryCDCStream(BigqueryResultStream, IncrementalMixin):
         else:
             self._cursor = latest_record_state
             self.state = {self.cursor_field: self._cursor} 
-        
+        self.logger.info(f"current state of {self.name} is {self.state}")
+        if datetime.now() >= self.checkpoint_time + timedelta(minutes=15):
+            self.checkpoint(self.name, self.state, self.namespace)
+            self.checkpoint_time = datetime.now()
         return self.state
 
     def stream_slices(self, stream_state: Mapping[str, Any] = None, cursor_field=None, sync_mode=None, **kwargs) -> Iterable[Optional[Mapping[str, any]]]:
