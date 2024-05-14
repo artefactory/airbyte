@@ -1,12 +1,13 @@
 #
 import uuid
 from abc import ABC
+from collections import OrderedDict
 from typing import Any, Iterable, List, Mapping, MutableMapping, Optional, Tuple, Union
 
 import requests
 from airbyte_cdk.sources.streams.http import HttpStream, HttpSubStream
 from airbyte_protocol.models import SyncMode
-from .schema_builder import mapping_snowflake_type_airbyte_type
+from .schema_builder import mapping_snowflake_type_airbyte_type, format_field
 
 """
 TODO: Most comments in this class are instructive and should be deleted after the source is implemented.
@@ -383,10 +384,13 @@ class TableStream(SnowflakeStream):
         :return an iterable containing each record in the response
         """
         response_json = response.json()
-        ordered_column_names = [row_type['name'] for row_type in
-                                response_json.get('resultSetMetaData', {'rowType': []}).get('rowType', [])]
+        ordered_mapping_names_types = OrderedDict(
+            [(row_type['name'], row_type['type'])
+             for row_type in response_json.get('resultSetMetaData', {'rowType': []}).get('rowType', [])]
+        )
         for record in response_json.get("data", []):
-            yield {column_name: column_value for column_name, column_value in zip(ordered_column_names, record)}
+            yield {column_name: format_field(column_value, ordered_mapping_names_types[column_name])
+                   for column_name, column_value in zip(ordered_mapping_names_types.keys(), record)}
 
     def __str__(self):
         return f"Current stream has this table object as constructor {self.table_object}"
