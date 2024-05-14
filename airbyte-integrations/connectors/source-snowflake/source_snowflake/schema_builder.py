@@ -34,7 +34,7 @@ numeric_snowflake_type_airbyte_type = {
     "REAL": SchemaTypes.number,
 
     # Not present in documentation
-    'FIXED': SchemaTypes.integer,
+    'FIXED': SchemaTypes.number,
 }
 
 string_snowflake_type_airbyte_type = {
