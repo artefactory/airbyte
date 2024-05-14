@@ -6,6 +6,7 @@ from typing import Any, Iterable, List, Mapping, MutableMapping, Optional, Union
 
 import requests
 from airbyte_cdk.sources.streams import IncrementalMixin
+from airbyte_cdk.sources.streams.core import StreamData
 from airbyte_cdk.sources.streams.http import HttpStream
 from airbyte_protocol.models import SyncMode
 from .schema_builder import mapping_snowflake_type_airbyte_type, format_field
@@ -363,15 +364,15 @@ class TableStream(SnowflakeStream, IncrementalMixin):
     def supports_incremental(self) -> bool:
         return True
 
-    def get_updated_state(self, current_stream_state: MutableMapping[str, Any], latest_record: Mapping[str, Any]) -> Mapping[str, Any]:
+    def _get_updated_state(self, latest_record: Mapping[str, Any]) -> Mapping[str, Any]:
         """
         Override to determine the latest state after reading the latest record. This typically compared the cursor_field from the latest record and
         the current state and picks the 'most' recent cursor. This is how a stream's state is determined. Required for incremental.
         """
         latest_record_state = latest_record[self.cursor_field]
-        stream_state = current_stream_state.get(self.cursor_field)
-        if stream_state:
-            self._cursor_value = max(latest_record_state, stream_state)
+        if self.state is not None and len(self.state) > 0:
+            current_state_value = self.state[self.cursor_field]
+            self._cursor_value = max(latest_record_state, current_state_value) if current_state_value is not None else latest_record_state
             self.state = {self.cursor_field: self._cursor_value}
             return {self.cursor_field: self._cursor_value}
         self._cursor_value = latest_record_state
@@ -472,6 +473,17 @@ class TableStream(SnowflakeStream, IncrementalMixin):
 
         return json_payload
 
+    def read_records(
+        self,
+        sync_mode: SyncMode,
+        cursor_field: Optional[List[str]] = None,
+        stream_slice: Optional[Mapping[str, Any]] = None,
+        stream_state: Optional[Mapping[str, Any]] = None,
+    ) -> Iterable[StreamData]:
+        for record in super().read_records(sync_mode, cursor_field, stream_slice, stream_state):
+            self.state = self._get_updated_state(record)
+            yield record
+
     def parse_response(self, response: requests.Response, **kwargs) -> Iterable[Mapping]:
         """
         :return an iterable containing each record in the response
@@ -548,7 +560,6 @@ class PushDownFilterStream(TableStream):
         database = self.config["database"]
         schema = self.table_object["schema"]
         table = self.table_object["table"]
-        print(self.name)
         return f"SELECT * FROM {database}.{schema}.{table} WHERE {self.where_clause}"
 
     def __str__(self):
