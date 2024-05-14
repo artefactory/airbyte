@@ -91,7 +91,7 @@ class SourceBigquery(AbstractSource):
         self._auth = BigqueryAuth(config)
         streams = config.get("streams", [])
         sync_method = config["replication_method"]["method"]
-
+        
         if streams:
             for stream in streams:
                 dataset_id, table_id = stream["parent_stream"].split(".")
@@ -106,7 +106,7 @@ class SourceBigquery(AbstractSource):
                             {
                                 "stream_path": f"{table_obj.path()}",
                                 "stream": SchemaHelpers.get_airbyte_stream(
-                                    f"{dataset_id}.{table_id}",
+                                    f"{stream['name']}",
                                     SchemaHelpers.get_json_schema(table),
                                 ),
                                 "table_data": None,
