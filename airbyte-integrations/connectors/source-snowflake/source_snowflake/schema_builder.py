@@ -96,10 +96,17 @@ mapping_snowflake_type_airbyte_type = {
 def format_field(field_value, field_type):
 
     # TODO check for semi structured data type
-    if field_type.upper() in ('DATE', 'DATETIME', 'TIMESTAMP_LTZ', 'TIMESTAMP_TZ', 'TIMESTAMP_NTZ', 'TIMESTAMP', 'TIME') and field_value:
-        ts = float(field_value)
-        dt = datetime.fromtimestamp(ts, pytz.timezone("UTC"))
-        return dt.isoformat(timespec='microseconds')
+    if field_type.upper() in date_and_time_snowflake_type_airbyte_type.keys() and field_value:
+        try:
+            if isinstance(field_value, str):
+                ts = float(field_value.split(' ')[0])
+            else:
+                ts = float(field_value)
+            dt = datetime.fromtimestamp(ts, pytz.timezone("UTC"))
+            return dt.isoformat(timespec='microseconds')
+        except ValueError:
+            # maybe add warning
+            return field_value
 
     if field_type.upper() in ('INT', 'INTEGER', 'BIGINT', 'SMALLINT', 'TINYINT', 'BYTEINT') and field_value:
         return int(field_value)
