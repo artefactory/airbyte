@@ -2,11 +2,11 @@
 import uuid
 from abc import ABC
 from collections import OrderedDict
-from typing import Any, Iterable, List, Mapping, MutableMapping, Optional, Tuple, Union
+from typing import Any, Iterable, List, Mapping, MutableMapping, Optional, Union
 
 import requests
 from airbyte_cdk.sources.streams import IncrementalMixin
-from airbyte_cdk.sources.streams.http import HttpStream, HttpSubStream
+from airbyte_cdk.sources.streams.http import HttpStream
 from airbyte_protocol.models import SyncMode
 from .schema_builder import mapping_snowflake_type_airbyte_type, format_field
 
@@ -220,7 +220,7 @@ class TableCatalogStream(SnowflakeStream):
         schema = self.config.get('schema', '')
         if schema:
             json_payload['schema'] = schema
-        print('json payload', json_payload, flush=True)
+
         return json_payload
 
     @classmethod
@@ -330,7 +330,7 @@ class TableStream(SnowflakeStream, IncrementalMixin):
         self.table_schema_stream = TableSchemaStream(url_base=url_base, config=config, table_object=table_object,
                                                      **stream_filtered_kwargs)
         self._namespace = None
-        self._cursor = None
+        self._cursor_value = None
         schema_generator = self.table_schema_stream.read_records(sync_mode=SyncMode.full_refresh)
         first_column = next(schema_generator)["column_name"]
         self._cursor_field = first_column
@@ -347,13 +347,13 @@ class TableStream(SnowflakeStream, IncrementalMixin):
     def state(self):
         if not self.cursor_field:
             return {}
-        return {self.cursor_field: self._cursor}
+        return {self.cursor_field: self._cursor_value}
 
     @state.setter
     def state(self, new_state):
         if not (new_state is None or not new_state):
             self.cursor_field = list(new_state.keys())[0]
-            self._cursor = new_state[self.cursor_field]
+            self._cursor_value = new_state[self.cursor_field]
 
     @property
     def source_defined_cursor(self) -> bool:
@@ -371,12 +371,12 @@ class TableStream(SnowflakeStream, IncrementalMixin):
         latest_record_state = latest_record[self.cursor_field]
         stream_state = current_stream_state.get(self.cursor_field)
         if stream_state:
-            self._cursor = max(latest_record_state, stream_state)
-            self.state = {self.cursor_field: self._cursor}
-            return {self.cursor_field: self._cursor}
-        self._cursor = latest_record_state
-        self.state = {self.cursor_field: self._cursor}
-        return {self.cursor_field: self._cursor}
+            self._cursor_value = max(latest_record_state, stream_state)
+            self.state = {self.cursor_field: self._cursor_value}
+            return {self.cursor_field: self._cursor_value}
+        self._cursor_value = latest_record_state
+        self.state = {self.cursor_field: self._cursor_value}
+        return {self.cursor_field: self._cursor_value}
 
     @property
     def namespace(self):
@@ -420,26 +420,26 @@ class TableStream(SnowflakeStream, IncrementalMixin):
                 self.cursor_field = cursor_field
 
             if stream_state:
-                self._cursor = stream_state.get(self.cursor_field)
+                self._cursor_value = stream_state.get(self.cursor_field)
 
-            yield {self.cursor_field: self._cursor}
+            yield {self.cursor_field: self._cursor_value}
         else:
-            yield None
+            yield {}
 
     def get_updated_statement(self, stream_slice):
         """
         Can be used consistently only in request_body_json
-        otherwise we are not sure stream slice is the next slice and _cursor is updated with the correct data
+        otherwise we are not sure stream slice is the next slice and _cursor_value is updated with the correct data
         """
 
         updated_statement = self.statement
 
         if stream_slice:
             # TODO MAKE SURE THE CURSOR IS SINGLE VALUE AND NOT A STARTING AND ENDING VALUE (ex: window)
-            self._cursor = stream_slice.get(self.cursor_field, None)
+            self._cursor_value = stream_slice.get(self.cursor_field, None)
 
-        if self._cursor:
-            condition_of_state = f"{self.cursor_field}>={self._cursor}"
+        if self._cursor_value:
+            condition_of_state = f"{self.cursor_field}>={self._cursor_value}"
             key_word_where = " where "  # spaces in case there is a where in a table name
             if key_word_where in self.statement.lower():
                 updated_statement = f"{self.statement} AND {condition_of_state}"

@@ -92,22 +92,24 @@ class SourceSnowflake(AbstractSource):
 
         push_down_filters_streams = []
         if 'streams' in config and config['streams']:
-            for stream in config['streams']:
-                parent_stream_name = stream['parent_stream']
+            for push_down_filter_stream_config in config['streams']:
+                push_down_filter_namespace = push_down_filter_stream_config.get('namespace', None)
+
+                parent_stream_name = push_down_filter_stream_config['parent_stream']
                 if parent_stream_name not in standard_streams:
                     continue
+
                 parent_stream = standard_streams[parent_stream_name]
-                parent_namespace = stream.get('parent_namespace', False)
+                parent_namespace = push_down_filter_stream_config.get('parent_namespace', False)
                 if parent_stream and parent_namespace:
-                    # should we set prent namespace ?
+                    # should we set parent namespace ?
                     parent_stream.namespace = parent_namespace
-                stream_name_space = stream.get('namespace', None)
-                push_down_filter_stream = PushDownFilterStream(name=stream['name'],
+                push_down_filter_stream = PushDownFilterStream(name=push_down_filter_stream_config['name'],
                                                                url_base=url_base,
                                                                config=config,
-                                                               where_clause=stream['where_clause'],
+                                                               where_clause=push_down_filter_stream_config['where_clause'],
                                                                parent_stream=parent_stream,
-                                                               namespace=stream_name_space,
+                                                               namespace=push_down_filter_namespace,
                                                                authenticator=authenticator,)
                 push_down_filters_streams.append(push_down_filter_stream)
 
