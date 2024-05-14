@@ -101,13 +101,13 @@ class SourceSnowflake(AbstractSource):
                 if parent_stream and parent_namespace:
                     # should we set prent namespace ?
                     parent_stream.namespace = parent_namespace
-
+                stream_name_space = stream.get('namespace', None)
                 push_down_filter_stream = PushDownFilterStream(name=stream['name'],
                                                                url_base=url_base,
                                                                config=config,
                                                                where_clause=stream['where_clause'],
                                                                parent_stream=parent_stream,
-                                                               namespace=stream['namespace'],
+                                                               namespace=stream_name_space,
                                                                authenticator=authenticator,)
                 push_down_filters_streams.append(push_down_filter_stream)
 

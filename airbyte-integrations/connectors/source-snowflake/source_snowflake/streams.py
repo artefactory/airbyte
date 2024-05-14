@@ -331,7 +331,9 @@ class TableStream(SnowflakeStream, IncrementalMixin):
                                                      **stream_filtered_kwargs)
         self._namespace = None
         self._cursor = None
-        self._cursor_field = None
+        schema_generator = self.table_schema_stream.read_records(sync_mode=SyncMode.full_refresh)
+        first_column = next(schema_generator)["column_name"]
+        self._cursor_field = first_column
 
     @property
     def cursor_field(self):
@@ -349,8 +351,9 @@ class TableStream(SnowflakeStream, IncrementalMixin):
 
     @state.setter
     def state(self, new_state):
-        self.cursor_field = list(new_state.keys())[0]
-        self._cursor = new_state[self.cursor_field]
+        if not (new_state is None or not new_state):
+            self.cursor_field = list(new_state.keys())[0]
+            self._cursor = new_state[self.cursor_field]
 
     @property
     def source_defined_cursor(self) -> bool:
@@ -374,7 +377,6 @@ class TableStream(SnowflakeStream, IncrementalMixin):
         self._cursor = latest_record_state
         self.state = {self.cursor_field: self._cursor}
         return {self.cursor_field: self._cursor}
-
 
     @property
     def namespace(self):
@@ -409,7 +411,8 @@ class TableStream(SnowflakeStream, IncrementalMixin):
 
         return f"SELECT * FROM {database}.{schema}.{table}"
 
-    def stream_slices(self, stream_state: Mapping[str, Any] = None, cursor_field=None, sync_mode=None, **kwargs) -> Iterable[Optional[Mapping[str, any]]]:
+    def stream_slices(self, stream_state: Mapping[str, Any] = None, cursor_field=None, sync_mode=None, **kwargs) -> Iterable[
+        Optional[Mapping[str, any]]]:
         if sync_mode == SyncMode.incremental:
             if isinstance(cursor_field, list) and cursor_field:
                 self.cursor_field = cursor_field[0]
@@ -478,6 +481,9 @@ class TableStream(SnowflakeStream, IncrementalMixin):
             [(row_type['name'], row_type['type'])
              for row_type in response_json.get('resultSetMetaData', {'rowType': []}).get('rowType', [])]
         )
+        print("-"*30)
+        print(response_json.get("data", []))
+        print("-"*30)
         for record in response_json.get("data", []):
             yield {column_name: format_field(column_value, ordered_mapping_names_types[column_name])
                    for column_name, column_value in zip(ordered_mapping_names_types.keys(), record)}
@@ -544,7 +550,7 @@ class PushDownFilterStream(TableStream):
         database = self.config["database"]
         schema = self.table_object["schema"]
         table = self.table_object["table"]
-
+        print(self.name)
         return f"SELECT * FROM {database}.{schema}.{table} WHERE {self.where_clause}"
 
     def __str__(self):
