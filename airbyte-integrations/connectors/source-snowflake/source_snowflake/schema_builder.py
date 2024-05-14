@@ -1,3 +1,4 @@
+import json
 from datetime import datetime
 from typing import Dict
 
@@ -95,7 +96,12 @@ mapping_snowflake_type_airbyte_type = {
 
 def format_field(field_value, field_type):
 
-    # TODO check for semi structured data type
+    if field_type.upper() in ('OBJECT', 'ARRAY'):
+        print('-'*30)
+        print(json.loads(field_value))
+        print('-'*30)
+        return json.loads(field_value)
+
     if field_type.upper() in date_and_time_snowflake_type_airbyte_type.keys() and field_value:
         try:
             if isinstance(field_value, str):
