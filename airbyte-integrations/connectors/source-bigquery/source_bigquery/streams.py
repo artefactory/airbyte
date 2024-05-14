@@ -451,7 +451,7 @@ class BigqueryCDCStream(BigqueryResultStream, IncrementalMixin):
         super().__init__(stream_path, stream_name, stream_schema, stream_request, **kwargs)
         self.request_body = stream_request
         self._cursor = None
-        self.checkpoint_time = datetime.now()
+        self._checkpoint_time = datetime.now()
     
     @property
     def name(self):
@@ -496,9 +496,9 @@ class BigqueryCDCStream(BigqueryResultStream, IncrementalMixin):
         self.state = {self.cursor_field: self._cursor} 
         self.logger.info(f"current state of {self.name} is {self.state}")
 
-        if datetime.now() >= self.checkpoint_time + timedelta(minutes=15):
+        if datetime.now() >= self._checkpoint_time + timedelta(minutes=15):
             self.checkpoint(self.name, self.state, self.namespace)
-            self.checkpoint_time = datetime.now()
+            self._checkpoint_time = datetime.now()
         return self.state
 
     def stream_slices(self, stream_state: Mapping[str, Any] = None, cursor_field=None, sync_mode=None, **kwargs) -> Iterable[Optional[Mapping[str, any]]]:
