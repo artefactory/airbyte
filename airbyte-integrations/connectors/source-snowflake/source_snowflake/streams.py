@@ -481,9 +481,7 @@ class TableStream(SnowflakeStream, IncrementalMixin):
             [(row_type['name'], row_type['type'])
              for row_type in response_json.get('resultSetMetaData', {'rowType': []}).get('rowType', [])]
         )
-        print("-"*30)
-        print(response_json.get("data", []))
-        print("-"*30)
+
         for record in response_json.get("data", []):
             yield {column_name: format_field(column_value, ordered_mapping_names_types[column_name])
                    for column_name, column_value in zip(ordered_mapping_names_types.keys(), record)}
