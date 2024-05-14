@@ -405,7 +405,7 @@ class TableStream(SnowflakeStream):
             snowflake_column_type = column_object['type'].upper()
             if snowflake_column_type not in mapping_snowflake_type_airbyte_type:
                 raise ValueError(f"The type {snowflake_column_type} is not recognized. "
-                                 f"You should update the mapping to consider this unknown type")
+                                 f"Please, contact Airbyte support to update the connector to handle this new type")
             airbyte_column_type_object = mapping_snowflake_type_airbyte_type[snowflake_column_type]
             properties[column_name] = airbyte_column_type_object
         return json_schema
