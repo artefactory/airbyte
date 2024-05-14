@@ -325,13 +325,14 @@ class BigqueryIncrementalStream(BigqueryResultStream, IncrementalMixin):
         """
         latest_record_state = latest_record[self.cursor_field]
         stream_state = current_stream_state.get(self.cursor_field)
+
         if stream_state:
             self._cursor = max(latest_record_state, stream_state)
-            self.state = {self.cursor_field: self._cursor} 
-            return {self.cursor_field: self._cursor}
-        self._cursor = latest_record_state
+        else:
+            self._cursor = latest_record_state
         self.state = {self.cursor_field: self._cursor} 
-        return {self.cursor_field: self._cursor}
+
+        return self.state
 
     def stream_slices(self, stream_state: Mapping[str, Any] = None, cursor_field=None, sync_mode=None, **kwargs) -> Iterable[Optional[Mapping[str, any]]]:
         if sync_mode == SyncMode.incremental:
@@ -481,11 +482,11 @@ class BigqueryCDCStream(BigqueryResultStream, IncrementalMixin):
         stream_state = current_stream_state.get(self.cursor_field)
         if stream_state:
             self._cursor = max(latest_record_state, stream_state)
-            self.state = {self.cursor_field: self._cursor} 
         else:
             self._cursor = latest_record_state
-            self.state = {self.cursor_field: self._cursor} 
+        self.state = {self.cursor_field: self._cursor} 
         self.logger.info(f"current state of {self.name} is {self.state}")
+
         if datetime.now() >= self.checkpoint_time + timedelta(minutes=15):
             self.checkpoint(self.name, self.state, self.namespace)
             self.checkpoint_time = datetime.now()
