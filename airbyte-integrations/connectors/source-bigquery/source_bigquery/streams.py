@@ -294,6 +294,7 @@ class BigqueryIncrementalStream(BigqueryResultStream, IncrementalMixin):
         super().__init__(stream_path, stream_name, stream_schema, stream_request, **kwargs)
         self.request_body = stream_request
         self._cursor = None
+        self._checkpoint_time = datetime.now()
         
     @property
     def name(self):
@@ -331,6 +332,10 @@ class BigqueryIncrementalStream(BigqueryResultStream, IncrementalMixin):
         else:
             self._cursor = latest_record_state
         self.state = {self.cursor_field: self._cursor} 
+
+        if datetime.now() >= self._checkpoint_time + timedelta(minutes=15):
+            self.checkpoint(self.name, self.state, self.namespace)
+            self._checkpoint_time = datetime.now()
 
         return self.state
 
