@@ -249,7 +249,8 @@ class TableQueryResult(BigqueryResultStream):
         stream_slice: Optional[Mapping[str, Any]] = None,
         next_page_token: Optional[Mapping[str, Any]] = None,
     ) -> Optional[Mapping[str, Any]]:
-        query_string = f"select * from `{self.parent_stream}` where {self.where_clause}"
+        where_clause = self.where_clause.replace("\"", "'")
+        query_string = f"select * from `{self.parent_stream}` where {where_clause}"
         request_body = {
             "kind": "bigquery#queryRequest",
             "query": query_string,
@@ -263,8 +264,6 @@ class TableQueryResult(BigqueryResultStream):
         Override this method to define how a response is parsed.
         :return an iterable containing each record in the response
         """
-        # import ipdb
-        # ipdb.set_trace()
         record = response.json()
         yield record
 
