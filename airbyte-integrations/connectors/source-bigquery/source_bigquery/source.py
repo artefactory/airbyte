@@ -89,7 +89,7 @@ class SourceBigquery(AbstractSource):
         :param config: A Mapping of the user input configuration as defined in the connector spec.
         """
         self._auth = BigqueryAuth(config)
-        streams = config.get("streams")
+        streams = config.get("streams", [])
         if streams:
             for stream in streams:
                 parent_stream = stream['parent_stream']
