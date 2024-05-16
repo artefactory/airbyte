@@ -422,7 +422,10 @@ class TableStream(SnowflakeStream, IncrementalMixin):
         Optional[Mapping[str, any]]]:
         if sync_mode == SyncMode.incremental:
             if isinstance(cursor_field, list) and cursor_field:
-                self.cursor_field = cursor_field[0]
+                if len(cursor_field) == 1:
+                    self.cursor_field = cursor_field[0]
+                else:
+                    raise ValueError('When cursor_field is a list, its size must be 1')
             elif cursor_field:
                 self.cursor_field = cursor_field
 
