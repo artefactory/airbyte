@@ -9,6 +9,7 @@ connectionSpecification:
     - warehouse
     - database
     - role
+    - replication_method
   properties:
     credentials:
       oneOf:
@@ -76,50 +77,50 @@ connectionSpecification:
         - user_name
         title: JWT Token
         type: object
-      order: 0
+      order: 1
       title: Authorization Method
       type: object
-    database:
-      description: The database you created for Airbyte to access data.
-      examples:
-      - AIRBYTE_DATABASE
-      order: 4
-      title: Database
-      type: string
     host:
       description: The host domain of the snowflake instance (must include the account,
         region, cloud environment, and end with snowflakecomputing.com).
       examples:
       - accountname.us-east-2.aws.snowflakecomputing.com
-      order: 1
+      order: 2
       title: Account Name
       type: string
     role:
       description: The role you created for Airbyte to access Snowflake.
       examples:
       - AIRBYTE_ROLE
-      order: 2
+      order: 3
       title: Role
+      type: string
+    warehouse:
+      description: The warehouse you created for Airbyte to access data.
+      examples:
+        - AIRBYTE_WAREHOUSE
+      order: 4
+      title: Warehouse
+      type: string
+    database:
+      description: The database you created for Airbyte to access data.
+      examples:
+        - AIRBYTE_DATABASE
+      order: 5
+      title: Database
       type: string
     schema:
       description: The source Snowflake schema tables. Leave empty to access tables
         from multiple schemas.
       examples:
       - AIRBYTE_SCHEMA
-      order: 5
+      order: 6
       title: Schema
-      type: string
-    warehouse:
-      description: The warehouse you created for Airbyte to access data.
-      examples:
-      - AIRBYTE_WAREHOUSE
-      order: 3
-      title: Warehouse
       type: string
     streams:
       title: Push Down Filter
       description: Used to filter out data on the source and creates a dedicated stream
-      order: 8
+      order: 7
       type: array
       items:
         title: FileBasedStreamConfig
@@ -149,3 +150,31 @@ connectionSpecification:
         - name
         - parent_stream
         - where_clause
+    replication_method:
+      type: object
+      title: Update Method
+      description: Configures how data is extracted from the database.
+      order: 8
+      group: advanced
+      default: standard
+      display_type: radio
+      oneOf:
+        - title: Scan Changes with User Defined Cursor
+          description: Incrementally detects new inserts and updates using the <a href="https://docs.airbyte.com/understanding-airbyte/connections/incremental-append/#user-defined-cursor">cursor
+            column</a> chosen when configuring a connection (e.g. created_at, updated_at).
+          required:
+            - method
+          properties:
+            method:
+              type: string
+              const: standard
+              order: 8
+        - title: Read Changes using Change History
+          description: Incrementally reads new inserts using Snowflake's change history
+          required:
+            - method
+          properties:
+            method:
+              type: string
+              const: history
+              order: 8
