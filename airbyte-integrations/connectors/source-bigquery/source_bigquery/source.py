@@ -22,6 +22,8 @@ from airbyte_cdk.sources.concurrent_source.concurrent_source import ConcurrentSo
 from airbyte_cdk.sources.connector_state_manager import ConnectorStateManager
 from airbyte_cdk.sources.message import InMemoryMessageRepository
 from airbyte_cdk.sources.source import TState
+from airbyte_cdk.sources.streams.concurrent.adapters import StreamFacade
+from airbyte_cdk.sources.streams.concurrent.cursor import ConcurrentCursor, CursorField, FinalStateCursor
 
 from .auth import BigqueryAuth
 from .streams import BigqueryDatasets, BigqueryTables, BigqueryStream, BigqueryTable, BigqueryTableData, BigqueryIncrementalStream, IncrementalQueryResult, TableChangeHistory, BigqueryCDCStream
@@ -104,7 +106,7 @@ class SourceBigquery(ConcurrentSourceAdapter):
             return True, error_msg
         return True, None
     
-    def streams(self, config: Mapping[str, Any]) -> Iterable[Stream]:
+    def streams(self, config: Mapping[str, Any]) -> List[Stream]:
         """
         Replace the streams below with your own streams.
 
@@ -165,21 +167,24 @@ class SourceBigquery(ConcurrentSourceAdapter):
                                 "type": incremental_type
                             }
                         )
-                    
+        
+        streams = []
         for stream in self.streams_catalog:
             if stream["type"] == "Standard":
-                yield BigqueryIncrementalStream(
+                streams.append(BigqueryIncrementalStream(
                     stream_path=stream["stream_path"],
                     stream_name=stream["stream"].name,
                     stream_schema=stream["stream"].json_schema,
                     stream_request=stream["table_data"],
                     authenticator=self._auth,
-                )
+                ))
             else:
-                yield BigqueryCDCStream(
+                streams.append(BigqueryCDCStream(
                     stream_path=stream["stream_path"],
                     stream_name=stream["stream"].name,
                     stream_schema=stream["stream"].json_schema,
                     stream_request=stream["table_data"],
                     authenticator=self._auth,
-                )
+                ))
+        
+        return streams
