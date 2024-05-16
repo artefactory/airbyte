@@ -338,9 +338,7 @@ class TableStream(SnowflakeStream, IncrementalMixin):
                                                      **stream_filtered_kwargs)
         self._namespace = None
         self._cursor_value = None
-        schema_generator = self.table_schema_stream.read_records(sync_mode=SyncMode.full_refresh)
-        first_column = next(schema_generator)["column_name"]
-        self._cursor_field = first_column
+        self._cursor_field = []
 
     @property
     def cursor_field(self):
@@ -352,7 +350,7 @@ class TableStream(SnowflakeStream, IncrementalMixin):
 
     @property
     def state(self):
-        if not self.cursor_field:
+        if not self.cursor_field or isinstance(self.cursor_field, list):
             return {}
         return {self.cursor_field: self._cursor_value}
 
@@ -490,7 +488,8 @@ class TableStream(SnowflakeStream, IncrementalMixin):
         stream_state: Optional[Mapping[str, Any]] = None,
     ) -> Iterable[StreamData]:
         for record in super().read_records(sync_mode, cursor_field, stream_slice, stream_state):
-            self.state = self._get_updated_state(record)
+            if isinstance(self.cursor_field, str):
+                self.state = self._get_updated_state(record)
             yield record
 
     def parse_response(self, response: requests.Response, **kwargs) -> Iterable[Mapping]:
