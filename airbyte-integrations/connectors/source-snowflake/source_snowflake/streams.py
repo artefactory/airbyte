@@ -454,6 +454,7 @@ class TableStream(SnowflakeStream, IncrementalMixin):
             else:
                 updated_statement = f"{self.statement} WHERE {condition_of_state}"
 
+        if self.cursor_field:
             updated_statement = f"{updated_statement} ORDER BY {self.cursor_field} ASC"
 
         return updated_statement
