@@ -1,14 +1,21 @@
 #
+import logging
 import uuid
 from abc import ABC
 from collections import OrderedDict
+from datetime import datetime, timedelta
 from typing import Any, Iterable, List, Mapping, MutableMapping, Optional, Union
 
 import requests
 from airbyte_cdk.sources.streams import IncrementalMixin
 from airbyte_cdk.sources.streams.core import StreamData
 from airbyte_cdk.sources.streams.http import HttpStream
-from airbyte_protocol.models import SyncMode
+from airbyte_cdk.models import (AirbyteMessage, AirbyteStateMessage, AirbyteStateType,
+                                AirbyteStreamState, StreamDescriptor, AirbyteStateBlob)
+from airbyte_cdk.sources.utils.schema_helpers import InternalConfig
+from airbyte_cdk.sources.utils.slice_logger import SliceLogger
+from airbyte_protocol.models import SyncMode, Type, ConfiguredAirbyteStream
+
 from .schema_builder import mapping_snowflake_type_airbyte_type, format_field
 
 """
@@ -243,7 +250,6 @@ class TableCatalogStream(SnowflakeStream):
                              'and STableCatalogStream.SCHEMA_NAME_COLUMN with the keys representing this variables in resultSetMetaData '
                              'present in the Snowflake API response')
 
-
         return mapping_column_name_to_index
 
     def parse_response(self, response: requests.Response, **kwargs) -> Iterable[Mapping]:
@@ -339,6 +345,7 @@ class TableStream(SnowflakeStream, IncrementalMixin):
         self._namespace = None
         self._cursor_value = None
         self._cursor_field = []
+        self.checkpoint_time = datetime.now()
 
     @property
     def cursor_field(self):
@@ -368,20 +375,22 @@ class TableStream(SnowflakeStream, IncrementalMixin):
     def supports_incremental(self) -> bool:
         return True
 
-    def _get_updated_state(self, latest_record: Mapping[str, Any]) -> Mapping[str, Any]:
+    def checkpoint(self, stream_name, stream_state, stream_namespace):
         """
-        Override to determine the latest state after reading the latest record. This typically compared the cursor_field from the latest record and
-        the current state and picks the 'most' recent cursor. This is how a stream's state is determined. Required for incremental.
+        Checkpoint state.
         """
-        latest_record_state = latest_record[self.cursor_field]
-        if self.state is not None and len(self.state) > 0:
-            current_state_value = self.state[self.cursor_field]
-            self._cursor_value = max(latest_record_state, current_state_value) if current_state_value is not None else latest_record_state
-            self.state = {self.cursor_field: self._cursor_value}
-            return {self.cursor_field: self._cursor_value}
-        self._cursor_value = latest_record_state
-        self.state = {self.cursor_field: self._cursor_value}
-        return {self.cursor_field: self._cursor_value}
+        state = AirbyteMessage(
+            type=Type.STATE,
+            state=AirbyteStateMessage(
+                type=AirbyteStateType.STREAM,
+                stream=AirbyteStreamState(
+                    stream_descriptor=StreamDescriptor(name=stream_name, namespace=stream_namespace),
+                    stream_state=AirbyteStateBlob.parse_obj(stream_state),
+                )
+            ),
+        )
+        self.logger.info(f"Checkpoint state of {self.name} is {stream_state}")
+        print(state.json(exclude_unset=True))  # Emit state
 
     @property
     def namespace(self):
@@ -416,16 +425,63 @@ class TableStream(SnowflakeStream, IncrementalMixin):
 
         return f'SELECT * FROM "{database}"."{schema}"."{table}"'
 
+    ######################################
+    ###### State and cursor management
+    ######################################
+
+    def read(  # type: ignore  # ignoring typing for ConnectorStateManager because of circular dependencies
+            self,
+            configured_stream: ConfiguredAirbyteStream,
+            logger: logging.Logger,
+            slice_logger: SliceLogger,
+            stream_state: MutableMapping[str, Any],
+            state_manager,
+            internal_config: InternalConfig,
+    ) -> Iterable[StreamData]:
+        self.cursor_field = self._process_cursor_field(configured_stream.cursor_field)
+        return super().read(configured_stream,
+                            logger,
+                            slice_logger,
+                            stream_state,
+                            state_manager,
+                            internal_config)
+
+    def _get_updated_state(self, latest_record: Mapping[str, Any]) -> Mapping[str, Any]:
+        """
+        Override to determine the latest state after reading the latest record. This typically compared the cursor_field from the latest record and
+        the current state and picks the 'most' recent cursor. This is how a stream's state is determined. Required for incremental.
+        """
+        latest_record_state = latest_record[self.cursor_field]
+        if self.state is not None and len(self.state) > 0:
+            current_state_value = self.state[self.cursor_field]
+            self._cursor_value = max(latest_record_state, current_state_value) if current_state_value is not None else latest_record_state
+            self.state = {self.cursor_field: self._cursor_value}
+            return {self.cursor_field: self._cursor_value}
+        self._cursor_value = latest_record_state
+        self.state = {self.cursor_field: self._cursor_value}
+
+        self.logger.info(f"current state of {self.name} is {self.state}")
+        if datetime.now() >= self.checkpoint_time + timedelta(minutes=15):
+            self.checkpoint(self.name, self.state, self.namespace)
+            self.checkpoint_time = datetime.now()
+
+        return self.state
+
+    @classmethod
+    def _process_cursor_field(cls, cursor_field):
+        processed_cursor_field = cursor_field
+        if isinstance(cursor_field, list) and cursor_field:
+            if len(cursor_field) == 1:
+                processed_cursor_field = cursor_field[0]
+            else:
+                raise ValueError('When cursor_field is a list, its size must be 1')
+        return processed_cursor_field
+
     def stream_slices(self, stream_state: Mapping[str, Any] = None, cursor_field=None, sync_mode=None, **kwargs) -> Iterable[
         Optional[Mapping[str, any]]]:
+
         if sync_mode == SyncMode.incremental:
-            if isinstance(cursor_field, list) and cursor_field:
-                if len(cursor_field) == 1:
-                    self.cursor_field = cursor_field[0]
-                else:
-                    raise ValueError('When cursor_field is a list, its size must be 1')
-            elif cursor_field:
-                self.cursor_field = cursor_field
+            self.cursor_field = self._process_cursor_field(cursor_field)
 
             if stream_state:
                 self._cursor_value = stream_state.get(self.cursor_field)
@@ -481,17 +537,9 @@ class TableStream(SnowflakeStream, IncrementalMixin):
 
         return json_payload
 
-    def read_records(
-        self,
-        sync_mode: SyncMode,
-        cursor_field: Optional[List[str]] = None,
-        stream_slice: Optional[Mapping[str, Any]] = None,
-        stream_state: Optional[Mapping[str, Any]] = None,
-    ) -> Iterable[StreamData]:
-        for record in super().read_records(sync_mode, cursor_field, stream_slice, stream_state):
-            if isinstance(self.cursor_field, str):
-                self.state = self._get_updated_state(record)
-            yield record
+    ######################################
+    ###### Response processing
+    ######################################
 
     def parse_response(self, response: requests.Response, **kwargs) -> Iterable[Mapping]:
         """
@@ -507,8 +555,18 @@ class TableStream(SnowflakeStream, IncrementalMixin):
             yield {column_name: format_field(column_value, ordered_mapping_names_types[column_name])
                    for column_name, column_value in zip(ordered_mapping_names_types.keys(), record)}
 
-    def __str__(self):
-        return f"Current stream has this table object as constructor {self.table_object}"
+    def read_records(
+            self,
+            sync_mode: SyncMode,
+            cursor_field: Optional[List[str]] = None,
+            stream_slice: Optional[Mapping[str, Any]] = None,
+            stream_state: Optional[Mapping[str, Any]] = None,
+    ) -> Iterable[StreamData]:
+        self.cursor_field = self._process_cursor_field(cursor_field)
+        for record in super().read_records(sync_mode, cursor_field, stream_slice, stream_state):
+            if isinstance(self.cursor_field, str):
+                self.state = self._get_updated_state(record)
+            yield record
 
     def get_json_schema(self) -> Mapping[str, Any]:
         properties = {}
@@ -528,6 +586,9 @@ class TableStream(SnowflakeStream, IncrementalMixin):
             airbyte_column_type_object = mapping_snowflake_type_airbyte_type[snowflake_column_type]
             properties[column_name] = airbyte_column_type_object
         return json_schema
+
+    def __str__(self):
+        return f"Current stream has this table object as constructor {self.table_object}"
 
 
 class PushDownFilterStream(TableStream):
