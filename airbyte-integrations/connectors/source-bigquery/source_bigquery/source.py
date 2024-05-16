@@ -14,9 +14,14 @@ from airbyte_cdk.sources.streams import Stream
 from airbyte_cdk.sources.streams.http import HttpStream, HttpSubStream
 from airbyte_cdk.sources.streams.http.auth import TokenAuthenticator
 from airbyte_protocol.models import SyncMode, Type
-from airbyte_cdk.models import AirbyteCatalog, AirbyteMessage, AirbyteStateMessage, ConfiguredAirbyteCatalog
-from airbyte_cdk.logger import AirbyteLogger
+from airbyte_cdk.models import AirbyteCatalog, AirbyteMessage, AirbyteStateMessage, ConfiguredAirbyteCatalog, Level, ConfiguredAirbyteStream
+from airbyte_cdk.logger import AirbyteLogger, AirbyteLogFormatter
 from airbyte_cdk.utils.traced_exception import AirbyteTracedException, FailureType
+from airbyte_cdk.sources.concurrent_source.concurrent_source_adapter import ConcurrentSourceAdapter
+from airbyte_cdk.sources.concurrent_source.concurrent_source import ConcurrentSource
+from airbyte_cdk.sources.connector_state_manager import ConnectorStateManager
+from airbyte_cdk.sources.message import InMemoryMessageRepository
+from airbyte_cdk.sources.source import TState
 
 from .auth import BigqueryAuth
 from .streams import BigqueryDatasets, BigqueryTables, BigqueryStream, BigqueryTable, BigqueryTableData, BigqueryIncrementalStream, IncrementalQueryResult, TableChangeHistory, BigqueryCDCStream
@@ -33,12 +38,29 @@ The approach here is not authoritative, and devs are free to use their own judge
 
 There are additional required TODOs in the files within the integration_tests folder and the spec.yaml file.
 """
+_DEFAULT_CONCURRENCY = 10
+_MAX_CONCURRENCY = 10
 
 # Source
-class SourceBigquery(AbstractSource):
+class SourceBigquery(ConcurrentSourceAdapter):
     logger = logging.getLogger("airbyte")
     streams_catalog: Iterable[Mapping[str, Any]] = []
     _auth: BigqueryAuth = None
+
+    message_repository = InMemoryMessageRepository(Level(AirbyteLogFormatter.level_mapping[logger.level]))
+
+    def __init__(self, catalog: Optional[ConfiguredAirbyteCatalog], config: Optional[Mapping[str, Any]], state: Optional[TState], **kwargs):
+        if config:
+            concurrency_level = min(config.get("num_workers", _DEFAULT_CONCURRENCY), _MAX_CONCURRENCY)
+        else:
+            concurrency_level = _DEFAULT_CONCURRENCY
+        self.logger.info(f"Using concurrent cdk with concurrency level {concurrency_level}")
+        concurrent_source = ConcurrentSource.create(
+            concurrency_level, concurrency_level // 2, self.logger, self._slice_logger, self.message_repository
+        )
+        super().__init__(concurrent_source)
+        self.catalog = catalog
+        self.state = state
 
     def check_connection(self, logger, config: Mapping[str, Any]) -> Tuple[bool, any]:
         """
