@@ -97,9 +97,6 @@ mapping_snowflake_type_airbyte_type = {
 def format_field(field_value, field_type):
 
     if field_type.upper() in ('OBJECT', 'ARRAY'):
-        print('-'*30)
-        print(json.loads(field_value))
-        print('-'*30)
         return json.loads(field_value)
 
     if field_type.upper() in date_and_time_snowflake_type_airbyte_type.keys() and field_value:
