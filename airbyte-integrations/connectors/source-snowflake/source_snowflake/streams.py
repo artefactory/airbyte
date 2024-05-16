@@ -531,7 +531,6 @@ class TableStream(SnowflakeStream, IncrementalMixin):
 
 
 class PushDownFilterStream(TableStream):
-    # Remark maybe change the class name
 
     def __init__(self, name, url_base, config, where_clause, parent_stream, namespace=None, **kwargs):
         kwargs['url_base'] = url_base
