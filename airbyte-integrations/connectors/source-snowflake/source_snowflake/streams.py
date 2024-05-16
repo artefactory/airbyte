@@ -84,7 +84,7 @@ class SnowflakeStream(HttpStream, ABC):
             next_page_token: Optional[Mapping[str, Any]] = None,
     ) -> Mapping[str, Any]:
         headers = {
-            'User-Agent': 'myApplication/1.0',
+            'User-Agent': 'Airbyte',
             'X-Snowflake-Authorization-Token-Type': 'KEYPAIR_JWT',  # to be changed when authentication method is set
             'Content-Type': 'application/json',
             'Accept': 'application/json',
