@@ -21,4 +21,5 @@ def run():
         SourceBigquery.read_config(config_path) if config_path else None,
         SourceBigquery.read_state(state_path) if state_path else None,
     )
-    launch(source, sys.argv[1:])
+    if source:
+        launch(source, sys.argv[1:])

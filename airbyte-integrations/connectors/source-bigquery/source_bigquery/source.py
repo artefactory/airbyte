@@ -7,8 +7,10 @@ import logging
 from abc import ABC
 from typing import Any, Iterable, List, Mapping, MutableMapping, Optional, Tuple
 
+import pytz
 import requests
 from requests import codes, exceptions  # type: ignore[import]
+from datetime import datetime, timedelta
 from airbyte_cdk.sources import AbstractSource
 from airbyte_cdk.sources.streams import Stream
 from airbyte_cdk.sources.streams.http import HttpStream, HttpSubStream
@@ -24,6 +26,7 @@ from airbyte_cdk.sources.message import InMemoryMessageRepository
 from airbyte_cdk.sources.source import TState
 from airbyte_cdk.sources.streams.concurrent.adapters import StreamFacade
 from airbyte_cdk.sources.streams.concurrent.cursor import ConcurrentCursor, CursorField, FinalStateCursor
+from airbyte_cdk.sources.streams.concurrent.state_converters.datetime_stream_state_converter import EpochValueConcurrentStreamStateConverter, IsoMillisConcurrentStreamStateConverter
 
 from .auth import BigqueryAuth
 from .streams import BigqueryDatasets, BigqueryTables, BigqueryStream, BigqueryTable, BigqueryTableData, BigqueryIncrementalStream, IncrementalQueryResult, TableChangeHistory, BigqueryCDCStream
@@ -48,6 +51,10 @@ class SourceBigquery(ConcurrentSourceAdapter):
     logger = logging.getLogger("airbyte")
     streams_catalog: Iterable[Mapping[str, Any]] = []
     _auth: BigqueryAuth = None
+    _SLICE_BOUNDARY_FIELDS_BY_IMPLEMENTATION = {
+        BigqueryIncrementalStream: ("_bigquery_created_time", "_bigquery_created_time"),
+        BigqueryCDCStream: ("change_timestamp", "change_timestamp"),
+    }
 
     message_repository = InMemoryMessageRepository(Level(AirbyteLogFormatter.level_mapping[logger.level]))
 
@@ -187,4 +194,51 @@ class SourceBigquery(ConcurrentSourceAdapter):
                     authenticator=self._auth,
                 ))
         
-        return streams
+        state_manager = ConnectorStateManager(stream_instance_map={stream.name: stream for stream in streams}, state=self.state)
+        return [
+            self._to_concurrent(
+                stream,
+                datetime.now(tz=pytz.UTC) - timedelta(days=8),
+                timedelta(minutes=1),
+                state_manager,
+            )
+            for stream in streams
+        ]
+
+    def _to_concurrent(
+        self, stream: Stream, fallback_start: datetime, slice_range: timedelta, state_manager: ConnectorStateManager
+    ) -> Stream:
+        if self._stream_state_is_full_refresh(stream.state):
+            return StreamFacade.create_from_stream(
+                stream,
+                self,
+                self.logger,
+                self._create_empty_state(),
+                FinalStateCursor(stream_name=stream.name, stream_namespace=stream.namespace, message_repository=self.message_repository),
+            )
+
+        state = state_manager.get_stream_state(stream.name, stream.namespace)
+        slice_boundary_fields = self._SLICE_BOUNDARY_FIELDS_BY_IMPLEMENTATION.get(type(stream))
+        if slice_boundary_fields:
+            cursor_field = CursorField(stream.cursor_field) if isinstance(stream.cursor_field, str) else CursorField(stream.cursor_field[0])
+            converter = IsoMillisConcurrentStreamStateConverter()
+            cursor = ConcurrentCursor(
+                stream.name,
+                stream.namespace,
+                state_manager.get_stream_state(stream.name, stream.namespace),
+                self.message_repository,
+                state_manager,
+                converter,
+                cursor_field,
+                slice_boundary_fields,
+                fallback_start,
+                converter.get_end_provider(),
+                timedelta(seconds=0),
+                slice_range,
+            )
+            return StreamFacade.create_from_stream(stream, self, self.logger, state, cursor)
+
+        return stream
+
+    def _create_empty_state(self) -> MutableMapping[str, Any]:
+        return {}
