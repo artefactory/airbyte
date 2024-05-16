@@ -288,7 +288,7 @@ class TableSchemaStream(SnowflakeStream):
         schema = self.table_object["schema"]
         table = self.table_object["table"]
 
-        return f"SELECT TOP 1 * FROM {database}.{schema}.{table}"
+        return f'SELECT TOP 1 * FROM "{database}"."{schema}"."{table}"'
 
     def request_body_json(
             self,
@@ -414,7 +414,7 @@ class TableStream(SnowflakeStream, IncrementalMixin):
         schema = self.table_object["schema"]
         table = self.table_object["table"]
 
-        return f"SELECT * FROM {database}.{schema}.{table}"
+        return f'SELECT * FROM "{database}"."{schema}"."{table}"'
 
     def stream_slices(self, stream_state: Mapping[str, Any] = None, cursor_field=None, sync_mode=None, **kwargs) -> Iterable[
         Optional[Mapping[str, any]]]:
@@ -568,7 +568,7 @@ class PushDownFilterStream(TableStream):
         database = self.config["database"]
         schema = self.table_object["schema"]
         table = self.table_object["table"]
-        return f"SELECT * FROM {database}.{schema}.{table} WHERE {self.where_clause}"
+        return f'SELECT * FROM "{database}"."{schema}"."{table}" WHERE {self.where_clause}'
 
     def __str__(self):
         return f"Current stream has this table object as constructor: {self.table_object} and as where clause: {self.where_clause}"
