@@ -4,7 +4,8 @@
 import uuid
 from abc import ABC
 from typing import Any, Iterable, List, Mapping, MutableMapping, Optional, Tuple, Union
-from .streams import SnowflakeStream, CheckConnectionStream, TableCatalogStream, TableStream, PushDownFilterStream
+from .streams import SnowflakeStream, CheckConnectionStream, TableCatalogStream, TableStream, PushDownFilterStream, \
+    TableChangeDataCaptureStream, PushDownFilterChangeDataCaptureStream
 import requests
 from airbyte_cdk.sources import AbstractSource
 from airbyte_cdk.sources.streams import Stream
@@ -82,14 +83,41 @@ class SourceSnowflake(AbstractSource):
         table_catalog_stream = TableCatalogStream(url_base=url_base,
                                                   config=config,
                                                   authenticator=authenticator)
+
+        update_method = config.get('replication_method', {'method': 'standard'}).get('method', 'standard')
+
+        if update_method.lower() == 'standard':
+            stream_class = TableStream
+            push_down_filters_class = PushDownFilterStream
+
+        elif update_method.lower() == 'history':
+            stream_class = TableChangeDataCaptureStream
+            push_down_filters_class = PushDownFilterChangeDataCaptureStream
+
+        else:
+            raise ValueError(f'Update method {update_method} not recognized')
+
+        standard_streams = self._get_standard_streams(stream_class, config, url_base, table_catalog_stream, authenticator)
+        push_down_filters_streams = self._get_push_down_filters_streams(push_down_filters_class,
+                                                                        config, url_base, authenticator, standard_streams)
+        streams = list(standard_streams.values()) + push_down_filters_streams
+
+        return streams
+
+    @classmethod
+    def _get_standard_streams(cls, stream_class, config, url_base, table_catalog_stream, authenticator):
         standard_streams = {}
         for table_object in table_catalog_stream.read_records(sync_mode=SyncMode.full_refresh):
-            standard_stream = TableStream(url_base=url_base,
-                                          config=config,
-                                          authenticator=authenticator,
-                                          table_object=table_object)
+            standard_stream = stream_class(url_base=url_base,
+                                           config=config,
+                                           authenticator=authenticator,
+                                           table_object=table_object)
             standard_streams[standard_stream.name] = standard_stream
 
+        return standard_streams
+
+    @classmethod
+    def _get_push_down_filters_streams(cls, push_down_filter_stream_class, config, url_base, authenticator, standard_streams):
         push_down_filters_streams = []
         if 'streams' in config and config['streams']:
             for push_down_filter_stream_config in config['streams']:
@@ -104,15 +132,12 @@ class SourceSnowflake(AbstractSource):
                 if parent_stream and parent_namespace:
                     # should we set parent namespace ?
                     parent_stream.namespace = parent_namespace
-                push_down_filter_stream = PushDownFilterStream(name=push_down_filter_stream_config['name'],
-                                                               url_base=url_base,
-                                                               config=config,
-                                                               where_clause=push_down_filter_stream_config['where_clause'],
-                                                               parent_stream=parent_stream,
-                                                               namespace=push_down_filter_namespace,
-                                                               authenticator=authenticator,)
+                push_down_filter_stream = push_down_filter_stream_class(name=push_down_filter_stream_config['name'],
+                                                                        url_base=url_base,
+                                                                        config=config,
+                                                                        where_clause=push_down_filter_stream_config['where_clause'],
+                                                                        parent_stream=parent_stream,
+                                                                        namespace=push_down_filter_namespace,
+                                                                        authenticator=authenticator, )
                 push_down_filters_streams.append(push_down_filter_stream)
-
-        streams = [stream for stream in standard_streams.values()] + push_down_filters_streams
-
-        return streams
+        return push_down_filters_streams

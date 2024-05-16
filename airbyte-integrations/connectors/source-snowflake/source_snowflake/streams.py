@@ -633,3 +633,13 @@ class PushDownFilterStream(TableStream):
 
     def __str__(self):
         return f"Current stream has this table object as constructor: {self.table_object} and as where clause: {self.where_clause}"
+
+
+class TableChangeDataCaptureStream(TableStream):
+    primary_key = None
+    state_checkpoint_interval = None
+    RETENTION_DAYS = 90
+
+
+class PushDownFilterChangeDataCaptureStream(PushDownFilterStream):
+    pass
