@@ -235,8 +235,14 @@ class TableCatalogStream(SnowflakeStream):
         column_name_index_updated_filter = [0 if key_word_index == -1 else 1 for key_word_index in mapping_column_name_to_index.values()]
 
         if not all(column_name_index_updated_filter):
-            raise ValueError('At least one index of column names is not updated. The error might a wrong key word '
-                             'or a change in the naming of keys in resultSetMetaData of Snowflake API')
+            raise ValueError('At least one index of column names is not updated. The error might be a wrong key word '
+                             'or a change in the naming of keys in resultSetMetaData of Snowflake API.\n'
+                             'To resolve this issue, compare the column name provided with keys of resultSetMetaData of Snowflake API '
+                             'and update your column names.\n'
+                             'For example, for class TableCatalogStream, compare TableCatalogStream.DATABASE_NAME_COLUMN '
+                             'and STableCatalogStream.SCHEMA_NAME_COLUMN with the keys representing this variables in resultSetMetaData '
+                             'present in the Snowflake API response')
+
 
         return mapping_column_name_to_index
 
