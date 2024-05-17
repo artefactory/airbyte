@@ -456,9 +456,9 @@ class TableStream(SnowflakeStream, IncrementalMixin):
             current_state_value = self.state[self.cursor_field]
             self._cursor_value = max(latest_record_state, current_state_value) if current_state_value is not None else latest_record_state
             self.state = {self.cursor_field: self._cursor_value}
-            return {self.cursor_field: self._cursor_value}
-        self._cursor_value = latest_record_state
-        self.state = {self.cursor_field: self._cursor_value}
+        else:
+            self._cursor_value = latest_record_state
+            self.state = {self.cursor_field: self._cursor_value}
 
         self.logger.info(f"current state of {self.name} is {self.state}")
         if datetime.now() >= self.checkpoint_time + timedelta(minutes=15):
