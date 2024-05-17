@@ -637,7 +637,7 @@ class PushDownFilterStream(TableStream):
 
 
 class TableChangeDataCaptureStream(TableStream):
-    RETENTION_DAYS = 90
+    RETENTION_DAYS = 1
     DEFAULT_CURSOR_FIELD = 'requested_at'
 
     def __init__(self, url_base, config, table_object, **kwargs):
@@ -655,7 +655,7 @@ class TableChangeDataCaptureStream(TableStream):
         history_timestamp = history_date.strftime("%Y-%m-%d %H:%M:%S")
 
         return (f'SELECT * FROM "{database}"."{schema}"."{table}" '
-                f'CHANGES(INFORMATION => DEFAULT) AT(TIMESTAMP => TO_TIMESTAMP({history_timestamp}))')
+                f'CHANGES(INFORMATION => DEFAULT) AT(TIMESTAMP => TO_TIMESTAMP(\'{history_timestamp}\'))')
 
     def get_updated_statement(self, stream_slice):
         """
@@ -679,7 +679,6 @@ class TableChangeDataCaptureStream(TableStream):
 
         if self.cursor_field and self.cursor_field != self.DEFAULT_CURSOR_FIELD:
             updated_statement = f"{updated_statement} ORDER BY {self.cursor_field} ASC"
-
         return updated_statement
 
     def parse_response(self, response: requests.Response, **kwargs) -> Iterable[Mapping]:
