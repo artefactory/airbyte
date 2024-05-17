@@ -729,5 +729,31 @@ class TableChangeDataCaptureStream(TableStream):
         return json_schema
 
 
-class PushDownFilterChangeDataCaptureStream(PushDownFilterStream):
-    pass
+class PushDownFilterChangeDataCaptureStream(TableChangeDataCaptureStream):
+
+    def __init__(self, name, url_base, config, where_clause, parent_stream, namespace=None, **kwargs):
+        kwargs['url_base'] = url_base
+        kwargs['config'] = config
+        kwargs['table_object'] = parent_stream.table_object
+        kwargs['table_schema_stream'] = parent_stream.table_schema_stream
+        TableChangeDataCaptureStream.__init__(self, **kwargs)
+        self._name = name
+        self._namespace = namespace
+        self._url_base = url_base
+        self.config = config
+        self._table_object = parent_stream.table_object
+        self.where_clause = where_clause
+        self.table_schema_stream = parent_stream.table_schema_stream
+
+    @property
+    def statement(self):
+        database = self.config["database"]
+        schema = self.table_object["schema"]
+        table = self.table_object["table"]
+
+        history_date = datetime.now() - timedelta(days=self.RETENTION_DAYS)
+        history_timestamp = history_date.strftime("%Y-%m-%d %H:%M:%S")
+
+        return (f'SELECT * FROM "{database}"."{schema}"."{table}" '
+                f'CHANGES(INFORMATION => DEFAULT) AT(TIMESTAMP => TO_TIMESTAMP(\'{history_timestamp}\')) '
+                f'WHERE {self.where_clause}')
