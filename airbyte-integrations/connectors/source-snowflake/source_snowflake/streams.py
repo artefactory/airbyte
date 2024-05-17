@@ -637,10 +637,49 @@ class PushDownFilterStream(TableStream):
 
 
 class TableChangeDataCaptureStream(TableStream):
-    primary_key = None
-    state_checkpoint_interval = None
     RETENTION_DAYS = 90
+    DEFAULT_CURSOR_FIELD = 'requested_at'
+    def __init__(self, url_base, config, table_object, **kwargs):
+        stream_filtered_kwargs = {k: v for k, v in kwargs.items() if k in SnowflakeStream.__init__.__annotations__}
+        super().__init__(url_base, config, table_object, **stream_filtered_kwargs)
+        self._cursor_field = self.DEFAULT_CURSOR_FIELD
 
+    @property
+    def statement(self):
+        database = self.config["database"]
+        schema = self.table_object["schema"]
+        table = self.table_object["table"]
+
+        history_date = datetime.now() - timedelta(days=self.RETENTION_DAYS)
+        history_timestamp = history_date.strftime("%Y-%m-%d %H:%M:%S")
+
+        return (f'SELECT * FROM "{database}"."{schema}"."{table}" '
+                f'CHANGES(INFORMATION => DEFAULT) AT(TIMESTAMP => TO_TIMESTAMP({history_timestamp}))')
+
+    def get_updated_statement(self, stream_slice):
+        """
+        Can be used consistently only in request_body_json
+        otherwise we are not sure stream slice is the next slice and _cursor_value is updated with the correct data
+        """
+
+        updated_statement = self.statement
+
+        if stream_slice and self.cursor_field != self.DEFAULT_CURSOR_FIELD:
+            # TODO MAKE SURE THE CURSOR IS SINGLE VALUE AND NOT A STARTING AND ENDING VALUE (ex: window)
+            self._cursor_value = stream_slice.get(self.cursor_field, None)
+
+            if self._cursor_value:
+                condition_of_state = f"{self.cursor_field}>={self._cursor_value}"
+                key_word_where = " where "  # spaces in case there is a where in a table name
+                if key_word_where in self.statement.lower():
+                    updated_statement = f"{self.statement} AND {condition_of_state}"
+                else:
+                    updated_statement = f"{self.statement} WHERE {condition_of_state}"
+
+        if self.cursor_field and self.cursor_field != self.DEFAULT_CURSOR_FIELD:
+            updated_statement = f"{updated_statement} ORDER BY {self.cursor_field} ASC"
+
+        return updated_statement
 
 class PushDownFilterChangeDataCaptureStream(PushDownFilterStream):
     pass
