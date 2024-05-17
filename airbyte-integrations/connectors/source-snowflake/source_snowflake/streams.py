@@ -643,7 +643,6 @@ class TableChangeDataCaptureStream(TableStream):
     def __init__(self, url_base, config, table_object, **kwargs):
         stream_filtered_kwargs = {k: v for k, v in kwargs.items() if k in SnowflakeStream.__init__.__annotations__}
         super().__init__(url_base, config, table_object, **stream_filtered_kwargs)
-        self._cursor_field = self.DEFAULT_CURSOR_FIELD
 
     @property
     def statement(self):
