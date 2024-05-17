@@ -16,7 +16,8 @@ from airbyte_cdk.sources.utils.schema_helpers import InternalConfig
 from airbyte_cdk.sources.utils.slice_logger import SliceLogger
 from airbyte_protocol.models import SyncMode, Type, ConfiguredAirbyteStream
 
-from .schema_builder import mapping_snowflake_type_airbyte_type, format_field
+from .schema_builder import mapping_snowflake_type_airbyte_type, format_field, date_and_time_snowflake_type_airbyte_type, \
+    string_snowflake_type_airbyte_type
 
 """
 TODO: Most comments in this class are instructive and should be deleted after the source is implemented.
@@ -345,6 +346,7 @@ class TableStream(SnowflakeStream, IncrementalMixin):
         self._namespace = None
         self._cursor_value = None
         self._cursor_field = []
+        self._json_schema_properties = None
         self.checkpoint_time = datetime.now()
 
     @property
@@ -503,17 +505,34 @@ class TableStream(SnowflakeStream, IncrementalMixin):
             self._cursor_value = stream_slice.get(self.cursor_field, None)
 
         if self._cursor_value:
-            condition_of_state = f"{self.cursor_field}>={self._cursor_value}"
+            state_sql_condition = self._get_state_sql_condition()
             key_word_where = " where "  # spaces in case there is a where in a table name
             if key_word_where in self.statement.lower():
-                updated_statement = f"{self.statement} AND {condition_of_state}"
+                updated_statement = f"{self.statement} AND {state_sql_condition}"
             else:
-                updated_statement = f"{self.statement} WHERE {condition_of_state}"
+                updated_statement = f"{self.statement} WHERE {state_sql_condition}"
 
         if self.cursor_field:
             updated_statement = f"{updated_statement} ORDER BY {self.cursor_field} ASC"
 
         return updated_statement
+
+    def _get_state_sql_condition(self):
+        """
+        The schema must have been generated before
+        """
+        state_sql_condition = f"{self.cursor_field}>={self._cursor_value}"
+        if self.cursor_field.upper() not in self._json_schema_properties:
+            raise ValueError(f'this field {self.cursor_field} should be present in schema. Make sure the column is present in your stream')
+
+        if self._json_schema_properties[self.cursor_field.upper()]["type"].upper() in date_and_time_snowflake_type_airbyte_type:
+            state_sql_condition = f"TO_TIMESTAMP({self.cursor_field})>=TO_TIMESTAMP({self._cursor_value})"
+
+        if self._json_schema_properties[self.cursor_field.upper()]["type"].upper() in string_snowflake_type_airbyte_type:
+            state_sql_condition = f"{self.cursor_field}>='{self._cursor_value}'"
+
+
+        return state_sql_condition
 
     def request_body_json(
             self,
@@ -585,6 +604,8 @@ class TableStream(SnowflakeStream, IncrementalMixin):
                                  f"Please, contact Airbyte support to update the connector to handle this new type")
             airbyte_column_type_object = mapping_snowflake_type_airbyte_type[snowflake_column_type]
             properties[column_name] = airbyte_column_type_object
+
+        self._json_schema_properties = properties
         return json_schema
 
     def __str__(self):
