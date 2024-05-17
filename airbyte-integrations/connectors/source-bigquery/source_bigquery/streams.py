@@ -8,7 +8,6 @@ import sys
 from abc import ABC
 from typing import Any, Iterable, List, Mapping, MutableMapping, Optional, Tuple
 
-import ipdb.stdout
 import requests
 import pytz
 from datetime import datetime, timedelta
@@ -554,8 +553,6 @@ class BigqueryCDCStream(BigqueryResultStream, IncrementalMixin):
         return request_body
     
     def process_records(self, record) -> Iterable[Mapping[str, Any]]:
-        # import ipdb
-        # ipdb.set_trace()
         fields = record.get("schema")["fields"]
         stream_data = record.get("rows", [])
         for data in stream_data:
