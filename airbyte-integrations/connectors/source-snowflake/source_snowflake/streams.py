@@ -757,3 +757,6 @@ class PushDownFilterChangeDataCaptureStream(TableChangeDataCaptureStream):
         return (f'SELECT * FROM "{database}"."{schema}"."{table}" '
                 f'CHANGES(INFORMATION => DEFAULT) AT(TIMESTAMP => TO_TIMESTAMP(\'{history_timestamp}\')) '
                 f'WHERE {self.where_clause}')
+    @property
+    def name(self):
+        return f"{self._name}"
