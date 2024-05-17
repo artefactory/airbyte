@@ -8,16 +8,20 @@ import sys
 from abc import ABC
 from typing import Any, Iterable, List, Mapping, MutableMapping, Optional, Tuple
 
+import ipdb.stdout
 import requests
+import pytz
 from datetime import datetime, timedelta
 from airbyte_cdk.sources import AbstractSource
 from airbyte_cdk.sources.streams import Stream, IncrementalMixin
+from airbyte_cdk.sources.streams.core import Stream, StreamData
 from airbyte_cdk.sources.streams.http import HttpStream, HttpSubStream
 from airbyte_cdk.sources.streams.http.auth import TokenAuthenticator
 from airbyte_protocol.models import SyncMode, Type
 from airbyte_cdk.models import AirbyteCatalog, AirbyteMessage, AirbyteStateMessage, ConfiguredAirbyteCatalog, AirbyteStateType, AirbyteStreamState, StreamDescriptor, AirbyteStateBlob
 from airbyte_cdk.logger import AirbyteLogger
 from airbyte_cdk.utils.traced_exception import AirbyteTracedException, FailureType
+from airbyte_cdk.sources.streams.concurrent.cursor import Cursor
 from .schema_helpers import SchemaHelpers
 
 """
@@ -303,6 +307,8 @@ class BigqueryIncrementalStream(BigqueryResultStream, IncrementalMixin):
     
     @property
     def state(self):
+        if not self._cursor:
+            return {}
         return {
             self.cursor_field: self._cursor,
         }
@@ -453,6 +459,7 @@ class BigqueryCDCStream(BigqueryResultStream, IncrementalMixin):
         self.request_body = stream_request
         self._cursor = None
         self._checkpoint_time = datetime.now()
+        # self._stream_slicer_cursor = None
     
     @property
     def name(self):
@@ -467,6 +474,8 @@ class BigqueryCDCStream(BigqueryResultStream, IncrementalMixin):
     
     @property
     def state(self):
+        if not self._cursor:
+            return {}
         return {
             self.cursor_field: self._cursor,
         }
@@ -482,8 +491,8 @@ class BigqueryCDCStream(BigqueryResultStream, IncrementalMixin):
     @property
     def supports_incremental(self) -> bool:
         return True
-    
-    def get_updated_state(self, current_stream_state: MutableMapping[str, Any], latest_record: Mapping[str, Any], **kwargs) -> Mapping[str, Any]:
+
+    def _updated_state(self, current_stream_state: MutableMapping[str, Any], latest_record: Mapping[str, Any], **kwargs) -> Mapping[str, Any]:
         """
         Override to determine the latest state after reading the latest record. This typically compared the cursor_field from the latest record and
         the current state and picks the 'most' recent cursor. This is how a stream's state is determined. Required for incremental.
@@ -491,7 +500,8 @@ class BigqueryCDCStream(BigqueryResultStream, IncrementalMixin):
         latest_record_state = latest_record[self.cursor_field]
         stream_state = current_stream_state.get(self.cursor_field)
         if stream_state:
-            self._cursor = max(latest_record_state, stream_state)
+            max_date = max(datetime.strptime(latest_record_state, '%Y-%m-%dT%H:%M:%S.%f%z'), datetime.strptime(stream_state, '%Y-%m-%dT%H:%M:%S.%f%z'))
+            self._cursor = max_date.isoformat(timespec='microseconds')
         else:
             self._cursor = latest_record_state
         self.state = {self.cursor_field: self._cursor} 
@@ -502,15 +512,26 @@ class BigqueryCDCStream(BigqueryResultStream, IncrementalMixin):
             self._checkpoint_time = datetime.now()
         return self.state
 
+    def chunk_dates(self, start_date) -> Iterable[Tuple[int, int]]:
+        slice_range = 1
+        now = datetime(2024,5,16,17,33,9,571000, tzinfo=pytz.timezone("UTC"))  #datetime.now(tz=pytz.timezone("UTC"))
+        step = timedelta(minutes=slice_range)
+        new_start_date = start_date
+        while new_start_date < now:
+            before_date = min(now, new_start_date + step)
+            yield new_start_date, before_date
+            new_start_date = before_date
+            
     def stream_slices(self, stream_state: Mapping[str, Any] = None, cursor_field=None, sync_mode=None, **kwargs) -> Iterable[Optional[Mapping[str, any]]]:
-        if sync_mode == SyncMode.incremental:
-            if stream_state:
-                self._cursor = stream_state.get(self.cursor_field) #or self._state.get(self.cursor_field)
+        default_start = datetime(2024, 5, 16, 17, 29, 9, 571000, tzinfo=pytz.timezone("UTC"))
+        if stream_state:
+            self._cursor = stream_state.get(self.cursor_field) #or self._state.get(self.cursor_field)
+        if self._cursor:
+            default_start = datetime.strptime(self._cursor, '%Y-%m-%dT%H:%M:%S.%f%z')
+        for start, end in self.chunk_dates(default_start):
             yield {
-                    self.cursor_field : self._cursor
-                } 
-        else:
-            yield
+                "start" : start.isoformat(timespec='microseconds'), "end": end.isoformat(timespec='microseconds')
+            } 
 
     def request_body_json(
         self,
@@ -520,9 +541,10 @@ class BigqueryCDCStream(BigqueryResultStream, IncrementalMixin):
     ) -> Optional[Mapping[str, Any]]:
         query_string = f"select * from APPENDS(TABLE `{self.stream_name}`,NULL,NULL)"
         if stream_slice:
-            self._cursor = stream_slice.get(self.cursor_field, None)
-            if self._cursor:
-                query_string = f"select * from APPENDS(TABLE `{self.stream_name}`,'{self._cursor}',NULL)"
+            start = stream_slice.get("start", None)
+            end = stream_slice.get("end", None)
+            if start and end:
+                query_string = f"select * from APPENDS(TABLE `{self.stream_name}`,'{start}','{end}')"
 
         request_body = {
             "kind": "bigquery#queryRequest",
@@ -532,15 +554,19 @@ class BigqueryCDCStream(BigqueryResultStream, IncrementalMixin):
         return request_body
     
     def process_records(self, record) -> Iterable[Mapping[str, Any]]:
+        # import ipdb
+        # ipdb.set_trace()
         fields = record.get("schema")["fields"]
         stream_data = record.get("rows", [])
         for data in stream_data:
             rows = data.get("f")
-            yield {
+            row = {
                 "_bigquery_table_id": record.get("jobReference")["jobId"],
                 "_bigquery_created_time": None, #TODO: Update this to row insertion time
                 **{CHANGE_FIELDS.get(element["name"], element["name"]): SchemaHelpers.format_field(rows[fields.index(element)]["v"], element["type"]) for element in fields},
             }
+            self.state = self._updated_state(self.state, row)
+            yield row
 
 
 class TableChangeHistory(BigqueryCDCStream):

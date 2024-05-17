@@ -43,7 +43,7 @@ The approach here is not authoritative, and devs are free to use their own judge
 
 There are additional required TODOs in the files within the integration_tests folder and the spec.yaml file.
 """
-_DEFAULT_CONCURRENCY = 10
+_DEFAULT_CONCURRENCY = 2
 _MAX_CONCURRENCY = 10
 
 # Source
@@ -53,7 +53,7 @@ class SourceBigquery(ConcurrentSourceAdapter):
     _auth: BigqueryAuth = None
     _SLICE_BOUNDARY_FIELDS_BY_IMPLEMENTATION = {
         BigqueryIncrementalStream: ("_bigquery_created_time", "_bigquery_created_time"),
-        BigqueryCDCStream: ("change_timestamp", "change_timestamp"),
+        BigqueryCDCStream: ("start", "end"),
     }
 
     message_repository = InMemoryMessageRepository(Level(AirbyteLogFormatter.level_mapping[logger.level]))
@@ -198,7 +198,7 @@ class SourceBigquery(ConcurrentSourceAdapter):
         return [
             self._to_concurrent(
                 stream,
-                datetime.now(tz=pytz.UTC) - timedelta(days=8),
+                datetime(2024, 5, 16, 17, 29, 9, 571000, tzinfo=pytz.timezone("UTC")), #TODO: change
                 timedelta(minutes=1),
                 state_manager,
             )
@@ -233,7 +233,7 @@ class SourceBigquery(ConcurrentSourceAdapter):
                 slice_boundary_fields,
                 fallback_start,
                 converter.get_end_provider(),
-                timedelta(seconds=0),
+                timedelta(minutes=1),
                 slice_range,
             )
             return StreamFacade.create_from_stream(stream, self, self.logger, state, cursor)
