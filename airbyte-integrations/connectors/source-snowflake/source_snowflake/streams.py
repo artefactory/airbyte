@@ -333,6 +333,7 @@ class TableSchemaStream(SnowflakeStream):
 class TableStream(SnowflakeStream, IncrementalMixin):
     primary_key = None
     state_checkpoint_interval = None
+    CHECK_POINT_INTERVAL_IN_MINUTES = 15
 
     def __init__(self, url_base, config, table_object, **kwargs):
         stream_filtered_kwargs = {k: v for k, v in kwargs.items() if k in SnowflakeStream.__init__.__annotations__}
@@ -456,12 +457,12 @@ class TableStream(SnowflakeStream, IncrementalMixin):
             current_state_value = self.state[self.cursor_field]
             self._cursor_value = max(latest_record_state, current_state_value) if current_state_value is not None else latest_record_state
             self.state = {self.cursor_field: self._cursor_value}
-            return {self.cursor_field: self._cursor_value}
-        self._cursor_value = latest_record_state
-        self.state = {self.cursor_field: self._cursor_value}
+        else:
+            self._cursor_value = latest_record_state
+            self.state = {self.cursor_field: self._cursor_value}
 
         self.logger.info(f"current state of {self.name} is {self.state}")
-        if datetime.now() >= self.checkpoint_time + timedelta(minutes=15):
+        if datetime.now() >= self.checkpoint_time + timedelta(minutes=self.CHECK_POINT_INTERVAL_IN_MINUTES):
             self.checkpoint(self.name, self.state, self.namespace)
             self.checkpoint_time = datetime.now()
 
