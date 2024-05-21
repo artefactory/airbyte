@@ -1,17 +1,18 @@
 #
 # Copyright (c) 2024 Airbyte, Inc., all rights reserved.
 #
-import uuid
-from abc import ABC
-from typing import Any, Iterable, List, Mapping, MutableMapping, Optional, Tuple, Union
-from .streams import SnowflakeStream, CheckConnectionStream, TableCatalogStream, TableStream, PushDownFilterStream
+from typing import Any, List, Mapping, Tuple
+
+from source_snowflake.streams.util_streams import TableCatalogStream
+from source_snowflake.streams.table_stream import TableStream
+from source_snowflake.streams.check_connection import CheckConnectionStream
 import requests
 from airbyte_cdk.sources import AbstractSource
 from airbyte_cdk.sources.streams import Stream
-from airbyte_cdk.sources.streams.http.requests_native_auth import TokenAuthenticator
 from airbyte_protocol.models import SyncMode
 
 from .authenticator import SnowflakeJwtAuthenticator
+from .streams.push_down_filter_stream import PushDownFilterStream
 
 
 # Source

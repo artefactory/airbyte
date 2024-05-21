@@ -4,12 +4,12 @@
 
 
 from .source import SourceSnowflake
-from .streams import SnowflakeStream, CheckConnectionStream
 from .authenticator import SnowflakeJwtAuthenticator
 from .schema_builder import mapping_snowflake_type_airbyte_type
+from .streams.check_connection import CheckConnectionStream
 
 __all__ = ["SourceSnowflake",
-           "SnowflakeStream",
            "CheckConnectionStream",
            "SnowflakeJwtAuthenticator",
            "mapping_snowflake_type_airbyte_type", ]
+
