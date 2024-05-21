@@ -12,8 +12,8 @@ class SchemaTypes:
     boolean: Dict = {"type": ["null", "boolean"]}
     date: Dict = {"type": ["null", "string"], "format": "date"}
     timestamp_with_timezone: Dict = {"type": ["null", "string"], "format": "date-time", "airbyte_type": "timestamp_with_timezone"}
-    timestamp_without_timezone: Dict = {"type": ["null", "string"], "format": "date-time", "airbyte_type": "timestamp_without_timezone"},
-    time_without_timezone: Dict = {"type": ["null", "string"], "format": "time", "airbyte_type": "time_without_timezone"},
+    timestamp_without_timezone: Dict = {"type": ["null", "string"], "format": "date-time", "airbyte_type": "timestamp_without_timezone"}
+    time_without_timezone: Dict = {"type": ["null", "string"], "format": "time", "airbyte_type": "time_without_timezone"}
     array_with_any: Dict = {"type": ["null", "array"], "items": {}}
     object: Dict = {"type": ["null", "object"]}
 
