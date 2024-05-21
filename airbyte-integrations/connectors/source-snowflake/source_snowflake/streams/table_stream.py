@@ -36,6 +36,11 @@ class TableStream(SnowflakeStream, IncrementalMixin):
         self._json_schema_properties = None
         self.checkpoint_time = datetime.now()
 
+
+    ######################################
+    ###### Properties
+    ######################################
+
     @property
     def cursor_field(self):
         return self._cursor_field
@@ -63,23 +68,6 @@ class TableStream(SnowflakeStream, IncrementalMixin):
     @property
     def supports_incremental(self) -> bool:
         return True
-
-    def checkpoint(self, stream_name, stream_state, stream_namespace):
-        """
-        Checkpoint state.
-        """
-        state = AirbyteMessage(
-            type=Type.STATE,
-            state=AirbyteStateMessage(
-                type=AirbyteStateType.STREAM,
-                stream=AirbyteStreamState(
-                    stream_descriptor=StreamDescriptor(name=stream_name, namespace=stream_namespace),
-                    stream_state=AirbyteStateBlob.parse_obj(stream_state),
-                )
-            ),
-        )
-        self.logger.info(f"Checkpoint state of {self.name} is {stream_state}")
-        print(state.json(exclude_unset=True))  # Emit state
 
     @property
     def namespace(self):
@@ -115,7 +103,7 @@ class TableStream(SnowflakeStream, IncrementalMixin):
         return f'SELECT * FROM "{database}"."{schema}"."{table}"'
 
     ######################################
-    ###### State and cursor management
+    ###### State, cursor management and checkpointing
     ######################################
 
     def read(  # type: ignore  # ignoring typing for ConnectorStateManager because of circular dependencies
@@ -218,7 +206,6 @@ class TableStream(SnowflakeStream, IncrementalMixin):
         if self._json_schema_properties[self.cursor_field.upper()]["type"].upper() in string_snowflake_type_airbyte_type:
             state_sql_condition = f"{self.cursor_field}>='{self._cursor_value}'"
 
-
         return state_sql_condition
 
     def request_body_json(
@@ -242,6 +229,24 @@ class TableStream(SnowflakeStream, IncrementalMixin):
             json_payload['schema'] = schema
 
         return json_payload
+
+    def checkpoint(self, stream_name, stream_state, stream_namespace):
+        """
+        Checkpoint state.
+        """
+        state = AirbyteMessage(
+            type=Type.STATE,
+            state=AirbyteStateMessage(
+                type=AirbyteStateType.STREAM,
+                stream=AirbyteStreamState(
+                    stream_descriptor=StreamDescriptor(name=stream_name, namespace=stream_namespace),
+                    stream_state=AirbyteStateBlob.parse_obj(stream_state),
+                )
+            ),
+        )
+        self.logger.info(f"Checkpoint state of {self.name} is {stream_state}")
+        print(state.json(exclude_unset=True))  # Emit state
+
 
     ######################################
     ###### Response processing

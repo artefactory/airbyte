@@ -1,21 +1,4 @@
-import logging
-from collections import OrderedDict
-from datetime import datetime, timedelta
 from typing import Any, Iterable, List, Mapping, MutableMapping, Optional
-
-import requests
-from airbyte_cdk.sources.streams import IncrementalMixin
-from airbyte_cdk.sources.streams.core import StreamData
-from airbyte_cdk.models import (AirbyteMessage, AirbyteStateMessage, AirbyteStateType,
-                                AirbyteStreamState, StreamDescriptor, AirbyteStateBlob)
-from airbyte_cdk.sources.utils.schema_helpers import InternalConfig
-from airbyte_cdk.sources.utils.slice_logger import SliceLogger
-from airbyte_protocol.models import SyncMode, Type, ConfiguredAirbyteStream
-
-from source_snowflake.schema_builder import mapping_snowflake_type_airbyte_type, format_field, date_and_time_snowflake_type_airbyte_type, \
-    string_snowflake_type_airbyte_type
-from .snowflake_parent_stream import SnowflakeStream
-from .util_streams import TableSchemaStream
 from .table_stream import TableStream
 
 
