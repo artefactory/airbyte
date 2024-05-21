@@ -137,7 +137,6 @@ class TableStream(SnowflakeStream, IncrementalMixin):
             self._cursor_value = latest_record_state
             self.state = {self.cursor_field: self._cursor_value}
 
-        self.logger.info(f"current state of {self.name} is {self.state}")
         if datetime.now() >= self.checkpoint_time + timedelta(minutes=15):
             self.checkpoint(self.name, self.state, self.namespace)
             self.checkpoint_time = datetime.now()
