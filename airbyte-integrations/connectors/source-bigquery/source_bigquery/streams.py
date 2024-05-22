@@ -368,8 +368,8 @@ class BigqueryIncrementalStream(BigqueryResultStream, IncrementalMixin):
             self._cursor = stream_slice.get(self.cursor_field, None)
             if self._cursor:
                 if isinstance(self._cursor, str):
-                    self._cursor = f"'{self._cursor}'"
-                query_string = f"select * from `{self.name}` where {self.cursor_field}>={self._cursor} ORDER BY {self.cursor_field}"
+                    cursor_value = f"'{self._cursor}'"
+                query_string = f"select * from `{self.name}` where {self.cursor_field}>={cursor_value} ORDER BY {self.cursor_field}"
     
         request_body = {
             "kind": "bigquery#queryRequest",
@@ -426,8 +426,8 @@ class IncrementalQueryResult(BigqueryIncrementalStream):
             self._cursor = stream_slice.get(self.cursor_field, None)
             if self._cursor:
                 if isinstance(self._cursor, str):
-                    self._cursor = f"'{self._cursor}'"
-                query_string = f"select * from `{self.stream_name}` where {self.cursor_field}>={self._cursor}" #TODO: add order by cursor_field
+                    cursor_value = f"'{self._cursor}'"
+                query_string = f"select * from `{self.stream_name}` where {self.cursor_field}>={cursor_value}" #TODO: add order by cursor_field
     
         request_body = {
             "kind": "bigquery#queryRequest",
