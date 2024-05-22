@@ -369,7 +369,7 @@ class BigqueryIncrementalStream(BigqueryResultStream, IncrementalMixin):
             if self._cursor:
                 if isinstance(self._cursor, str):
                     self._cursor = f"'{self._cursor}'"
-                query_string = f"select * from `{self.name}` where {self.cursor_field}>={self._cursor}"
+                query_string = f"select * from `{self.name}` where {self.cursor_field}>={self._cursor} ORDER BY {self.cursor_field}"
     
         request_body = {
             "kind": "bigquery#queryRequest",
