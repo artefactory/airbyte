@@ -432,7 +432,8 @@ class IncrementalQueryResult(BigqueryIncrementalStream):
         request_body = {
             "kind": "bigquery#queryRequest",
             "query": query_string,
-            "useLegacySql": False
+            "useLegacySql": False,
+            "dryRun": True
             }
         return request_body
     
@@ -588,7 +589,8 @@ class TableChangeHistory(BigqueryCDCStream):
         request_body = {
             "kind": "bigquery#queryRequest",
             "query": query_string,
-            "useLegacySql": False
+            "useLegacySql": False,
+            "dryRun": True
             }
         return request_body
 
