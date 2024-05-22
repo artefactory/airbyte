@@ -61,8 +61,7 @@ class BigqueryStream(HttpStream, ABC):
         return self.stream_schema
 
     def next_page_token(self, response: requests.Response, **kwargs) -> Optional[Mapping[str, Any]]:
-        # TODO: check if correct
-        next_page = response.json().get("offset")
+        next_page = response.json().get("pageToken")
         if next_page:
             return next_page
         return None
