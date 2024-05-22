@@ -304,8 +304,6 @@ class BigqueryIncrementalStream(BigqueryResultStream, IncrementalMixin):
     
     @property
     def state(self):
-        if not self._cursor:
-            return {}
         return {
             self.cursor_field: self._cursor,
         }
@@ -323,13 +321,13 @@ class BigqueryIncrementalStream(BigqueryResultStream, IncrementalMixin):
     def supports_incremental(self) -> bool:
         return True
     
-    def get_updated_state(self, current_stream_state: MutableMapping[str, Any], latest_record: Mapping[str, Any]) -> Mapping[str, Any]:
+    def _updated_state(self, current_stream_state: MutableMapping[str, Any], latest_record: Mapping[str, Any]) -> Mapping[str, Any]:
         """
         Override to determine the latest state after reading the latest record. This typically compared the cursor_field from the latest record and
         the current state and picks the 'most' recent cursor. This is how a stream's state is determined. Required for incremental.
         """
         latest_record_state = latest_record[self.cursor_field]
-        stream_state = current_stream_state.get(self.cursor_field)
+        stream_state = current_stream_state.get(self.cursor_field, None)
 
         if stream_state:
             self._cursor = max(latest_record_state, stream_state)
@@ -371,7 +369,7 @@ class BigqueryIncrementalStream(BigqueryResultStream, IncrementalMixin):
             if self._cursor:
                 if isinstance(self._cursor, str):
                     self._cursor = f"'{self._cursor}'"
-                query_string = f"select * from `{self.name}` where {self.cursor_field}>={self._cursor}" #TODO: maybe add order by cursor_field
+                query_string = f"select * from `{self.name}` where {self.cursor_field}>={self._cursor}"
     
         request_body = {
             "kind": "bigquery#queryRequest",
@@ -385,11 +383,13 @@ class BigqueryIncrementalStream(BigqueryResultStream, IncrementalMixin):
         stream_data = record.get("rows", [])
         for data in stream_data:
             rows = data.get("f")
-            yield {
+            row = {
                 "_bigquery_table_id": record.get("jobReference")["jobId"],
                 "_bigquery_created_time": None, #TODO: Update this to row insertion time
                 **{CHANGE_FIELDS.get(element["name"], element["name"]): SchemaHelpers.format_field(rows[fields.index(element)]["v"], element["type"]) for element in fields},
             }
+            self._updated_state(self.state, row)
+            yield row
 
 
 class IncrementalQueryResult(BigqueryIncrementalStream):
