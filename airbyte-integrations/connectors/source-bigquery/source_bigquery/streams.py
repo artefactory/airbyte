@@ -423,14 +423,6 @@ class IncrementalQueryResult(BigqueryIncrementalStream):
         next_page_token: Optional[Mapping[str, Any]] = None,
     ) -> Optional[Mapping[str, Any]]:
         query_string = f"select * from `{self.stream_name}`"
-        if stream_slice:
-            self._cursor = stream_slice.get(self.cursor_field, None)
-            if self._cursor:
-                cursor_value = self._cursor
-                if isinstance(self._cursor, str):
-                    cursor_value = f"'{self._cursor}'"
-                query_string = f"select * from `{self.stream_name}` where {self.cursor_field}>={cursor_value}" #TODO: add order by cursor_field
-    
         request_body = {
             "kind": "bigquery#queryRequest",
             "query": query_string,
@@ -580,11 +572,6 @@ class TableChangeHistory(BigqueryCDCStream):
         next_page_token: Optional[Mapping[str, Any]] = None,
     ) -> Optional[Mapping[str, Any]]:
         query_string = f"select * from APPENDS(TABLE `{self.name}`,NULL,NULL)"
-        if stream_slice:
-            self._cursor = stream_slice.get(self.cursor_field, None)
-            if self._cursor:
-                query_string = f"select * from APPENDS(TABLE `{self.name}`,'{self._cursor}',NULL)"
-
         request_body = {
             "kind": "bigquery#queryRequest",
             "query": query_string,
