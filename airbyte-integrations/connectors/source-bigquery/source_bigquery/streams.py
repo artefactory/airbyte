@@ -509,14 +509,11 @@ class BigqueryCDCStream(BigqueryResultStream, IncrementalMixin):
         return self.state
 
     def stream_slices(self, stream_state: Mapping[str, Any] = None, cursor_field=None, sync_mode=None, **kwargs) -> Iterable[Optional[Mapping[str, any]]]:
-        if sync_mode == SyncMode.incremental:
-            if stream_state:
-                self._cursor = stream_state.get(self.cursor_field) #or self._state.get(self.cursor_field)
-            yield {
-                    self.cursor_field : self._cursor
-                } 
-        else:
-            yield
+        if stream_state:
+            self._cursor = stream_state.get(self.cursor_field)
+        yield {
+                self.cursor_field : self._cursor
+            } 
 
     def request_body_json(
         self,
