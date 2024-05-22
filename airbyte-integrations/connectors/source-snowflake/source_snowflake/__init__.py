@@ -10,6 +10,5 @@ from .streams.check_connection import CheckConnectionStream
 
 __all__ = ["SourceSnowflake",
            "CheckConnectionStream",
-           "SnowflakeJwtAuthenticator",
-           "mapping_snowflake_type_airbyte_type", ]
+           "SnowflakeJwtAuthenticator", ]
 

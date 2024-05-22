@@ -5,8 +5,8 @@ from typing import Any, Iterable, List, Mapping, MutableMapping, Optional, Union
 import requests
 from airbyte_protocol.models import SyncMode
 
-from source_snowflake import mapping_snowflake_type_airbyte_type
-from source_snowflake.schema_builder import date_and_time_snowflake_type_airbyte_type, string_snowflake_type_airbyte_type
+from source_snowflake.schema_builder import date_and_time_snowflake_type_airbyte_type, string_snowflake_type_airbyte_type, \
+    mapping_snowflake_type_airbyte_type
 from source_snowflake.streams.snowflake_parent_stream import SnowflakeStream
 
 
@@ -170,6 +170,10 @@ class StreamLauncher(SnowflakeStream):
                                                      **kwargs)
         self.current_state = current_state
         self._cursor_field = cursor_field
+
+    @property
+    def url_base(self):
+        return self._url_base
 
     @property
     def cursor_field(self):

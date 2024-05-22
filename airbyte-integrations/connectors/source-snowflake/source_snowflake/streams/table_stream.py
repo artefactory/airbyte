@@ -126,7 +126,8 @@ class TableStream(SnowflakeStream, IncrementalMixin):
         """
         self.set_statement_handle()
         request_headers = dict(super().request_headers(stream_state, stream_slice, next_page_token))
-        request_headers["partition"] = next_page_token["partition"]
+        if next_page_token and "partition" in next_page_token:
+            request_headers["partition"] = next_page_token["partition"]
         return request_headers
 
     def request_params(
@@ -149,6 +150,7 @@ class TableStream(SnowflakeStream, IncrementalMixin):
                                          config=self.config,
                                          table_object=self.table_object,
                                          current_state=self.state,
+                                         cursor_field=self.cursor_field,
                                          **self._kwargs)
         post_response_iterable = stream_launcher.read_records(sync_mode=SyncMode.full_refresh)
         for post_response in post_response_iterable:
@@ -158,7 +160,8 @@ class TableStream(SnowflakeStream, IncrementalMixin):
     def next_page_token(self, response: requests.Response) -> Optional[Mapping[str, Any]]:
         if self.number_of_partitions is None:
             response_json = response.json()
-            self.number_of_partitions = len(response_json['partitionInfo'])
+            partition_info_value = response_json.get('resultSetMetaData', {'partitionInfo': []}).get('partitionInfo', [])
+            self.number_of_partitions = len(partition_info_value)
 
         next_partition_index = self.number_of_read_partitions + 1
 
