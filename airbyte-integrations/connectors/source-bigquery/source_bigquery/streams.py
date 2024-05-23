@@ -56,7 +56,7 @@ class BigqueryStream(HttpStream, ABC):
         return self.stream_name
 
     def get_json_schema(self) -> Mapping[str, Any]:
-        return self.stream_schema
+        return self.stream_schema()
 
     def next_page_token(self, response: requests.Response, **kwargs) -> Optional[Mapping[str, Any]]:
         # TODO: check if correct
@@ -394,15 +394,20 @@ class IncrementalQueryResult(BigqueryIncrementalStream):
     """  
     """ 
     primary_key = None
-    
+
     def __init__(self, project_id: list, dataset_id: str, table_id: str, **kwargs):
         self.project_id = project_id
         self.parent_stream = dataset_id + "." + table_id
-        super().__init__(self.path(), self.parent_stream, self.get_json_schema(), **kwargs)
+        super().__init__(self.path(), self.parent_stream, self.get_json_schema, **kwargs)
+        self.stream_obj = BigqueryIncrementalStream(self.path(), self.parent_stream, self.get_json_schema, **kwargs) #super() 
     
     @property
     def name(self):
         return self.parent_stream
+    
+    @property
+    def stream(self):
+        return self.stream_obj
     
     def path(self, **kwargs) -> str:
         """
@@ -411,6 +416,8 @@ class IncrementalQueryResult(BigqueryIncrementalStream):
         return f"/bigquery/v2/projects/{self.project_id}/queries"
 
     def get_json_schema(self) -> Mapping[str, Any]:
+        for table in self.read_records(sync_mode=SyncMode.full_refresh):
+            return SchemaHelpers.get_json_schema(table)
         return {}
     
     def request_body_json(
@@ -547,11 +554,16 @@ class TableChangeHistory(BigqueryCDCStream):
     def __init__(self, project_id: list, dataset_id: str, table_id: str, **kwargs):
         self.project_id = project_id
         self.parent_stream = dataset_id + "." + table_id
-        super().__init__(self.path(), self.parent_stream, self.get_json_schema(), **kwargs)
+        super().__init__(self.path(), self.parent_stream, self.get_json_schema, **kwargs)
+        self.stream_obj = BigqueryCDCStream(self.path(), self.parent_stream, self.get_json_schema, **kwargs)
     
     @property
     def name(self):
         return self.parent_stream
+    
+    @property
+    def stream(self):
+        return self.stream_obj
     
     def path(self, **kwargs) -> str:
         """
@@ -560,6 +572,8 @@ class TableChangeHistory(BigqueryCDCStream):
         return f"/bigquery/v2/projects/{self.project_id}/queries"
 
     def get_json_schema(self) -> Mapping[str, Any]:
+        for table in self.read_records(sync_mode=SyncMode.full_refresh):
+            return SchemaHelpers.get_json_schema(table)
         return {}
 
     def request_body_json(

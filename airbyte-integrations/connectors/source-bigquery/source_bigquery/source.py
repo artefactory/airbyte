@@ -91,7 +91,7 @@ class SourceBigquery(AbstractSource):
         self._auth = BigqueryAuth(config)
         streams = config.get("streams", [])
         sync_method = config["replication_method"]["method"]
-        
+        streams_catalog = []
         if streams:
             for stream in streams:
                 dataset_id, table_id = stream["parent_stream"].split(".")
@@ -102,7 +102,7 @@ class SourceBigquery(AbstractSource):
                     table_obj = TableChangeHistory(config["project_id"], dataset_id, table_id, authenticator=self._auth)
                     incremental_type = "History"
                 for table in table_obj.read_records(sync_mode=SyncMode.full_refresh):
-                        self.streams_catalog.append(
+                        streams_catalog.append(
                             {
                                 "stream_path": f"{table_obj.path()}",
                                 "stream": SchemaHelpers.get_airbyte_stream(
@@ -121,43 +121,13 @@ class SourceBigquery(AbstractSource):
                     table_id = table_info.get("tableReference")["tableId"]
                     if sync_method == "Standard":
                         table_obj = IncrementalQueryResult(config["project_id"], dataset_id, table_id, authenticator=self._auth)
-                        incremental_type = "Standard"
                     else:
                         try:
                             table_obj = TableChangeHistory(config["project_id"], dataset_id, table_id, authenticator=self._auth)
                             next(table_obj.read_records(sync_mode=SyncMode.full_refresh))
-                            incremental_type = "History"
                         except Exception as e:
                             self.logger.warn(str(e))
                             table_obj = IncrementalQueryResult(config["project_id"], dataset_id, table_id, authenticator=self._auth)
-                            incremental_type = "Standard"
-                    for table in table_obj.read_records(sync_mode=SyncMode.full_refresh):
-                        self.streams_catalog.append(
-                            {
-                                "stream_path": f"{table_obj.path()}",
-                                "stream": SchemaHelpers.get_airbyte_stream(
-                                    f"{dataset_id}.{table_id}",
-                                    SchemaHelpers.get_json_schema(table),
-                                ),
-                                "table_data": None,
-                                "type": incremental_type
-                            }
-                        )
-                    
-        for stream in self.streams_catalog:
-            if stream["type"] == "Standard":
-                yield BigqueryIncrementalStream(
-                    stream_path=stream["stream_path"],
-                    stream_name=stream["stream"].name,
-                    stream_schema=stream["stream"].json_schema,
-                    stream_request=stream["table_data"],
-                    authenticator=self._auth,
-                )
-            else:
-                yield BigqueryCDCStream(
-                    stream_path=stream["stream_path"],
-                    stream_name=stream["stream"].name,
-                    stream_schema=stream["stream"].json_schema,
-                    stream_request=stream["table_data"],
-                    authenticator=self._auth,
-                )
+                    streams_catalog.append(table_obj.stream)
+        for stream in streams_catalog:
+            yield stream
