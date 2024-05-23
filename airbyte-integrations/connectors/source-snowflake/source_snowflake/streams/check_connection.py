@@ -7,23 +7,10 @@ from source_snowflake.streams.snowflake_parent_stream import SnowflakeStream
 
 class CheckConnectionStream(SnowflakeStream):
 
-    def __init__(self, url_base, config, **kwargs):
-        super().__init__(**kwargs)
+    def __init__(self, url_base, config, authenticator):
+        super().__init__(authenticator=authenticator)
         self._url_base = url_base
-        self.config = config
-
-    def path(
-            self, stream_state: Mapping[str, Any] = None, stream_slice: Mapping[str, Any] = None, next_page_token: Mapping[str, Any] = None
-    ) -> str:
-        """
-            path of request
-        """
-
-        return f"{self.url_base}/{self.url_suffix}"
-
-    @property
-    def url_base(self):
-        return self._url_base
+        self._config = config
 
     @property
     def statement(self):
@@ -38,27 +25,9 @@ class CheckConnectionStream(SnowflakeStream):
         database = self.config["database"]
         schema = self.config.get('schema', "")
         if not schema:
-            return f"SHOW TABLES IN DATABASE {database}"
+            return f'SHOW TABLES IN DATABASE "{database}"'
 
-        return f"SHOW TABLES IN SCHEMA {database}.{schema}"
-
-    def request_body_json(
-            self,
-            stream_state: Optional[Mapping[str, Any]],
-            stream_slice: Optional[Mapping[str, Any]] = None,
-            next_page_token: Optional[Mapping[str, Any]] = None,
-    ) -> Optional[Mapping[str, Any]]:
-        json_payload = {
-            "statement": self.statement,
-            "role": self.config['role'],
-            "warehouse": self.config['warehouse'],
-            "database": self.config['database'],
-            "timeout": "1000",
-        }
-        schema = self.config.get('schema', '')
-        if schema:
-            json_payload['schema'] = schema
-        return json_payload
+        return f'SHOW TABLES IN SCHEMA "{database}"."{schema}"'
 
     def parse_response(self, response: requests.Response, **kwargs) -> Iterable[Mapping]:
         """

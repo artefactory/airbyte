@@ -113,7 +113,6 @@ class SourceSnowflake(AbstractSource):
         host = config['host']
         url_base = self.format_url_base(host)
         authenticator = SnowflakeJwtAuthenticator.from_config(config)
-
         table_catalog_stream = TableCatalogStream(url_base=url_base,
                                                   config=config,
                                                   authenticator=authenticator)

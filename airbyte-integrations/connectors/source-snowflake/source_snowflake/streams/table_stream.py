@@ -2,7 +2,7 @@ import logging
 import uuid
 from collections import OrderedDict
 from datetime import datetime, timedelta
-from typing import Any, Iterable, List, Mapping, MutableMapping, Optional, Tuple
+from typing import Any, Iterable, List, Mapping, MutableMapping, Optional, Tuple, Union
 
 import requests
 from airbyte_cdk.sources import Source
@@ -17,23 +17,20 @@ from airbyte_protocol.models import SyncMode, Type, ConfiguredAirbyteStream
 from source_snowflake.schema_builder import mapping_snowflake_type_airbyte_type, format_field, date_and_time_snowflake_type_airbyte_type, \
     string_snowflake_type_airbyte_type
 from .snowflake_parent_stream import SnowflakeStream
-from .util_streams import TableSchemaStream, StreamLauncher
+from .util_streams import TableSchemaStream, StreamLauncher, PrimaryKeyStream
 
 
 class TableStream(SnowflakeStream, IncrementalMixin):
-    primary_key = None
     state_checkpoint_interval = None
     CHECK_POINT_DURATION_IN_MINUTES = 15
 
-    def __init__(self, url_base, config, table_object, **kwargs):
-        stream_filtered_kwargs = {k: v for k, v in kwargs.items() if k in SnowflakeStream.__init__.__annotations__}
-        super().__init__(**stream_filtered_kwargs)
-        self._kwargs = kwargs
+    def __init__(self, url_base, config, table_object, authenticator):
+        super().__init__(authenticator=authenticator)
         self._url_base = url_base
-        self.config = config
-        self.table_object = table_object
+        self._config = config
+        self._table_object = table_object
         self.table_schema_stream = TableSchemaStream(url_base=url_base, config=config, table_object=table_object,
-                                                     **stream_filtered_kwargs)
+                                                     authenticator=authenticator)
         self._namespace = None
         self._state_value = None
         self._cursor_field = []
@@ -41,6 +38,10 @@ class TableStream(SnowflakeStream, IncrementalMixin):
         self.checkpoint_time = datetime.now()
         self.ordered_mapping_names_types = None
 
+        self._primary_key = None
+        self._is_primary_key_set = False
+
+        # Pagination
         self.number_of_partitions = None
         self.number_of_read_partitions = 0
 
@@ -105,6 +106,41 @@ class TableStream(SnowflakeStream, IncrementalMixin):
     def url_base(self):
         return self._url_base
 
+    def set_primary_key(self):
+        self._primary_key = self._get_primary_key()
+        self._is_primary_key_set = True
+
+    @property
+    def primary_key(self) -> Optional[Union[str, List[str], List[List[str]]]]:
+        """
+        :return: string if single primary key, list of strings if composite primary key, list of list of strings if composite primary key consisting of nested fields.
+          If the stream has no primary keys, return None.
+        """
+        if not self._is_primary_key_set and self.authenticator.get_auth_header():
+            self.set_primary_key()
+
+        print('primary key', self._primary_key)
+        return self._primary_key
+
+    def _get_primary_key(self):
+        primary_key_stream = PrimaryKeyStream(url_base=self.url_base,
+                                              config=self.config,
+                                              table_object=self.table_object,
+                                              authenticator=self.authenticator)
+        primary_key_result = []
+        for record in primary_key_stream.read_records(sync_mode=SyncMode.full_refresh):
+            primary_key_result.append(record['primary_key'])
+
+        if not len(primary_key_result):
+            return None
+
+        elif len(primary_key_result) == 1:
+            return primary_key_result[0]
+
+        else:
+            # Improvement manage nested primary keys
+            return primary_key_result
+
     ######################################
     ###### HTTP configuration
     ######################################
@@ -152,7 +188,7 @@ class TableStream(SnowflakeStream, IncrementalMixin):
         Unexpected but transient exceptions (connection timeout, DNS resolution failed, etc..) are retried by default.
         """
 
-        return response.status_code == 202
+        return response.status_code == 202 or response.status_code == 429 or 500 <= response.status_code < 600
 
     def set_statement_handle(self):
         if self.statement_handle:
@@ -162,11 +198,12 @@ class TableStream(SnowflakeStream, IncrementalMixin):
                                          table_object=self.table_object,
                                          current_state=self.state,
                                          cursor_field=self.cursor_field,
-                                         **self._kwargs)
+                                         authenticator=self.authenticator)
         post_response_iterable = stream_launcher.read_records(sync_mode=SyncMode.full_refresh)
         for post_response in post_response_iterable:
             if post_response:
-                self.statement_handle = post_response['statementHandle']
+                json_post_response = post_response[0]
+                self.statement_handle = json_post_response['statementHandle']
 
     def next_page_token(self, response: requests.Response) -> Optional[Mapping[str, Any]]:
         if self.number_of_partitions is None:
@@ -182,7 +219,6 @@ class TableStream(SnowflakeStream, IncrementalMixin):
         self.number_of_read_partitions = next_partition_index
 
         return {"partition": next_partition_index}
-
 
     ######################################
     ###### Response processing
@@ -209,7 +245,6 @@ class TableStream(SnowflakeStream, IncrementalMixin):
             stream_slice: Optional[Mapping[str, Any]] = None,
             stream_state: Optional[Mapping[str, Any]] = None,
     ) -> Iterable[StreamData]:
-
         for record in super().read_records(sync_mode, cursor_field, stream_slice, stream_state):
             if isinstance(self.cursor_field, str):
                 self.state = self._get_updated_state(record)

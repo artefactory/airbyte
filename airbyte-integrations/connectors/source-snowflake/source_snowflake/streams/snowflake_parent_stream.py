@@ -31,11 +31,30 @@ class SnowflakeStream(HttpStream, ABC):
     See the reference docs for the full list of configurable options.
     """
     url_suffix = "api/v2/statements"
-    url_base = ""
+    TIME_OUT_IN_SECONDS = "1000"
+
+    def __init__(self, authenticator=None):
+        super().__init__(authenticator=authenticator)
+        self._authenticator= authenticator
+        self._url_base = None
+        self._config = None
+        self._table_object = {}
+
+    @property
+    def url_base(self):
+        return self._url_base
+
+    @property
+    def config(self):
+        return self._config
 
     @property
     def statement(self):
         return None
+
+    @property
+    def table_object(self):
+        return self._table_object
 
     def next_page_token(self, response: requests.Response) -> Optional[Mapping[str, Any]]:
         return None
@@ -87,3 +106,51 @@ class SnowflakeStream(HttpStream, ABC):
         """
         return None
 
+    def path(
+            self, stream_state: Mapping[str, Any] = None, stream_slice: Mapping[str, Any] = None, next_page_token: Mapping[str, Any] = None
+    ) -> str:
+        """
+            path of request
+        """
+
+        return f"{self.url_base}/{self.url_suffix}"
+
+    def request_body_json(
+            self,
+            stream_state: Optional[Mapping[str, Any]],
+            stream_slice: Optional[Mapping[str, Any]] = None,
+            next_page_token: Optional[Mapping[str, Any]] = None,
+    ) -> Optional[Mapping[str, Any]]:
+        json_payload = {
+            "statement": self.statement,
+            "role": self.config['role'],
+            "warehouse": self.config['warehouse'],
+            "database": self.config['database'],
+            "timeout": self.TIME_OUT_IN_SECONDS,
+        }
+
+        schema = self.table_object.get('schema', '')
+        if schema:
+            json_payload['schema'] = schema
+        return json_payload
+
+    @classmethod
+    def get_index_of_columns_from_names(cls, metadata_object: Mapping[Any, any], column_names: Iterable[str]) -> Mapping[str, Any]:
+        mapping_column_name_to_index = {column_name: -1 for column_name in column_names}
+        for current_index, column_object in enumerate(metadata_object["resultSetMetaData"]["rowType"]):
+            for column_name in mapping_column_name_to_index:
+                if column_object['name'] == column_name:
+                    mapping_column_name_to_index[column_name] = current_index
+
+        column_name_index_updated_filter = [0 if key_word_index == -1 else 1 for key_word_index in mapping_column_name_to_index.values()]
+
+        if not all(column_name_index_updated_filter):
+            raise ValueError('At least one index of column names is not updated. The error might be a wrong key word '
+                             'or a change in the naming of keys in resultSetMetaData of Snowflake API.\n'
+                             'To resolve this issue, compare the column name provided with keys of resultSetMetaData of Snowflake API '
+                             'and update your column names.\n'
+                             'For example, for class TableCatalogStream, compare TableCatalogStream.DATABASE_NAME_COLUMN '
+                             'and TableCatalogStream.SCHEMA_NAME_COLUMN with the keys representing this variables in resultSetMetaData '
+                             'present in the Snowflake API response')
+
+        return mapping_column_name_to_index

@@ -14,23 +14,11 @@ class TableCatalogStream(SnowflakeStream):
     DATABASE_NAME_COLUMN = "name"
     SCHEMA_NAME_COLUMN = "schema_name"
 
-    def __init__(self, url_base, config, **kwargs):
-        super().__init__(**kwargs)
+    def __init__(self, url_base, config, authenticator):
+        super().__init__(authenticator=authenticator)
         self._url_base = url_base
-        self.config = config
+        self._config = config
 
-    def path(
-            self, stream_state: Mapping[str, Any] = None, stream_slice: Mapping[str, Any] = None, next_page_token: Mapping[str, Any] = None
-    ) -> str:
-        """
-            path of request
-        """
-
-        return f"{self.url_base}/{self.url_suffix}"
-
-    @property
-    def url_base(self):
-        return self._url_base
 
     @property
     def statement(self):
@@ -41,45 +29,6 @@ class TableCatalogStream(SnowflakeStream):
 
         return f"SHOW TABLES IN SCHEMA {database}.{schema}"
 
-    def request_body_json(
-            self,
-            stream_state: Optional[Mapping[str, Any]],
-            stream_slice: Optional[Mapping[str, Any]] = None,
-            next_page_token: Optional[Mapping[str, Any]] = None,
-    ) -> Optional[Mapping[str, Any]]:
-        json_payload = {
-            "statement": self.statement,
-            "role": self.config['role'],
-            "warehouse": self.config['warehouse'],
-            "database": self.config['database'],
-            "timeout": "1000",
-        }
-        schema = self.config.get('schema', '')
-        if schema:
-            json_payload['schema'] = schema
-
-        return json_payload
-
-    @classmethod
-    def get_index_of_columns_from_names(cls, metadata_object: Mapping[Any, any], column_names: Iterable[str]) -> Mapping[str, Any]:
-        mapping_column_name_to_index = {column_name: -1 for column_name in column_names}
-        for current_index, column_object in enumerate(metadata_object["resultSetMetaData"]["rowType"]):
-            for column_name in mapping_column_name_to_index:
-                if column_object['name'] == column_name:
-                    mapping_column_name_to_index[column_name] = current_index
-
-        column_name_index_updated_filter = [0 if key_word_index == -1 else 1 for key_word_index in mapping_column_name_to_index.values()]
-
-        if not all(column_name_index_updated_filter):
-            raise ValueError('At least one index of column names is not updated. The error might be a wrong key word '
-                             'or a change in the naming of keys in resultSetMetaData of Snowflake API.\n'
-                             'To resolve this issue, compare the column name provided with keys of resultSetMetaData of Snowflake API '
-                             'and update your column names.\n'
-                             'For example, for class TableCatalogStream, compare TableCatalogStream.DATABASE_NAME_COLUMN '
-                             'and TableCatalogStream.SCHEMA_NAME_COLUMN with the keys representing this variables in resultSetMetaData '
-                             'present in the Snowflake API response')
-
-        return mapping_column_name_to_index
 
     def parse_response(self, response: requests.Response, **kwargs) -> Iterable[Mapping]:
         """
@@ -98,25 +47,12 @@ class TableCatalogStream(SnowflakeStream):
 
 
 class TableSchemaStream(SnowflakeStream):
-    def __init__(self, url_base, config, table_object, **kwargs):
-        stream_filtered_kwargs = {k: v for k, v in kwargs.items() if k in SnowflakeStream.__init__.__annotations__}
-        super().__init__(**stream_filtered_kwargs)
+    def __init__(self, url_base, config, table_object, authenticator):
+        super().__init__(authenticator=authenticator)
         self._url_base = url_base
-        self.config = config
-        self.table_object = table_object
+        self._config = config
+        self._table_object = table_object
 
-    def path(
-            self, stream_state: Mapping[str, Any] = None, stream_slice: Mapping[str, Any] = None, next_page_token: Mapping[str, Any] = None
-    ) -> str:
-        """
-            path of request
-        """
-
-        return f"{self.url_base}/{self.url_suffix}"
-
-    @property
-    def url_base(self):
-        return self._url_base
 
     @property
     def statement(self):
@@ -126,25 +62,6 @@ class TableSchemaStream(SnowflakeStream):
 
         return f'SELECT TOP 1 * FROM "{database}"."{schema}"."{table}"'
 
-    def request_body_json(
-            self,
-            stream_state: Optional[Mapping[str, Any]],
-            stream_slice: Optional[Mapping[str, Any]] = None,
-            next_page_token: Optional[Mapping[str, Any]] = None,
-    ) -> Optional[Mapping[str, Any]]:
-        json_payload = {
-            "statement": self.statement,
-            "role": self.config['role'],
-            "warehouse": self.config['warehouse'],
-            "database": self.config['database'],
-            "timeout": "1000",
-        }
-
-        schema = self.table_object.get('schema', '')
-        if schema:
-            json_payload['schema'] = schema
-        return json_payload
-
     def parse_response(self, response: requests.Response, **kwargs) -> Iterable[Mapping]:
         """
         :return an iterable containing each record in the response
@@ -153,8 +70,40 @@ class TableSchemaStream(SnowflakeStream):
         # checks in the response nested fields response -> resultSetMetaData -> rowType
         for row_type in response_json.get('resultSetMetaData', {'rowType': []}).get('rowType', []):
             yield {'column_name': row_type['name'],
-                   'type': row_type['type'],
-                   }
+                   'type': row_type['type']}
+
+    def __str__(self):
+        return f"Current stream has this table object as constructor {self.table_object}"
+
+
+class PrimaryKeyStream(SnowflakeStream):
+    PRIMARY_COLUMN_NAME = 'column_name'
+
+    def __init__(self, url_base, config, table_object, authenticator):
+        super().__init__(authenticator=authenticator)
+        self._url_base = url_base
+        self._config = config
+        self._table_object = table_object
+
+    @property
+    def statement(self):
+        database = self.config["database"]
+        schema = self.table_object["schema"]
+        table = self.table_object["table"]
+
+        return f'SHOW PRIMARY KEYS IN "{database}"."{schema}"."{table}"'
+
+    def parse_response(self, response: requests.Response, **kwargs) -> Iterable[Mapping]:
+        """
+        :return an iterable containing each record in the response
+        """
+        response_json = response.json()
+        column_names_to_be_extracted_from_records = [self.PRIMARY_COLUMN_NAME]
+        index_of_columns_from_names = self.get_index_of_columns_from_names(response_json, column_names_to_be_extracted_from_records)
+
+        primary_column_name_index = index_of_columns_from_names[self.PRIMARY_COLUMN_NAME]
+        for record in response_json.get("data", []):
+            yield {'primary_key': record[primary_column_name_index]}
 
     def __str__(self):
         return f"Current stream has this table object as constructor {self.table_object}"
@@ -162,23 +111,20 @@ class TableSchemaStream(SnowflakeStream):
 
 class StreamLauncher(SnowflakeStream):
 
-    TIME_OUT_IN_SECONDS = "1000"
-    def __init__(self, url_base, config, table_object, current_state, cursor_field, where_clause=None, **kwargs):
-        stream_filtered_kwargs = {k: v for k, v in kwargs.items() if k in SnowflakeStream.__init__.__annotations__}
-        super().__init__(**stream_filtered_kwargs)
+    def __init__(self, url_base, config, table_object, current_state, cursor_field, authenticator, where_clause=None):
+        super().__init__(authenticator=authenticator)
         self._url_base = url_base
-        self.config = config
-        self.table_object = table_object
+        self._config = config
+        self._table_object = table_object
         self._json_schema_properties = None
-        self.table_schema_stream = TableSchemaStream(url_base=url_base, config=config, table_object=table_object,
-                                                     **kwargs)
+        self.table_schema_stream = TableSchemaStream(url_base=url_base,
+                                                     config=config,
+                                                     table_object=table_object,
+                                                     authenticator=authenticator)
         self.current_state = current_state
         self._cursor_field = cursor_field
         self.where_clause = where_clause
 
-    @property
-    def url_base(self):
-        return self._url_base
 
     @property
     def cursor_field(self):
@@ -202,16 +148,6 @@ class StreamLauncher(SnowflakeStream):
             return f'SELECT * FROM "{database}"."{schema}"."{table}" WHERE {self.where_clause}'
 
         return f'SELECT * FROM "{database}"."{schema}"."{table}"'
-
-    def path(
-            self, stream_state: Mapping[str, Any] = None, stream_slice: Mapping[str, Any] = None, next_page_token: Mapping[str, Any] = None
-    ) -> str:
-        """
-            path of request
-        """
-
-        return f"{self.url_base}/{self.url_suffix}"
-
 
     def request_params(
             self, stream_state: Mapping[str, Any], stream_slice: Mapping[str, any] = None, next_page_token: Mapping[str, Any] = None
@@ -316,7 +252,5 @@ class StreamLauncher(SnowflakeStream):
         :return an iterable containing each record in the response
         """
         response_json = response.json()
-        yield response_json
-
-
+        yield [response_json]
 
