@@ -288,7 +288,7 @@ class BigqueryIncrementalStream(BigqueryResultStream, IncrementalMixin):
     """
     """ 
     # _state = {}
-    cursor_field = "_bigquery_created_time"
+    cursor_field = []
     primary_key = None
     state_checkpoint_interval = None
     
@@ -304,6 +304,8 @@ class BigqueryIncrementalStream(BigqueryResultStream, IncrementalMixin):
     
     @property
     def state(self):
+        if not self.cursor_field:
+            return {}
         return {
             self.cursor_field: self._cursor,
         }
@@ -326,6 +328,9 @@ class BigqueryIncrementalStream(BigqueryResultStream, IncrementalMixin):
         Override to determine the latest state after reading the latest record. This typically compared the cursor_field from the latest record and
         the current state and picks the 'most' recent cursor. This is how a stream's state is determined. Required for incremental.
         """
+        if not self.cursor_field:
+            return self.state
+        
         latest_record_state = latest_record[self.cursor_field]
         stream_state = current_stream_state.get(self.cursor_field, None)
 
@@ -350,9 +355,12 @@ class BigqueryIncrementalStream(BigqueryResultStream, IncrementalMixin):
         if stream_state:
             self._cursor = stream_state.get(self.cursor_field) #or self._state.get(self.cursor_field)
 
-        yield {
-                self.cursor_field : self._cursor
-            }
+        if self.cursor_field:
+            yield {
+                    self.cursor_field : self._cursor
+                }
+        else:
+            yield {}
     
     def request_body_json(
         self,
