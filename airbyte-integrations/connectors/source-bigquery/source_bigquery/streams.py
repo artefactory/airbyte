@@ -67,14 +67,13 @@ class BigqueryStream(HttpStream, ABC):
 
     def process_records(self, record) -> Iterable[Mapping[str, Any]]:
         fields = record.get("schema")["fields"]
-        stream_data = self.stream_data.read_records(sync_mode=SyncMode.full_refresh)
-
-        for data in stream_data:
-            rows = data.get("f")
+        rows = self.stream_data.read_records(sync_mode=SyncMode.full_refresh)
+        for row in rows:
+            data = row.get("f")
             yield {
                 "_bigquery_table_id": record.get("tableReference")["tableId"],
                 "_bigquery_created_time": record.get("creationTime"),
-                **{element["name"]: SchemaHelpers.format_field(rows[fields.index(element)]["v"], element["type"]) for element in fields},
+                **{element["name"]: SchemaHelpers.format_field(data[fields.index(element)]["v"], element["type"]) for element in fields},
             }
 
     def parse_response(self, response: requests.Response, **kwargs) -> Iterable[Mapping]:
@@ -211,14 +210,13 @@ class BigqueryResultStream(BigqueryStream):
     
     def process_records(self, record) -> Iterable[Mapping[str, Any]]:
         fields = record.get("schema")["fields"]
-        stream_data = record.get("rows", [])
-
-        for data in stream_data:
-            rows = data.get("f")
+        rows = record.get("rows", [])
+        for row in rows:
+            data = row.get("f")
             yield {
                 "_bigquery_table_id": record.get("jobReference")["jobId"],
                 "_bigquery_created_time": None, #TODO: Update this to row insertion time
-                **{element["name"]: SchemaHelpers.format_field(rows[fields.index(element)]["v"], element["type"]) for element in fields},
+                **{element["name"]: SchemaHelpers.format_field(data[fields.index(element)]["v"], element["type"]) for element in fields},
             }
 
     def checkpoint(self, stream_name, stream_state, stream_namespace):
@@ -386,16 +384,16 @@ class BigqueryIncrementalStream(BigqueryResultStream, IncrementalMixin):
     
     def process_records(self, record) -> Iterable[Mapping[str, Any]]:
         fields = record.get("schema")["fields"]
-        stream_data = record.get("rows", [])
-        for data in stream_data:
-            rows = data.get("f")
-            row = {
+        rows = record.get("rows", [])
+        for row in rows:
+            data = row.get("f")
+            formated_data = {
                 "_bigquery_table_id": record.get("jobReference")["jobId"],
                 "_bigquery_created_time": None, #TODO: Update this to row insertion time
-                **{CHANGE_FIELDS.get(element["name"], element["name"]): SchemaHelpers.format_field(rows[fields.index(element)]["v"], element["type"]) for element in fields},
+                **{CHANGE_FIELDS.get(element["name"], element["name"]): SchemaHelpers.format_field(data[fields.index(element)]["v"], element["type"]) for element in fields},
             }
-            self._updated_state(self.state, row)
-            yield row
+            self._updated_state(self.state, formated_data)
+            yield formated_data
 
 
 class IncrementalQueryResult(BigqueryIncrementalStream):
@@ -540,16 +538,16 @@ class BigqueryCDCStream(BigqueryResultStream, IncrementalMixin):
     
     def process_records(self, record) -> Iterable[Mapping[str, Any]]:
         fields = record.get("schema")["fields"]
-        stream_data = record.get("rows", [])
-        for data in stream_data:
-            rows = data.get("f")
-            row = {
+        rows = record.get("rows", [])
+        for row in rows:
+            data = row.get("f")
+            formated_data = {
                 "_bigquery_table_id": record.get("jobReference")["jobId"],
                 "_bigquery_created_time": None, #TODO: Update this to row insertion time
-                **{CHANGE_FIELDS.get(element["name"], element["name"]): SchemaHelpers.format_field(rows[fields.index(element)]["v"], element["type"]) for element in fields},
+                **{CHANGE_FIELDS.get(element["name"], element["name"]): SchemaHelpers.format_field(data[fields.index(element)]["v"], element["type"]) for element in fields},
             }
-            self.state = self._updated_state(self.state, row)
-            yield row
+            self._updated_state(self.state, formated_data)
+            yield formated_data
 
 
 class TableChangeHistory(BigqueryCDCStream):
