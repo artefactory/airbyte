@@ -1,0 +1,14 @@
+{
+    "streams": [
+        {
+            "name": "higher_than_5",
+            "parent_stream": "TEST.TEST_TABLE",
+            "where_clause": "COL1>=5"
+        }
+    ],
+    "database": "TEST_AIRBYTE",
+    "schema": "TEST",
+    "replication_method": {
+        "method": "standard"
+    }
+}

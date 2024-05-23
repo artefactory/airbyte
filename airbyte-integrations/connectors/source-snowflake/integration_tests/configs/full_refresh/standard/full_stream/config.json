@@ -1,0 +1,8 @@
+{
+    "database": "TEST_AIRBYTE",
+    "schema": "TEST",
+    "streams": [],
+    "replication_method": {
+        "method": "standard"
+    }
+}

@@ -34,8 +34,6 @@ class CheckConnectionStream(SnowflakeStream):
             We don't need to request the table in order to make sure it is working properly
             SHOW TABLES IN DATABASE statement does not include "system tables" in the dataset0
             if schema is provided by the use we replace the search of tables (streams) in database by search in shema
-
-        TODO: Validate that the streams in the pushdown filter configuration are available
         """
         database = self.config["database"]
         schema = self.config.get('schema', "")
