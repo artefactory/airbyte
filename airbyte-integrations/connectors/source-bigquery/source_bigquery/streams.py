@@ -469,8 +469,6 @@ class BigqueryCDCStream(BigqueryResultStream, IncrementalMixin):
     
     @property
     def state(self):
-        if not self._cursor:
-            return {}
         return {
             self.cursor_field: self._cursor,
         }
