@@ -159,15 +159,13 @@ def main():
         enrich_config(config_file, basic_config)
 
         scenario_results, scenario_failed_commands = run_test_scenario(commands, mode, type_, stream, config_file, catalog_file)
-        results.append(scenario_results)
-        failed_commands.append(scenario_failed_commands)
+        results += scenario_results
+        failed_commands += scenario_failed_commands
 
         reset_config(config_file, basic_config)
 
     print_report(results)
     print_failed_commands(failed_commands)
-
-
 
 
 if __name__ == '__main__':
