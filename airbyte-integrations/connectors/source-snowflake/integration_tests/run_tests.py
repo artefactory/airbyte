@@ -69,54 +69,39 @@ def reset_config(file_path, basic_config):
         json.dump(basic_config, json_file, indent=4)
 
 
-def main():
-    # Iterate over all combinations of configurations
-    results = []
-    failed_commands = []
-    commands = [
-        "poetry run source-snowflake check --config integration_tests/{config_file}",
-        "poetry run source-snowflake discover --config integration_tests/{config_file}",
-        "poetry run source-snowflake read --config integration_tests/{config_file} --catalog integration_tests/{catalog_file}"
-    ]
+def run_test_scenario(commands, mode, type_, stream, config_file, catalog_file):
+    scenario_results = []
+    scenario_failed_commands = []
+    print('Scenario: ', mode, type_, stream)
+    # Run each command and capture the result
+    for cmd_template in tqdm(commands):
+        command = cmd_template.format(config_file=config_file, catalog_file=catalog_file)
+        return_code, output = run_bash_command(command)
 
-    for mode, type_, stream in product(modes, types, streams):
-        # Construct the path to the configuration files
-        config_dir = os.path.join(base_dir, mode, type_, stream)
-        config_file = os.path.join(config_dir, "config.json")
-        catalog_file = os.path.join(config_dir, "catalog.json")
+        # Check if the process finished properly (return_code == 0)
+        status = "------PASSED------" if return_code == 0 else "*****FAILED*****"
 
-        basic_config = load_json(config_file)
-        enrich_config(config_file, basic_config)
-        print('Scenario: ', mode, type_, stream)
-        # Run each command and capture the result
-        for cmd_template in tqdm(commands):
-            command = cmd_template.format(config_file=config_file, catalog_file=catalog_file)
-            return_code, output = run_bash_command(command)
+        # Log the result
+        scenario_results.append({
+            "mode": mode,
+            "type": type_,
+            "stream": stream,
+            "command": command,
+            "status": status
+        })
 
-            # Check if the process finished properly (return_code == 0)
-            status = "------PASSED------" if return_code == 0 else "*****FAILED*****"
-
-            # Log the result
-            results.append({
+        # If the command went wrong, log it in the failed commands list
+        if return_code == 1:
+            scenario_failed_commands.append({
                 "mode": mode,
                 "type": type_,
                 "stream": stream,
-                "command": command,
-                "status": status
+                "command": command
             })
-
-            # If the command went wrong, log it in the failed commands list
-            if return_code == 1:
-                failed_commands.append({
-                    "mode": mode,
-                    "type": type_,
-                    "stream": stream,
-                    "command": command
-                })
-
-        reset_config(config_file, basic_config)
+    return scenario_results, scenario_failed_commands
 
 
+def print_report(results):
     # Generate a report
     report = "Test Report:\n"
     current_scenario = None
@@ -140,6 +125,7 @@ def main():
     # Print the report
     print(report)
 
+def print_failed_commands(failed_commands):
     # Print all the commands that went wrong
     if failed_commands:
         print("\nCommands that went wrong:")
@@ -149,6 +135,39 @@ def main():
             print("-" * 40)
     else:
         print("All commands went well!")
+
+
+
+def main():
+    # Iterate over all combinations of configurations
+    results = []
+    failed_commands = []
+
+    commands = [
+        "poetry run source-snowflake check --config integration_tests/{config_file}",
+        "poetry run source-snowflake discover --config integration_tests/{config_file}",
+        "poetry run source-snowflake read --config integration_tests/{config_file} --catalog integration_tests/{catalog_file}"
+    ]
+
+    for mode, type_, stream in product(modes, types, streams):
+        # Construct the path to the configuration files
+        config_dir = os.path.join(base_dir, mode, type_, stream)
+        config_file = os.path.join(config_dir, "config.json")
+        catalog_file = os.path.join(config_dir, "catalog.json")
+
+        basic_config = load_json(config_file)
+        enrich_config(config_file, basic_config)
+
+        scenario_results, scenario_failed_commands = run_test_scenario(commands, mode, type_, stream, config_file, catalog_file)
+        results.append(scenario_results)
+        failed_commands.append(scenario_failed_commands)
+
+        reset_config(config_file, basic_config)
+
+    print_report(results)
+    print_failed_commands(failed_commands)
+
+
 
 
 if __name__ == '__main__':
