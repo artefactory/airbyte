@@ -367,6 +367,8 @@ class BigqueryIncrementalStream(BigqueryResultStream, IncrementalMixin):
         next_page_token: Optional[Mapping[str, Any]] = None,
     ) -> Optional[Mapping[str, Any]]:
         query_string = f"select * from `{self.name}`"
+        if self.cursor_field:
+            query_string = f"select * from `{self.name}` ORDER BY {self.cursor_field}"
         if stream_slice:
             self._cursor = stream_slice.get(self.cursor_field, None)
             if self._cursor:
