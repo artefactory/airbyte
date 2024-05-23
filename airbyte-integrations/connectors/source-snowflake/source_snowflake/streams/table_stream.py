@@ -2,9 +2,10 @@ import logging
 import uuid
 from collections import OrderedDict
 from datetime import datetime, timedelta
-from typing import Any, Iterable, List, Mapping, MutableMapping, Optional
+from typing import Any, Iterable, List, Mapping, MutableMapping, Optional, Tuple
 
 import requests
+from airbyte_cdk.sources import Source
 from airbyte_cdk.sources.streams import IncrementalMixin
 from airbyte_cdk.sources.streams.core import StreamData
 from airbyte_cdk.models import (AirbyteMessage, AirbyteStateMessage, AirbyteStateType,
@@ -96,9 +97,7 @@ class TableStream(SnowflakeStream, IncrementalMixin):
         """
             path of request
         """
-        if not self.statement_handle:
-            raise ValueError('self.statement_handle should be set to fetch the results. '
-                             'To solve this issue, you must ensure that the method set_statement_handle is called before the get request')
+        self.set_statement_handle()
         return f"{self.url_base}/{self.url_suffix}/{self.statement_handle}"
 
     @property
@@ -124,7 +123,6 @@ class TableStream(SnowflakeStream, IncrementalMixin):
         before launching any request
         This is appropriate as we have to launch the POST request before the GET
         """
-        self.set_statement_handle()
         request_headers = dict(super().request_headers(stream_state, stream_slice, next_page_token))
         if next_page_token and "partition" in next_page_token:
             request_headers["partition"] = next_page_token["partition"]
@@ -142,10 +140,22 @@ class TableStream(SnowflakeStream, IncrementalMixin):
     ######################################
     ###### Pagination
     ######################################
+    def should_retry(self, response: requests.Response) -> bool:
+        """
+        Override to set different conditions for backoff based on the response from the server.
+
+        By default, back off on the following HTTP response statuses:
+         - 429 (Too Many Requests) indicating rate limiting
+         - 500s to handle transient server errors
+
+        Unexpected but transient exceptions (connection timeout, DNS resolution failed, etc..) are retried by default.
+        """
+
+        return response.status_code == 202
+
     def set_statement_handle(self):
         if self.statement_handle:
             return
-
         stream_launcher = StreamLauncher(url_base=self.url_base,
                                          config=self.config,
                                          table_object=self.table_object,
@@ -198,7 +208,7 @@ class TableStream(SnowflakeStream, IncrementalMixin):
             stream_slice: Optional[Mapping[str, Any]] = None,
             stream_state: Optional[Mapping[str, Any]] = None,
     ) -> Iterable[StreamData]:
-        self.cursor_field = self._process_cursor_field(cursor_field)
+
         for record in super().read_records(sync_mode, cursor_field, stream_slice, stream_state):
             if isinstance(self.cursor_field, str):
                 self.state = self._get_updated_state(record)
@@ -228,6 +238,15 @@ class TableStream(SnowflakeStream, IncrementalMixin):
     ######################################
     ###### State, cursor management and checkpointing
     ######################################
+
+    def check_availability(self, logger: logging.Logger, source: Optional["Source"] = None) -> Tuple[bool, Optional[str]]:
+        """
+        the stream availability cannot be checked with httpcheckstrategy in the snowflake use case
+        We do not read directly with the request the content of the stream, we send a first query using a post then read by get
+        we can not perform the post without the cursor field that is set after we do the check
+        Deprecated soon
+        """
+        return True, None
 
     def read(  # type: ignore  # ignoring typing for ConnectorStateManager because of circular dependencies
             self,
@@ -280,15 +299,17 @@ class TableStream(SnowflakeStream, IncrementalMixin):
     def stream_slices(self, stream_state: Mapping[str, Any] = None, cursor_field=None, sync_mode=None, **kwargs) -> Iterable[
         Optional[Mapping[str, any]]]:
 
-        if sync_mode == SyncMode.incremental:
-            self.cursor_field = self._process_cursor_field(cursor_field)
+        self.cursor_field = self._process_cursor_field(cursor_field)
+        self.set_statement_handle()
+        slice = {"statement_handle": self.statement_handle}
 
+        if sync_mode == SyncMode.incremental:
             if stream_state:
                 self._state_value = stream_state.get(self.cursor_field)
 
-            yield {self.cursor_field: self._state_value}
+            yield {self.cursor_field: self._state_value, **slice}
         else:
-            yield {}
+            yield slice
 
     def checkpoint(self, stream_name, stream_state, stream_namespace):
         """

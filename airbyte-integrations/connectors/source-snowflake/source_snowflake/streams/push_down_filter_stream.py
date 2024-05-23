@@ -1,5 +1,9 @@
 from typing import Any, Iterable, List, Mapping, MutableMapping, Optional
+
+from airbyte_protocol.models import SyncMode
+
 from .table_stream import TableStream
+from .util_streams import StreamLauncher
 
 
 class PushDownFilterStream(TableStream):
@@ -22,25 +26,22 @@ class PushDownFilterStream(TableStream):
     def name(self):
         return f"{self._name}"
 
-    def path(
-            self, stream_state: Mapping[str, Any] = None, stream_slice: Mapping[str, Any] = None, next_page_token: Mapping[str, Any] = None
-    ) -> str:
-        """
-            path of request
-        """
+    def set_statement_handle(self):
+        if self.statement_handle:
+            return
 
-        return f"{self.url_base}/{self.url_suffix}"
+        stream_launcher = StreamLauncher(url_base=self.url_base,
+                                         config=self.config,
+                                         table_object=self.table_object,
+                                         current_state=self.state,
+                                         cursor_field=self.cursor_field,
+                                         where_clause=self.where_clause,
+                                         **self._kwargs)
 
-    @property
-    def url_base(self):
-        return self._url_base
-
-    @property
-    def statement(self):
-        database = self.config["database"]
-        schema = self.table_object["schema"]
-        table = self.table_object["table"]
-        return f'SELECT * FROM "{database}"."{schema}"."{table}" WHERE {self.where_clause}'
+        post_response_iterable = stream_launcher.read_records(sync_mode=SyncMode.full_refresh)
+        for post_response in post_response_iterable:
+            if post_response:
+                self.statement_handle = post_response['statementHandle']
 
     def __str__(self):
         return f"Current stream has this table object as constructor: {self.table_object} and as where clause: {self.where_clause}"

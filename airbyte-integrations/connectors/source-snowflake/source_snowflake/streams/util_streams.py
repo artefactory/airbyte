@@ -99,7 +99,8 @@ class TableCatalogStream(SnowflakeStream):
 
 class TableSchemaStream(SnowflakeStream):
     def __init__(self, url_base, config, table_object, **kwargs):
-        super().__init__(**kwargs)
+        stream_filtered_kwargs = {k: v for k, v in kwargs.items() if k in SnowflakeStream.__init__.__annotations__}
+        super().__init__(**stream_filtered_kwargs)
         self._url_base = url_base
         self.config = config
         self.table_object = table_object
@@ -160,8 +161,9 @@ class TableSchemaStream(SnowflakeStream):
 
 
 class StreamLauncher(SnowflakeStream):
-    def __init__(self, url_base, config, table_object, current_state, cursor_field, **kwargs):
-        super().__init__(**kwargs)
+    def __init__(self, url_base, config, table_object, current_state, cursor_field, where_clause=None, **kwargs):
+        stream_filtered_kwargs = {k: v for k, v in kwargs.items() if k in SnowflakeStream.__init__.__annotations__}
+        super().__init__(**stream_filtered_kwargs)
         self._url_base = url_base
         self.config = config
         self.table_object = table_object
@@ -170,6 +172,7 @@ class StreamLauncher(SnowflakeStream):
                                                      **kwargs)
         self.current_state = current_state
         self._cursor_field = cursor_field
+        self.where_clause = where_clause
 
     @property
     def url_base(self):
@@ -192,6 +195,9 @@ class StreamLauncher(SnowflakeStream):
         database = self.config["database"]
         schema = self.table_object["schema"]
         table = self.table_object["table"]
+
+        if self.where_clause:
+            return f'SELECT * FROM "{database}"."{schema}"."{table}" WHERE {self.where_clause}'
 
         return f'SELECT * FROM "{database}"."{schema}"."{table}"'
 
@@ -309,11 +315,6 @@ class StreamLauncher(SnowflakeStream):
         """
         response_json = response.json()
         yield response_json
-
-
-
-
-
 
 
 
