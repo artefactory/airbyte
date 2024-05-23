@@ -23,6 +23,7 @@ from .util_streams import TableSchemaStream, StreamLauncher
 class TableStream(SnowflakeStream, IncrementalMixin):
     primary_key = None
     state_checkpoint_interval = None
+    CHECK_POINT_DURATION_IN_MINUTES = 15
 
     def __init__(self, url_base, config, table_object, **kwargs):
         stream_filtered_kwargs = {k: v for k, v in kwargs.items() if k in SnowflakeStream.__init__.__annotations__}
@@ -280,7 +281,7 @@ class TableStream(SnowflakeStream, IncrementalMixin):
             self._state_value = latest_record_state
             self.state = {self.cursor_field: self._state_value}
 
-        if datetime.now() >= self.checkpoint_time + timedelta(minutes=15):
+        if datetime.now() >= self.checkpoint_time + timedelta(minutes=self.CHECK_POINT_DURATION_IN_MINUTES):
             self.checkpoint(self.name, self.state, self.namespace)
             self.checkpoint_time = datetime.now()
 

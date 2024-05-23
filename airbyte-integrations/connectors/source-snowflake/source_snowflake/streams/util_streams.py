@@ -161,6 +161,8 @@ class TableSchemaStream(SnowflakeStream):
 
 
 class StreamLauncher(SnowflakeStream):
+
+    TIME_OUT_IN_SECONDS = "1000"
     def __init__(self, url_base, config, table_object, current_state, cursor_field, where_clause=None, **kwargs):
         stream_filtered_kwargs = {k: v for k, v in kwargs.items() if k in SnowflakeStream.__init__.__annotations__}
         super().__init__(**stream_filtered_kwargs)
@@ -279,7 +281,7 @@ class StreamLauncher(SnowflakeStream):
             "role": self.config['role'],
             "warehouse": self.config['warehouse'],
             "database": self.config['database'],
-            "timeout": "1000",
+            "timeout": self.TIME_OUT_IN_SECONDS,
         }
 
         schema = self.table_object.get('schema', '')
