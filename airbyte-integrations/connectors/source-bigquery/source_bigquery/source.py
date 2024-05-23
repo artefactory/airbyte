@@ -92,42 +92,21 @@ class SourceBigquery(AbstractSource):
         streams = config.get("streams", [])
         sync_method = config["replication_method"]["method"]
         streams_catalog = []
-        if streams:
-            for stream in streams:
-                dataset_id, table_id = stream["parent_stream"].split(".")
+        
+        for dataset in BigqueryDatasets(project_id=config["project_id"], authenticator=self._auth).read_records(sync_mode=SyncMode.full_refresh):
+            dataset_id = dataset.get("datasetReference")["datasetId"]
+            # list and process each table under each base to generate the JSON Schema
+            for table_info in BigqueryTables(dataset_id=dataset_id, project_id=config["project_id"], authenticator=self._auth).read_records(sync_mode=SyncMode.full_refresh):
+                table_id = table_info.get("tableReference")["tableId"]
                 if sync_method == "Standard":
                     table_obj = IncrementalQueryResult(config["project_id"], dataset_id, table_id, authenticator=self._auth)
-                    incremental_type = "Standard"
                 else:
-                    table_obj = TableChangeHistory(config["project_id"], dataset_id, table_id, authenticator=self._auth)
-                    incremental_type = "History"
-                for table in table_obj.read_records(sync_mode=SyncMode.full_refresh):
-                        streams_catalog.append(
-                            {
-                                "stream_path": f"{table_obj.path()}",
-                                "stream": SchemaHelpers.get_airbyte_stream(
-                                    f"{stream['name']}",
-                                    SchemaHelpers.get_json_schema(table),
-                                ),
-                                "table_data": None,
-                                "type": incremental_type
-                            }
-                        )
-        else:
-            for dataset in BigqueryDatasets(project_id=config["project_id"], authenticator=self._auth).read_records(sync_mode=SyncMode.full_refresh):
-                dataset_id = dataset.get("datasetReference")["datasetId"]
-                # list and process each table under each base to generate the JSON Schema
-                for table_info in BigqueryTables(dataset_id=dataset_id, project_id=config["project_id"], authenticator=self._auth).read_records(sync_mode=SyncMode.full_refresh):
-                    table_id = table_info.get("tableReference")["tableId"]
-                    if sync_method == "Standard":
+                    try:
+                        table_obj = TableChangeHistory(config["project_id"], dataset_id, table_id, authenticator=self._auth)
+                        next(table_obj.read_records(sync_mode=SyncMode.full_refresh))
+                    except Exception as e:
+                        self.logger.warn(str(e))
                         table_obj = IncrementalQueryResult(config["project_id"], dataset_id, table_id, authenticator=self._auth)
-                    else:
-                        try:
-                            table_obj = TableChangeHistory(config["project_id"], dataset_id, table_id, authenticator=self._auth)
-                            next(table_obj.read_records(sync_mode=SyncMode.full_refresh))
-                        except Exception as e:
-                            self.logger.warn(str(e))
-                            table_obj = IncrementalQueryResult(config["project_id"], dataset_id, table_id, authenticator=self._auth)
-                    streams_catalog.append(table_obj.stream)
+                streams_catalog.append(table_obj.stream)
         for stream in streams_catalog:
             yield stream
