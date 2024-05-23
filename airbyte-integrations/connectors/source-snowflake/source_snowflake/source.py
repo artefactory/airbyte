@@ -12,6 +12,7 @@ from airbyte_cdk.sources.streams import Stream
 from airbyte_protocol.models import SyncMode
 
 from .authenticator import SnowflakeJwtAuthenticator
+from .snowflake_exceptions import InconsistentPushDownFilterParentStreamName
 from .streams.push_down_filter_stream import PushDownFilterStream
 
 
@@ -46,10 +47,14 @@ class SourceSnowflake(AbstractSource):
 
         authenticator = SnowflakeJwtAuthenticator.from_config(config)
 
-        check_connection_stream = CheckConnectionStream(url_base=url_base, config=config, authenticator=authenticator)
         try:
-            records = check_connection_stream.read_records(sync_mode=SyncMode.full_refresh)
-            next(records)
+            self.check_existence_of_at_least_one_stream(url_base=url_base, config=config, authenticator=authenticator)
+            self.check_push_down_filters_parent_stream_consistency(url_base=url_base, config=config, authenticator=authenticator)
+        except InconsistentPushDownFilterParentStreamName as e:
+            error_message = (f'You have provided inconsistent pushdown filters configuration. Parent stream not found or mistake in  '
+                             f'spelling parent stream name. Correct spelling must be your_schema_name.your_table_name.\n. Here is the '
+                             f'list of the streams affected by this error: {e.push_down_filters_without_consistent_parent}')
+            raise ValueError(error_message)
         except StopIteration:
             error_message = "There is no stream available for the connection specification provided"
             raise StopIteration(error_message)
@@ -65,6 +70,35 @@ class SourceSnowflake(AbstractSource):
 
         return True, None
 
+    @classmethod
+    def check_existence_of_at_least_one_stream(cls, url_base, config, authenticator):
+        check_connection_stream = CheckConnectionStream(url_base=url_base, config=config, authenticator=authenticator)
+        records = check_connection_stream.read_records(sync_mode=SyncMode.full_refresh)
+        next(records)
+
+    @classmethod
+    def check_push_down_filters_parent_stream_consistency(cls, url_base, config, authenticator):
+        table_catalog_stream = TableCatalogStream(url_base=url_base,
+                                                  config=config,
+                                                  authenticator=authenticator)
+        standard_stream_names = []
+        for table_object in table_catalog_stream.read_records(sync_mode=SyncMode.full_refresh):
+            standard_stream = TableStream(url_base=url_base,
+                                          config=config,
+                                          authenticator=authenticator,
+                                          table_object=table_object)
+            standard_stream_names.append(standard_stream.name)
+
+        push_down_filters_without_consistent_parent = []
+        if 'streams' in config and config['streams']:
+            for push_down_filter_stream_config in config['streams']:
+                parent_stream_name = push_down_filter_stream_config['parent_stream']
+                push_down_filter_stream_name = push_down_filter_stream_config['name']
+                if parent_stream_name not in standard_stream_names:
+                    push_down_filters_without_consistent_parent.append(push_down_filter_stream_name)
+
+        if push_down_filters_without_consistent_parent:
+            raise InconsistentPushDownFilterParentStreamName(push_down_filters_without_consistent_parent)
     @classmethod
     def format_url_base(cls, host: str) -> str:
         url_base = host
