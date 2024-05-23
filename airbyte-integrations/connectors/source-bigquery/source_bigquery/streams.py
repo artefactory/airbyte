@@ -342,20 +342,17 @@ class BigqueryIncrementalStream(BigqueryResultStream, IncrementalMixin):
         return self.state
 
     def stream_slices(self, stream_state: Mapping[str, Any] = None, cursor_field=None, sync_mode=None, **kwargs) -> Iterable[Optional[Mapping[str, any]]]:
-        if sync_mode == SyncMode.incremental:
-            if isinstance(cursor_field,list) and cursor_field:
-                self.cursor_field = cursor_field[0]
-            elif cursor_field:
-                self.cursor_field = cursor_field
+        if isinstance(cursor_field,list) and cursor_field:
+            self.cursor_field = cursor_field[0]
+        elif cursor_field:
+            self.cursor_field = cursor_field
 
-            if stream_state:
-                self._cursor = stream_state.get(self.cursor_field) #or self._state.get(self.cursor_field)
+        if stream_state:
+            self._cursor = stream_state.get(self.cursor_field) #or self._state.get(self.cursor_field)
 
-            yield {
-                    self.cursor_field : self._cursor
-                } 
-        else:
-            yield
+        yield {
+                self.cursor_field : self._cursor
+            }
     
     def request_body_json(
         self,
