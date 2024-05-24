@@ -120,7 +120,7 @@ class PrimaryKeyStream(SnowflakeStream):
 
 class StreamLauncher(SnowflakeStream):
 
-    def __init__(self, url_base, config, table_object, current_state, cursor_field, authenticator, where_clause=None):
+    def __init__(self, url_base, config, table_object, current_state, cursor_field, authenticator, where_clause=None, cdc_look_back_time_window=None):
         super().__init__(authenticator=authenticator)
         self._url_base = url_base
         self._config = config
@@ -133,6 +133,7 @@ class StreamLauncher(SnowflakeStream):
         self.current_state = current_state
         self._cursor_field = cursor_field
         self.where_clause = where_clause
+        self.cdc_look_back_time_window = cdc_look_back_time_window
 
 
     @property
@@ -266,7 +267,6 @@ class StreamLauncher(SnowflakeStream):
 
 
 class StreamLauncherChangeDataCapture(StreamLauncher):
-    RETENTION_DAYS = 30
 
     @property
     def statement(self):
@@ -274,7 +274,11 @@ class StreamLauncherChangeDataCapture(StreamLauncher):
         schema = self.table_object["schema"]
         table = self.table_object["table"]
 
-        history_date = datetime.now() - timedelta(days=self.RETENTION_DAYS)
+        if not self.cdc_look_back_time_window:
+            raise ValueError(f'{self.cdc_look_back_time_window} should be set. Make sure you have the rights '
+                             f'to read this information from Snowflake. this should have been already checked in check connection.')
+
+        history_date = datetime.now() - timedelta(days=self.cdc_look_back_time_window)
         history_timestamp = history_date.strftime("%Y-%m-%d %H:%M:%S")
 
         statement = (f'SELECT * FROM "{database}"."{schema}"."{table}" '
@@ -282,7 +286,7 @@ class StreamLauncherChangeDataCapture(StreamLauncher):
 
         if self.where_clause:
             statement = f'{statement} WHERE {self.where_clause}'
-        print('statement', statement)
+
         return statement
 
     def get_json_schema(self) -> Mapping[str, Any]:

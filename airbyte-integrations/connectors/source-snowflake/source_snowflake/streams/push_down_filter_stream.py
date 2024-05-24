@@ -70,7 +70,8 @@ class PushDownFilterChangeDataCaptureStream(TableChangeDataCaptureStream):
                                                           current_state=self.state,
                                                           cursor_field=self.cursor_field,
                                                           where_clause=self.where_clause,
-                                                          authenticator=self.authenticator)
+                                                          authenticator=self.authenticator,
+                                                          cdc_look_back_time_window=self.cdc_look_back_time_window)
 
         post_response_iterable = stream_launcher.read_records(sync_mode=SyncMode.full_refresh)
         for post_response in post_response_iterable:

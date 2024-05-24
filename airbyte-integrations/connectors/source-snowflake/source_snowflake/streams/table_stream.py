@@ -359,6 +359,18 @@ class TableStream(SnowflakeStream, IncrementalMixin):
 class TableChangeDataCaptureStream(TableStream):
     RETENTION_DAYS = 1
 
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.cdc_look_back_time_window = self._get_cdc_look_back_time_window()  # Unit of this duration is days
+
+    def _get_cdc_look_back_time_window(self):
+        retention_time = self.table_object['retention_time']
+        creation_date = self.table_object['created_on']
+
+        delta_days_from_creation = datetime.now() - datetime.fromtimestamp(float(creation_date))
+
+        return min(delta_days_from_creation.days, int(retention_time))
+
     def set_statement_handle(self):
         if self.statement_handle:
             return
@@ -367,7 +379,8 @@ class TableChangeDataCaptureStream(TableStream):
                                                           table_object=self.table_object,
                                                           current_state=self.state,
                                                           cursor_field=self.cursor_field,
-                                                          authenticator=self.authenticator)
+                                                          authenticator=self.authenticator,
+                                                          cdc_look_back_time_window=self.cdc_look_back_time_window)
         post_response_iterable = stream_launcher.read_records(sync_mode=SyncMode.full_refresh)
         for post_response in post_response_iterable:
             if post_response:
@@ -420,3 +433,4 @@ class TableChangeDataCaptureStream(TableStream):
             properties[column_name] = mapping_snowflake_type_airbyte_type[column_type.upper()]
 
         return json_schema
+
