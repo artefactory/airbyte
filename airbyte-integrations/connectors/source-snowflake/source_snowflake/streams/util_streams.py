@@ -15,6 +15,7 @@ class TableCatalogStream(SnowflakeStream):
     DATABASE_NAME_COLUMN = "name"
     SCHEMA_NAME_COLUMN = "schema_name"
     RETENTION_TIME_COLUMN = "retention_time"
+    CREATED_ON_COLUMN = "created_on"
 
     def __init__(self, url_base, config, authenticator):
         super().__init__(authenticator=authenticator)
@@ -37,17 +38,20 @@ class TableCatalogStream(SnowflakeStream):
         :return an iterable containing each record in the response
         """
         response_json = response.json()
-        column_names_to_be_extracted_from_records = [self.DATABASE_NAME_COLUMN, self.SCHEMA_NAME_COLUMN, self.RETENTION_TIME_COLUMN]
+        column_names_to_be_extracted_from_records = [self.DATABASE_NAME_COLUMN, self.SCHEMA_NAME_COLUMN,
+                                                     self.RETENTION_TIME_COLUMN, self.CREATED_ON_COLUMN]
         index_of_columns_from_names = self.get_index_of_columns_from_names(response_json, column_names_to_be_extracted_from_records)
 
         database_name_index = index_of_columns_from_names[self.DATABASE_NAME_COLUMN]
         schema_name_index = index_of_columns_from_names[self.SCHEMA_NAME_COLUMN]
         retention_time_index = index_of_columns_from_names[self.RETENTION_TIME_COLUMN]
+        created_on_index = index_of_columns_from_names[self.CREATED_ON_COLUMN]
 
         for record in response_json.get("data", []):
             yield {'schema': record[schema_name_index],
                    'table': record[database_name_index],
                    'retention_time': record[retention_time_index],
+                   'created_on': record[created_on_index],
                    }
 
 
