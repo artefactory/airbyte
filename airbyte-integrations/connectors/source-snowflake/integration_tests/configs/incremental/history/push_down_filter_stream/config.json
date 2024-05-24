@@ -2,12 +2,12 @@
     "database": "TEST_AIRBYTE",
     "schema": "TEST",
     "streams": [
-            {
-                "name": "higher_than_5",
-                "parent_stream": "TEST.TEST_TABLE",
-                "where_clause": "COL1>=5"
-            }
-        ],
+        {
+            "name": "higher_than_5",
+            "parent_stream": "TEST.TEST_TABLE",
+            "where_clause": "COL1>=5"
+        }
+    ],
     "replication_method": {
         "method": "history"
     }
