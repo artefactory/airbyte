@@ -24,7 +24,7 @@ base_dir = "configs"
 # streams = ['full_stream', 'push_down_filter_stream']
 
 modes = ['full_refresh', 'incremental']
-types = ['standard']
+types = ['standard', 'history']
 streams = ['full_stream', 'push_down_filter_stream']
 WORK_DIR = os.path.dirname(os.getcwd())
 # This file contains data that is common for configs but can't be shared in the git (private key, warehouse etc...)

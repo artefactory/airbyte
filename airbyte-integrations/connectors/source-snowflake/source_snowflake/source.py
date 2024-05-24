@@ -171,4 +171,5 @@ class SourceSnowflake(AbstractSource):
                                                                         namespace=push_down_filter_namespace,
                                                                         authenticator=authenticator, )
                 push_down_filters_streams.append(push_down_filter_stream)
+
         return push_down_filters_streams

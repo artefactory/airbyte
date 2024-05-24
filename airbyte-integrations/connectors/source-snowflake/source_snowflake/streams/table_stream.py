@@ -17,7 +17,7 @@ from airbyte_protocol.models import SyncMode, Type, ConfiguredAirbyteStream
 from source_snowflake.schema_builder import mapping_snowflake_type_airbyte_type, format_field, date_and_time_snowflake_type_airbyte_type, \
     string_snowflake_type_airbyte_type
 from .snowflake_parent_stream import SnowflakeStream
-from .util_streams import TableSchemaStream, StreamLauncher, PrimaryKeyStream
+from .util_streams import TableSchemaStream, StreamLauncher, PrimaryKeyStream, StreamLauncherChangeDataCapture
 
 
 class TableStream(SnowflakeStream, IncrementalMixin):
@@ -359,17 +359,20 @@ class TableStream(SnowflakeStream, IncrementalMixin):
 class TableChangeDataCaptureStream(TableStream):
     RETENTION_DAYS = 1
 
-    @property
-    def statement(self):
-        database = self.config["database"]
-        schema = self.table_object["schema"]
-        table = self.table_object["table"]
-
-        history_date = datetime.now() - timedelta(days=self.RETENTION_DAYS)
-        history_timestamp = history_date.strftime("%Y-%m-%d %H:%M:%S")
-
-        return (f'SELECT * FROM "{database}"."{schema}"."{table}" '
-                f'CHANGES(INFORMATION => DEFAULT) AT(TIMESTAMP => TO_TIMESTAMP(\'{history_timestamp}\'))')
+    def set_statement_handle(self):
+        if self.statement_handle:
+            return
+        stream_launcher = StreamLauncherChangeDataCapture(url_base=self.url_base,
+                                                          config=self.config,
+                                                          table_object=self.table_object,
+                                                          current_state=self.state,
+                                                          cursor_field=self.cursor_field,
+                                                          authenticator=self.authenticator)
+        post_response_iterable = stream_launcher.read_records(sync_mode=SyncMode.full_refresh)
+        for post_response in post_response_iterable:
+            if post_response:
+                json_post_response = post_response[0]
+                self.statement_handle = json_post_response['statementHandle']
 
     def parse_response(self, response: requests.Response, **kwargs) -> Iterable[Mapping]:
         """

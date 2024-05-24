@@ -1,5 +1,6 @@
 import uuid
 from collections import OrderedDict
+from datetime import datetime, timedelta
 from typing import Any, Iterable, List, Mapping, MutableMapping, Optional, Union
 
 import requests
@@ -143,11 +144,12 @@ class StreamLauncher(SnowflakeStream):
         database = self.config["database"]
         schema = self.table_object["schema"]
         table = self.table_object["table"]
+        statement = f'SELECT * FROM "{database}"."{schema}"."{table}"'
 
         if self.where_clause:
-            return f'SELECT * FROM "{database}"."{schema}"."{table}" WHERE {self.where_clause}'
+            statement = f'{statement} WHERE {self.where_clause}'
 
-        return f'SELECT * FROM "{database}"."{schema}"."{table}"'
+        return statement
 
     def request_params(
             self, stream_state: Mapping[str, Any], stream_slice: Mapping[str, any] = None, next_page_token: Mapping[str, Any] = None
@@ -253,4 +255,54 @@ class StreamLauncher(SnowflakeStream):
         """
         response_json = response.json()
         yield [response_json]
+
+
+class StreamLauncherChangeDataCapture(StreamLauncher):
+    RETENTION_DAYS = 30
+
+    @property
+    def statement(self):
+        database = self.config["database"]
+        schema = self.table_object["schema"]
+        table = self.table_object["table"]
+
+        history_date = datetime.now() - timedelta(days=self.RETENTION_DAYS)
+        history_timestamp = history_date.strftime("%Y-%m-%d %H:%M:%S")
+
+        statement = (f'SELECT * FROM "{database}"."{schema}"."{table}" '
+                        f'CHANGES(INFORMATION => DEFAULT) AT(TIMESTAMP => TO_TIMESTAMP(\'{history_timestamp}\'))')
+
+        if self.where_clause:
+            statement = f'{statement} WHERE {self.where_clause}'
+        print('statement', statement)
+        return statement
+
+    def get_json_schema(self) -> Mapping[str, Any]:
+        properties = {}
+        json_schema = {
+            "$schema": "https://json-schema.org/draft-07/schema#",
+            "type": "object",
+            "additionalProperties": True,
+            "properties": properties,
+        }
+
+        for column_object in self.table_schema_stream.read_records(sync_mode=SyncMode.full_refresh):
+            column_name = column_object['column_name']
+            snowflake_column_type = column_object['type'].upper()
+            if snowflake_column_type not in mapping_snowflake_type_airbyte_type:
+                raise ValueError(f"The type {snowflake_column_type} is not recognized. "
+                                 f"Please, contact Airbyte support to update the connector to handle this new type")
+            airbyte_column_type_object = mapping_snowflake_type_airbyte_type[snowflake_column_type]
+            properties[column_name] = airbyte_column_type_object
+
+        mapping_cdc_metadata_columns_to_types = {
+            "METADATA$ACTION": "text",
+            "METADATA$ISUPDATE": "boolean",
+            "METADATA$ROW_ID": "text",
+        }
+        for column_name, column_type in mapping_cdc_metadata_columns_to_types.items():
+            properties[column_name] = mapping_snowflake_type_airbyte_type[column_type.upper()]
+
+        return json_schema
+
 
