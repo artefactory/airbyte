@@ -10,6 +10,7 @@ from airbyte_cdk.sources.streams import IncrementalMixin
 from airbyte_cdk.sources.streams.core import StreamData
 from airbyte_cdk.models import (AirbyteMessage, AirbyteStateMessage, AirbyteStateType,
                                 AirbyteStreamState, StreamDescriptor, AirbyteStateBlob)
+from airbyte_cdk.sources.streams.http import HttpStream
 from airbyte_cdk.sources.utils.schema_helpers import InternalConfig
 from airbyte_cdk.sources.utils.slice_logger import SliceLogger
 from airbyte_protocol.models import SyncMode, Type, ConfiguredAirbyteStream
@@ -357,11 +358,27 @@ class TableStream(SnowflakeStream, IncrementalMixin):
 
 
 class TableChangeDataCaptureStream(TableStream):
-    RETENTION_DAYS = 1
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.cdc_look_back_time_window = self._get_cdc_look_back_time_window()  # Unit of this duration is days
+
+    @property
+    def cursor_field(self):
+        return 'last_update_date'
+
+    @cursor_field.setter
+    def cursor_field(self, new_cursor_field):
+        self._cursor_field = 'last_update_date'
+
+    @property
+    def state(self):
+        return {self._cursor_field: self._state_value}
+
+    @state.setter
+    def state(self, new_state):
+        if not (new_state is None or not new_state):
+            self._state_value = new_state[self.cursor_field]
 
     def _get_cdc_look_back_time_window(self):
         retention_time = self.table_object['retention_time']
@@ -434,3 +451,29 @@ class TableChangeDataCaptureStream(TableStream):
 
         return json_schema
 
+    def stream_slices(self, stream_state: Mapping[str, Any] = None, cursor_field=None, sync_mode=None, **kwargs) -> Iterable[
+        Optional[Mapping[str, any]]]:
+
+        self.set_statement_handle()
+        slice = {"statement_handle": self.statement_handle}
+
+        if sync_mode == SyncMode.incremental:
+            if stream_state:
+                self._state_value = stream_state.get(self.cursor_field)
+
+            yield {self.cursor_field: self._state_value, **slice}
+        else:
+            yield slice
+
+    def read_records(
+            self,
+            sync_mode: SyncMode,
+            cursor_field: Optional[List[str]] = None,
+            stream_slice: Optional[Mapping[str, Any]] = None,
+            stream_state: Optional[Mapping[str, Any]] = None,
+    ) -> Iterable[StreamData]:
+        state_value_when_update_is_finished = datetime.now()
+        for record in HttpStream.read_records(self, sync_mode, cursor_field, stream_slice, stream_state):
+            yield record
+
+        self.state = {self.cursor_field: state_value_when_update_is_finished}

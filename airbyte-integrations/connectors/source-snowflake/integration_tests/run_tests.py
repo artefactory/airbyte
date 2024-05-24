@@ -33,6 +33,7 @@ try:
 except KeyError:
     raise KeyError('Set the env variable CONFIG_SNOWFLAKE to point to the path of your config.json that contains private parameters')
 
+
 # Function to run bash command and return the result
 def run_bash_command(command):
     try:
