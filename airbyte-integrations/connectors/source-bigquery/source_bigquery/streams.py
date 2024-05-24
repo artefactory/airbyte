@@ -213,13 +213,12 @@ class BigqueryResultStream(BigqueryStream):
     def process_records(self, record) -> Iterable[Mapping[str, Any]]:
         fields = record.get("schema")["fields"]
         stream_data = record.get("rows", [])
-
         for data in stream_data:
             rows = data.get("f")
             yield {
                 "_bigquery_table_id": record.get("jobReference")["jobId"],
                 "_bigquery_created_time": None, #TODO: Update this to row insertion time
-                **{element["name"]: SchemaHelpers.format_field(rows[fields.index(element)]["v"], element["type"]) for element in fields},
+                **{CHANGE_FIELDS.get(element["name"], element["name"]): SchemaHelpers.format_field(rows[fields.index(element)]["v"], element["type"]) for element in fields},
             }
 
     def checkpoint(self, stream_name, stream_state, stream_namespace):
@@ -238,6 +237,60 @@ class BigqueryResultStream(BigqueryStream):
         )
         self.logger.info(f"Checkpoint state of {self.name} is {stream_state}")
         print(state.json(exclude_unset=True))  # Emit state
+
+
+class TableQueryRecord(BigqueryResultStream):
+    """  
+    """ 
+    name = "query_record"
+
+    def __init__(self, project_id: list, parent_stream: str, order: str, column: str, **kwargs):
+        self.project_id = project_id
+        self.parent_stream = parent_stream
+        self.order = order
+        self.column = column
+        self.data = None
+        super().__init__(self.path(), self.name, self.get_json_schema(), **kwargs)
+    
+    def path(self, **kwargs) -> str:
+        """
+        Documentation: https://cloud.google.com/bigquery/docs/reference/rest/v2/jobs/query
+        """
+        return f"/bigquery/v2/projects/{self.project_id}/queries"
+
+    def get_json_schema(self) -> Mapping[str, Any]:
+        return {}
+    
+    def request_body_json(
+        self,
+        stream_state: Optional[Mapping[str, Any]],
+        stream_slice: Optional[Mapping[str, Any]] = None,
+        next_page_token: Optional[Mapping[str, Any]] = None,
+    ) -> Optional[Mapping[str, Any]]:
+        query_string = f"select * from APPENDS(TABLE `{self.parent_stream}`,NULL,NULL) ORDER BY _CHANGE_TIMESTAMP {self.order} LIMIT 1"
+        # query_string = f"select * from `{self.parent_stream}` ORDER BY {self.column} {self.order} LIMIT 1"
+        request_body = {
+            "kind": "bigquery#queryRequest",
+            "query": query_string,
+            "useLegacySql": False
+            }
+        
+        return request_body
+
+    def process_records(self, record) -> Iterable[Mapping[str, Any]]:
+        fields = record.get("schema")["fields"]
+        try:
+            row = record["rows"][0]
+            data = row.get("f")
+        except KeyError:
+            yield {}
+        formated_data =  {
+                "_bigquery_table_id": record.get("jobReference")["jobId"],
+                "_bigquery_created_time": None, #TODO: Update this to row insertion time
+                **{CHANGE_FIELDS.get(element["name"], element["name"]): SchemaHelpers.format_field(data[fields.index(element)]["v"], element["type"]) for element in fields},
+            }
+        self.data = formated_data
+        yield formated_data
 
 
 class TableQueryResult(BigqueryResultStream):
@@ -457,6 +510,10 @@ class BigqueryCDCStream(BigqueryResultStream, IncrementalMixin):
         self.request_body = stream_request
         self._cursor = None
         self._checkpoint_time = datetime.now()
+        self.start_date = None
+        self.end_date = None
+        self.first_record = TableQueryRecord("sb-airbyte-connector-1ee6", stream_name, "ASC", self.cursor_field, **kwargs)
+        self.last_record = TableQueryRecord("sb-airbyte-connector-1ee6", stream_name, "DESC", self.cursor_field, **kwargs)
         # self._stream_slicer_cursor = None
     
     @property
@@ -504,32 +561,43 @@ class BigqueryCDCStream(BigqueryResultStream, IncrementalMixin):
             self._cursor = latest_record_state
         self.state = {self.cursor_field: self._cursor} 
         self.logger.info(f"current state of {self.name} is {self.state}")
-
         if datetime.now() >= self._checkpoint_time + timedelta(minutes=15):
             self.checkpoint(self.name, self.state, self.namespace)
             self._checkpoint_time = datetime.now()
         return self.state
 
-    def chunk_dates(self, start_date) -> Iterable[Tuple[int, int]]:
+    def _chunk_dates(self, start_date, end_date) -> Iterable[Tuple[datetime, datetime]]:
         slice_range = 1
-        now = datetime(2024,5,16,17,33,9,571000, tzinfo=pytz.timezone("UTC"))  #datetime.now(tz=pytz.timezone("UTC"))
+        if isinstance(start_date, str):
+            start_date = datetime.strptime(start_date, '%Y-%m-%dT%H:%M:%S.%f%z')
+        if isinstance(end_date, str):
+            end_date = datetime.strptime(end_date, '%Y-%m-%dT%H:%M:%S.%f%z')
         step = timedelta(minutes=slice_range)
         new_start_date = start_date
-        while new_start_date < now:
-            before_date = min(now, new_start_date + step)
+        if start_date == end_date: #.strftime('%Y-%m-%d %H:%M') .strftime('%Y-%m-%d %H:%M')
+            yield start_date, start_date + step
+        while new_start_date < end_date+step:
+            before_date = min(end_date+step, new_start_date + step)
             yield new_start_date, before_date
             new_start_date = before_date
             
     def stream_slices(self, stream_state: Mapping[str, Any] = None, cursor_field=None, sync_mode=None, **kwargs) -> Iterable[Optional[Mapping[str, any]]]:
-        default_start = datetime(2024, 5, 16, 17, 29, 9, 571000, tzinfo=pytz.timezone("UTC"))
+        start_time = next(self.first_record.read_records(sync_mode=SyncMode.full_refresh)).get(self.cursor_field, None)
+        end_time = next(self.last_record.read_records(sync_mode=SyncMode.full_refresh)).get(self.cursor_field, None)
+        default_start = start_time
         if stream_state:
             self._cursor = stream_state.get(self.cursor_field) #or self._state.get(self.cursor_field)
         if self._cursor:
-            default_start = datetime.strptime(self._cursor, '%Y-%m-%dT%H:%M:%S.%f%z')
-        for start, end in self.chunk_dates(default_start):
+            default_start = self._cursor
+        if start_time and end_time:
+            for start, end in self._chunk_dates(default_start, end_time):
+                yield {
+                    "start" : start.isoformat(timespec='microseconds'), "end": end.isoformat(timespec='microseconds')
+                } 
+        else:
             yield {
-                "start" : start.isoformat(timespec='microseconds'), "end": end.isoformat(timespec='microseconds')
-            } 
+                    "start" : None, "end": None
+                } 
 
     def request_body_json(
         self,
@@ -554,6 +622,7 @@ class BigqueryCDCStream(BigqueryResultStream, IncrementalMixin):
     def process_records(self, record) -> Iterable[Mapping[str, Any]]:
         fields = record.get("schema")["fields"]
         stream_data = record.get("rows", [])
+        formated_rows = []
         for data in stream_data:
             rows = data.get("f")
             row = {
@@ -561,7 +630,8 @@ class BigqueryCDCStream(BigqueryResultStream, IncrementalMixin):
                 "_bigquery_created_time": None, #TODO: Update this to row insertion time
                 **{CHANGE_FIELDS.get(element["name"], element["name"]): SchemaHelpers.format_field(rows[fields.index(element)]["v"], element["type"]) for element in fields},
             }
-            self.state = self._updated_state(self.state, row)
+            formated_rows.append(row)
+            self._updated_state(self.state, row)
             yield row
 
 
