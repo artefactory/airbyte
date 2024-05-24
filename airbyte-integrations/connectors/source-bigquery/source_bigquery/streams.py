@@ -430,7 +430,9 @@ class BigqueryIncrementalStream(BigqueryResultStream, IncrementalMixin):
         request_body = {
             "kind": "bigquery#queryRequest",
             "query": query_string,
-            "useLegacySql": False
+            "useLegacySql": False,
+            "timeoutMs": 30000,
+            "maxResults": 1000
             }
         return request_body
     
@@ -486,7 +488,8 @@ class IncrementalQueryResult(BigqueryIncrementalStream):
         request_body = {
             "kind": "bigquery#queryRequest",
             "query": query_string,
-            "useLegacySql": False
+            "useLegacySql": False,
+            "dryRun": True
             }
         return request_body
     
@@ -615,7 +618,9 @@ class BigqueryCDCStream(BigqueryResultStream, IncrementalMixin):
         request_body = {
             "kind": "bigquery#queryRequest",
             "query": query_string,
-            "useLegacySql": False
+            "useLegacySql": False,
+            "timeoutMs": 30000,
+            "maxResults": 1000
             }
         return request_body
     
@@ -673,7 +678,8 @@ class TableChangeHistory(BigqueryCDCStream):
         request_body = {
             "kind": "bigquery#queryRequest",
             "query": query_string,
-            "useLegacySql": False
+            "useLegacySql": False,
+            "dryRun": True
             }
         return request_body
 
