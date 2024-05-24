@@ -1,45 +1,25 @@
 {
         "streams": [
-            {
-                "stream": {
-                    "name": "higher_than_5",
-                    "json_schema": {
-                        "$schema": "https://json-schema.org/draft-07/schema#",
-                        "additionalProperties": true,
-                        "type": "object",
-                        "properties": {
-                            "COL3": {
-                                "type": [
-                                    "null",
-                                    "number"
-                                ]
-                            },
-                            "COL2": {
-                                "type": [
-                                    "null",
-                                    "number"
-                                ]
-                            },
-                            "COL1": {
-                                "type": [
-                                    "null",
-                                    "number"
-                                ]
-                            }
-                        }
-                    },
-                    "supported_sync_modes": [
-                        "full_refresh",
-                        "incremental"
-                    ],
-                    "source_defined_cursor": true,
-                    "default_cursor_field": [],
-                    "source_defined_primary_key": []
-                },
-                  "sync_mode": "full_refresh",
-                  "cursor_field": [],
-                  "destination_sync_mode": "overwrite"
-
+          {
+            "stream" : {
+              "name" : "higher_than_5",
+              "json_schema" : {
+                "$schema" : "https://json-schema.org/draft-07/schema#",
+                "additionalProperties" : true,
+                "type" : "object",
+                "properties" : {},
+                "supported_sync_modes" : [
+                  "full_refresh",
+                  "incremental"
+                ],
+                "source_defined_cursor" : true,
+                "default_cursor_field" : [],
+                "source_defined_primary_key" : []
+              },
+              "sync_mode" : "full_refresh",
+              "cursor_field" : [],
+              "destination_sync_mode" : "overwrite"
             }
+          }
         ]
     }
