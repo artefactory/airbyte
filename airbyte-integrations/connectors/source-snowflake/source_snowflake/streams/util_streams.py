@@ -283,7 +283,7 @@ class StreamLauncherChangeDataCapture(StreamLauncher):
 
         statement = (f'SELECT * FROM "{database}"."{schema}"."{table}" '
                         f'CHANGES(INFORMATION => DEFAULT) AT(TIMESTAMP => TO_TIMESTAMP(\'{history_timestamp}\'))')
-
+        print('statement', statement)
         if self.where_clause:
             statement = f'{statement} WHERE {self.where_clause}'
 
@@ -316,5 +316,26 @@ class StreamLauncherChangeDataCapture(StreamLauncher):
             properties[column_name] = mapping_snowflake_type_airbyte_type[column_type.upper()]
 
         return json_schema
+
+    def request_body_json(
+            self,
+            stream_state: Optional[Mapping[str, Any]],
+            stream_slice: Optional[Mapping[str, Any]] = None,
+            next_page_token: Optional[Mapping[str, Any]] = None,
+    ) -> Optional[Mapping[str, Any]]:
+
+        json_payload = {
+            "statement": self.statement,  # The statement is provided directly because state should not have any effect on the behavior
+            "role": self.config['role'],
+            "warehouse": self.config['warehouse'],
+            "database": self.config['database'],
+            "timeout": self.TIME_OUT_IN_SECONDS,
+        }
+
+        schema = self.table_object.get('schema', '')
+        if schema:
+            json_payload['schema'] = schema
+
+        return json_payload
 
 
