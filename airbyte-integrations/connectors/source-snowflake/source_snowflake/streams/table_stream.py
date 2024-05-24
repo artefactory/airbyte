@@ -119,7 +119,6 @@ class TableStream(SnowflakeStream, IncrementalMixin):
         if not self._is_primary_key_set and self.authenticator.get_auth_header():
             self.set_primary_key()
 
-        print('primary key', self._primary_key)
         return self._primary_key
 
     def _get_primary_key(self):
@@ -149,29 +148,12 @@ class TableStream(SnowflakeStream, IncrementalMixin):
     def http_method(self) -> str:
         return "GET"
 
-    def request_headers(
-            self,
-            stream_state: Optional[Mapping[str, Any]],
-            stream_slice: Optional[Mapping[str, Any]] = None,
-            next_page_token: Optional[Mapping[str, Any]] = None,
-    ) -> Mapping[str, Any]:
-        """
-        We set the statement handle here because this is the first method called
-        before launching any request
-        This is appropriate as we have to launch the POST request before the GET
-        """
-        request_headers = dict(super().request_headers(stream_state, stream_slice, next_page_token))
-        if next_page_token and "partition" in next_page_token:
-            request_headers["partition"] = next_page_token["partition"]
-        return request_headers
-
     def request_params(
             self, stream_state: Mapping[str, Any], stream_slice: Mapping[str, any] = None, next_page_token: Mapping[str, Any] = None
     ) -> MutableMapping[str, Any]:
-
-        params = {
-            "async": "true",
-        }
+        params = {}
+        if next_page_token and "partition" in next_page_token:
+            params["partition"] = next_page_token["partition"]
         return params
 
     ######################################
@@ -184,6 +166,7 @@ class TableStream(SnowflakeStream, IncrementalMixin):
         By default, back off on the following HTTP response statuses:
          - 429 (Too Many Requests) indicating rate limiting
          - 500s to handle transient server errors
+         - 202 to handle pending execution of requests
 
         Unexpected but transient exceptions (connection timeout, DNS resolution failed, etc..) are retried by default.
         """
@@ -217,8 +200,7 @@ class TableStream(SnowflakeStream, IncrementalMixin):
             return None
 
         self.number_of_read_partitions = next_partition_index
-
-        return {"partition": next_partition_index}
+        return {"partition": str(next_partition_index)}
 
     ######################################
     ###### Response processing
@@ -248,6 +230,7 @@ class TableStream(SnowflakeStream, IncrementalMixin):
         for record in super().read_records(sync_mode, cursor_field, stream_slice, stream_state):
             if isinstance(self.cursor_field, str):
                 self.state = self._get_updated_state(record)
+            self.emit_checkpoint_if_required()
             yield record
 
     def get_json_schema(self) -> Mapping[str, Any]:
@@ -316,11 +299,12 @@ class TableStream(SnowflakeStream, IncrementalMixin):
             self._state_value = latest_record_state
             self.state = {self.cursor_field: self._state_value}
 
+        return self.state
+
+    def emit_checkpoint_if_required(self):
         if datetime.now() >= self.checkpoint_time + timedelta(minutes=self.CHECK_POINT_DURATION_IN_MINUTES):
             self.checkpoint(self.name, self.state, self.namespace)
             self.checkpoint_time = datetime.now()
-
-        return self.state
 
     @classmethod
     def _process_cursor_field(cls, cursor_field):
