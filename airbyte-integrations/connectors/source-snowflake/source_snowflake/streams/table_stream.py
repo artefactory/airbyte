@@ -354,3 +354,66 @@ class TableStream(SnowflakeStream, IncrementalMixin):
 
     def __str__(self):
         return f"Current stream has this table object as constructor {self.table_object}"
+
+
+class TableChangeDataCaptureStream(TableStream):
+    RETENTION_DAYS = 1
+
+    @property
+    def statement(self):
+        database = self.config["database"]
+        schema = self.table_object["schema"]
+        table = self.table_object["table"]
+
+        history_date = datetime.now() - timedelta(days=self.RETENTION_DAYS)
+        history_timestamp = history_date.strftime("%Y-%m-%d %H:%M:%S")
+
+        return (f'SELECT * FROM "{database}"."{schema}"."{table}" '
+                f'CHANGES(INFORMATION => DEFAULT) AT(TIMESTAMP => TO_TIMESTAMP(\'{history_timestamp}\'))')
+
+    def parse_response(self, response: requests.Response, **kwargs) -> Iterable[Mapping]:
+        """
+        :return an iterable containing each record in the response
+        """
+        response_json = response.json()
+        ordered_mapping_names_types = OrderedDict(
+            [(row_type['name'], row_type['type'])
+             for row_type in response_json.get('resultSetMetaData', {'rowType': []}).get('rowType', [])]
+        )
+
+        # Type to be validated
+        ordered_mapping_names_types['updated_at'] = 'TIMESTAMP_TZ'
+        current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+        for record in response_json.get("data", []):
+            record.append(current_time)
+            yield {column_name: format_field(column_value, ordered_mapping_names_types[column_name])
+                   for column_name, column_value in zip(ordered_mapping_names_types.keys(), record)}
+
+    def get_json_schema(self) -> Mapping[str, Any]:
+        properties = {}
+        json_schema = {
+            "$schema": "https://json-schema.org/draft-07/schema#",
+            "type": "object",
+            "additionalProperties": True,
+            "properties": properties,
+        }
+
+        for column_object in self.table_schema_stream.read_records(sync_mode=SyncMode.full_refresh):
+            column_name = column_object['column_name']
+            snowflake_column_type = column_object['type'].upper()
+            if snowflake_column_type not in mapping_snowflake_type_airbyte_type:
+                raise ValueError(f"The type {snowflake_column_type} is not recognized. "
+                                 f"Please, contact Airbyte support to update the connector to handle this new type")
+            airbyte_column_type_object = mapping_snowflake_type_airbyte_type[snowflake_column_type]
+            properties[column_name] = airbyte_column_type_object
+
+        mapping_cdc_metadata_columns_to_types = {
+            "METADATA$ACTION": "text",
+            "METADATA$ISUPDATE": "boolean",
+            "METADATA$ROW_ID": "text",
+        }
+        for column_name, column_type in mapping_cdc_metadata_columns_to_types.items():
+            properties[column_name] = mapping_snowflake_type_airbyte_type[column_type.upper()]
+
+        return json_schema
