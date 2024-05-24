@@ -106,12 +106,11 @@ class SchemaHelpers:
     
     @staticmethod
     def format_field(field, field_type):
-        if field_type == "TIMESTAMP":
+        if field_type == "TIMESTAMP" and isinstance(field, str):
             ts=float(field)
             dt = datetime.fromtimestamp(ts, pytz.timezone("UTC")) #TODO: Update to use timestamps' actual zone
             return dt.isoformat(timespec='microseconds')
         if SIMPLE_BIGQUERY_TYPES.get(field_type) == SchemaTypes.number and field:
             # TODO: update to handle floats as well
             return int(field)
-        
         return field
