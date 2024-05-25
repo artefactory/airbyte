@@ -1,4 +1,6 @@
-CREATE SCHEMA INTEGRATION_TEST;
+CREATE DATABASE TEST_AIRBYTE;
+USE DATABASE TEST_AIRBYTE;
+CREATE OR REPLACE SCHEMA INTEGRATION_TEST;
 
 CREATE OR REPLACE TABLE
         INTEGRATION_TEST.TEST_TABLE(
@@ -44,7 +46,7 @@ INSERT
             99999999999999999999999999999999999999,
             10.12345,
             - 9007199254740991,
-            10e - 308,
+            10e-308,
             'тест',
             'テスト',
             '-!-',
@@ -85,7 +87,7 @@ INSERT
             - 99999999999999999999999999999999999999,
             10.12345,
             9007199254740991,
-            10e + 307,
+            10e+307,
             '⚡ test ��',
             'テスト',
             '-\x25-',
@@ -126,7 +128,7 @@ INSERT
             9223372036854775807,
             10.12345,
             9007199254740991,
-            10e + 307,
+            10e+307,
             '!"#$%&''()*+,-./:;<=>?\@[\]^_\`{|}~',
             'テスト',
             '-\x25-',
@@ -167,7 +169,7 @@ INSERT
             - 9223372036854775808,
             10.12345,
             9007199254740991,
-            10e + 307,
+            10e+307,
             '!"#$%&''()*+,-./:;<=>?\@[\]^_\`{|}~',
             'テスト',
             '-\x25-',
@@ -208,7 +210,7 @@ INSERT
             - 9223372036854775808,
             10.12345,
             9007199254740991,
-            10e + 307,
+            10e+307,
             '!"#$%&''()*+,-./:;<=>?\@[\]^_\`{|}~',
             'テスト',
             '-\x25-',
@@ -249,7 +251,7 @@ INSERT
             - 9223372036854775808,
             10.12345,
             9007199254740991,
-            10e + 307,
+            10e+307,
             '!"#$%&''()*+,-./:;<=>?\@[\]^_\`{|}~',
             'テスト',
             '-\x25-',
@@ -290,7 +292,7 @@ INSERT
             - 9223372036854775808,
             10.12345,
             9007199254740991,
-            10e + 307,
+            10e+307,
             '!"#$%&''()*+,-./:;<=>?\@[\]^_\`{|}~',
             'テスト',
             '-\x25-',
@@ -332,7 +334,7 @@ INSERT
             - 9223372036854775808,
             10.12345,
             9007199254740991,
-            10e + 307,
+            10e+307,
             '!"#$%&''()*+,-./:;<=>?\@[\]^_\`{|}~',
             'テスト',
             '-\x25-',
@@ -371,6 +373,6 @@ ALTER TABLE INTEGRATION_TEST.TEST_TABLE SET CHANGE_TRACKING = TRUE;
 
 
 -- CHANGES to populate changes UPDATE AND DELETE
-DELETE FROM INTEGRATION_TEST.TEST_TABLE WHERE TEST_COLUMN_1 = 8
-UPDATE INTEGRATION_TEST.TEST_TABLE SET TEST_COLUMN_1 = 9 WHERE TEST_COLUMN_1 = 7
+DELETE FROM INTEGRATION_TEST.TEST_TABLE WHERE ID = 8;
+UPDATE INTEGRATION_TEST.TEST_TABLE SET TEST_COLUMN_12 = 10.12 WHERE ID = 7;
 
