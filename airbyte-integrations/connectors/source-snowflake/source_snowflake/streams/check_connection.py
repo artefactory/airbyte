@@ -6,6 +6,10 @@ from source_snowflake.streams.snowflake_parent_stream import SnowflakeStream
 
 
 class CheckConnectionStream(SnowflakeStream):
+    DATABASE_NAME_COLUMN = "name"
+    SCHEMA_NAME_COLUMN = "schema_name"
+    CHANGE_TRACKING_COLUMN = "change_tracking"
+
 
     def __init__(self, url_base, config, authenticator):
         super().__init__(authenticator=authenticator)
@@ -34,6 +38,15 @@ class CheckConnectionStream(SnowflakeStream):
         :return an iterable containing each record in the response
         """
         response_json = response.json()
-        records = response_json.get("data", [])
-        yield from records
+        column_names_to_be_extracted_from_records = [self.DATABASE_NAME_COLUMN, self.SCHEMA_NAME_COLUMN, self.CHANGE_TRACKING_COLUMN]
+        index_of_columns_from_names = self.get_index_of_columns_from_names(response_json, column_names_to_be_extracted_from_records)
 
+        database_name_index = index_of_columns_from_names[self.DATABASE_NAME_COLUMN]
+        schema_name_index = index_of_columns_from_names[self.SCHEMA_NAME_COLUMN]
+        change_tracking_index = index_of_columns_from_names[self.CHANGE_TRACKING_COLUMN]
+
+        for record in response_json.get("data", []):
+            yield {'schema': record[schema_name_index],
+                   'table': record[database_name_index],
+                   'change_tracking': record[change_tracking_index],
+                   }

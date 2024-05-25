@@ -12,7 +12,7 @@ from airbyte_cdk.sources.streams import Stream
 from airbyte_protocol.models import SyncMode
 
 from .authenticator import SnowflakeJwtAuthenticator
-from .snowflake_exceptions import InconsistentPushDownFilterParentStreamName
+from .snowflake_exceptions import InconsistentPushDownFilterParentStreamNameError, NotEnabledChangeTrackingOptionError
 from .streams.push_down_filter_stream import PushDownFilterStream, PushDownFilterChangeDataCaptureStream
 
 
@@ -37,7 +37,6 @@ class SourceSnowflake(AbstractSource):
             error_message = f"your host is not ending with {self.SNOWFLAKE_URL_SUFFIX}"
             return False, error_message
 
-        # TODO: ask of unicity of name in pushdown filters otherwise change the way we set the name
         if 'streams' in config and config['streams']:
             push_down_filters_names = [stream['name'] for stream in config['streams']]
             if len(push_down_filters_names) != len(set(push_down_filters_names)):
@@ -46,11 +45,22 @@ class SourceSnowflake(AbstractSource):
         url_base = self.format_url_base(host)
 
         authenticator = SnowflakeJwtAuthenticator.from_config(config)
+        update_method = config.get('replication_method', {'method': 'standard'}).get('method', 'standard')
 
         try:
+
             self.check_existence_of_at_least_one_stream(url_base=url_base, config=config, authenticator=authenticator)
             self.check_push_down_filters_parent_stream_consistency(url_base=url_base, config=config, authenticator=authenticator)
-        except InconsistentPushDownFilterParentStreamName as e:
+            if update_method.lower() == 'history':
+                self.check_change_tracking_configuration(url_base, config, authenticator)
+
+        except NotEnabledChangeTrackingOptionError as e:
+            error_message = (f'In order to use CDC, yall the streams must have change tracking option enabled.\n '
+                             f'You have not set the option change_tracking for these streams:\n{e.streams_without_change_tracking_enabled}\n'
+                             f'Here is the command you need to run to enable it:\n'
+                             f'ALTER TABLE YOUR_TABLE SET CHANGE_TRACKING = TRUE;')
+            raise ValueError(error_message)
+        except InconsistentPushDownFilterParentStreamNameError as e:
             error_message = (f'You have provided inconsistent pushdown filters configuration. Parent stream not found or mistake in  '
                              f'spelling parent stream name. Correct spelling must be your_schema_name.your_table_name.\n. Here is the '
                              f'list of the streams affected by this error: {e.push_down_filters_without_consistent_parent}')
@@ -77,6 +87,18 @@ class SourceSnowflake(AbstractSource):
         next(records)
 
     @classmethod
+    def check_change_tracking_configuration(cls, url_base, config, authenticator):
+        check_connection_stream = CheckConnectionStream(url_base=url_base, config=config, authenticator=authenticator)
+        streams_without_change_tracking_enabled = []
+        for table_configuration_object in check_connection_stream.read_records(sync_mode=SyncMode.full_refresh):
+            if table_configuration_object['change_tracking'].lower() == 'off':
+                streams_without_change_tracking_enabled.append(f"{table_configuration_object['schema']}.{table_configuration_object['table']}")
+
+        if streams_without_change_tracking_enabled:
+            raise NotEnabledChangeTrackingOptionError(streams_without_change_tracking_enabled)
+
+
+    @classmethod
     def check_push_down_filters_parent_stream_consistency(cls, url_base, config, authenticator):
         table_catalog_stream = TableCatalogStream(url_base=url_base,
                                                   config=config,
@@ -89,16 +111,16 @@ class SourceSnowflake(AbstractSource):
                                           table_object=table_object)
             standard_stream_names.append(standard_stream.name)
 
-        push_down_filters_without_consistent_parent = []
+        push_down_filters_streams_without_consistent_parent = []
         if 'streams' in config and config['streams']:
             for push_down_filter_stream_config in config['streams']:
                 parent_stream_name = push_down_filter_stream_config['parent_stream']
                 push_down_filter_stream_name = push_down_filter_stream_config['name']
                 if parent_stream_name not in standard_stream_names:
-                    push_down_filters_without_consistent_parent.append(push_down_filter_stream_name)
+                    push_down_filters_streams_without_consistent_parent.append(push_down_filter_stream_name)
 
-        if push_down_filters_without_consistent_parent:
-            raise InconsistentPushDownFilterParentStreamName(push_down_filters_without_consistent_parent)
+        if push_down_filters_streams_without_consistent_parent:
+            raise InconsistentPushDownFilterParentStreamNameError(push_down_filters_streams_without_consistent_parent)
     @classmethod
     def format_url_base(cls, host: str) -> str:
         url_base = host
