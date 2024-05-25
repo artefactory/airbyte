@@ -5,8 +5,9 @@ import os
 from tqdm import tqdm
 
 """
+HOW TO ?
 To use this script correctly to run tests for local non regression:
- 0- Set up your sql environment with scripts in integration_tests/sql_set_up (In progress)
+ 0- Set up your sql environment with scripts in integration_tests/create_and_populate_table.sql
  1- Fill the private config file example_private_config.json with your private information and put the file in a path locally
  2- Set the env var CONFIG_SNOWFLAKE with the value: path/example_private_config.json
  3- run python run_tests.py from the folder integration_tests
