@@ -390,7 +390,7 @@ class BigqueryIncrementalStream(BigqueryResultStream, IncrementalMixin):
         else:
             self._cursor = latest_record_state
         self.state = {self.cursor_field: self._cursor} 
-
+        # self.checkpoint(self.name, self.state, self.namespace)
         if datetime.now() >= self._checkpoint_time + timedelta(minutes=15):
             self.checkpoint(self.name, self.state, self.namespace)
             self._checkpoint_time = datetime.now()
@@ -432,7 +432,7 @@ class BigqueryIncrementalStream(BigqueryResultStream, IncrementalMixin):
             "query": query_string,
             "useLegacySql": False,
             "timeoutMs": 30000,
-            "maxResults": 1000
+            "maxResults": 100000
             }
         return request_body
     
@@ -508,12 +508,12 @@ class BigqueryCDCStream(BigqueryResultStream, IncrementalMixin):
     primary_key = None
     state_checkpoint_interval = None
 
-    def __init__(self, stream_path, stream_name, stream_schema, stream_request=None, **kwargs):
+    def __init__(self, stream_path, stream_name, stream_schema, stream_request=None, fallback_start=None,**kwargs):
         super().__init__(stream_path, stream_name, stream_schema, stream_request, **kwargs)
         self.request_body = stream_request
         self._cursor = None
         self._checkpoint_time = datetime.now()
-        self.start_date = None
+        self.fallback_start = fallback_start
         self.end_date = None
         self.first_record = TableQueryRecord("sb-airbyte-connector-1ee6", stream_name, "ASC", self.cursor_field, **kwargs)
         self.last_record = TableQueryRecord("sb-airbyte-connector-1ee6", stream_name, "DESC", self.cursor_field, **kwargs)
@@ -532,8 +532,6 @@ class BigqueryCDCStream(BigqueryResultStream, IncrementalMixin):
     
     @property
     def state(self):
-        if not self._cursor:
-            return {}
         return {
             self.cursor_field: self._cursor,
         }
@@ -569,31 +567,39 @@ class BigqueryCDCStream(BigqueryResultStream, IncrementalMixin):
             self._checkpoint_time = datetime.now()
         return self.state
 
-    def _chunk_dates(self, start_date, end_date) -> Iterable[Tuple[datetime, datetime]]:
+    def _chunk_dates(self, start_date, end_date, table_start) -> Iterable[Tuple[datetime, datetime]]:
         slice_range = 1
         if isinstance(start_date, str):
             start_date = datetime.strptime(start_date, '%Y-%m-%dT%H:%M:%S.%f%z')
         if isinstance(end_date, str):
             end_date = datetime.strptime(end_date, '%Y-%m-%dT%H:%M:%S.%f%z')
+        if isinstance(table_start, str):
+            table_start = datetime.strptime(table_start, '%Y-%m-%dT%H:%M:%S.%f%z')
+        if start_date > end_date:
+            #TODO: maybe raise exception
+            return
         step = timedelta(minutes=slice_range)
         new_start_date = start_date
-        if start_date == end_date: #.strftime('%Y-%m-%d %H:%M') .strftime('%Y-%m-%d %H:%M')
+        if start_date == end_date:
             yield start_date, start_date + step
+            return
         while new_start_date < end_date+step:
             before_date = min(end_date+step, new_start_date + step)
+            if before_date < table_start:
+                before_date = table_start
             yield new_start_date, before_date
             new_start_date = before_date
             
     def stream_slices(self, stream_state: Mapping[str, Any] = None, cursor_field=None, sync_mode=None, **kwargs) -> Iterable[Optional[Mapping[str, any]]]:
         start_time = next(self.first_record.read_records(sync_mode=SyncMode.full_refresh)).get(self.cursor_field, None)
         end_time = next(self.last_record.read_records(sync_mode=SyncMode.full_refresh)).get(self.cursor_field, None)
-        default_start = start_time
+        default_start = self.fallback_start
         if stream_state:
             self._cursor = stream_state.get(self.cursor_field) #or self._state.get(self.cursor_field)
         if self._cursor:
             default_start = self._cursor
         if start_time and end_time:
-            for start, end in self._chunk_dates(default_start, end_time):
+            for start, end in self._chunk_dates(default_start, end_time, start_time):
                 yield {
                     "start" : start.isoformat(timespec='microseconds'), "end": end.isoformat(timespec='microseconds')
                 } 
@@ -614,13 +620,12 @@ class BigqueryCDCStream(BigqueryResultStream, IncrementalMixin):
             end = stream_slice.get("end", None)
             if start and end:
                 query_string = f"select * from APPENDS(TABLE `{self.stream_name}`,'{start}','{end}')"
-
         request_body = {
             "kind": "bigquery#queryRequest",
             "query": query_string,
             "useLegacySql": False,
             "timeoutMs": 30000,
-            "maxResults": 1000
+            "maxResults": 100000
             }
         return request_body
     
