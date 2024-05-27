@@ -19,7 +19,7 @@ from airbyte_cdk.logger import AirbyteLogger
 from airbyte_cdk.utils.traced_exception import AirbyteTracedException, FailureType
 
 from .auth import BigqueryAuth
-from .streams import BigqueryDatasets, BigqueryTables, BigqueryStream
+from .streams import BigqueryDatasets, BigqueryTables, BigqueryStream, BigqueryTable
 """
 TODO: Most comments in this class are instructive and should be deleted after the source is implemented.
 
