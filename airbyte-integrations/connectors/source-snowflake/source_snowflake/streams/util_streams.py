@@ -193,6 +193,9 @@ class StreamLauncher(SnowflakeStream):
         """
         The schema must have been generated before
         """
+        if not self._json_schema_set:
+            self.get_json_schema()
+
         state_sql_condition = f"{self.cursor_field}>={current_state_value}"
         if self.cursor_field.upper() not in self._json_schema['properties']:
             raise ValueError(f'this field {self.cursor_field} should be present in schema. Make sure the column is present in your stream')
