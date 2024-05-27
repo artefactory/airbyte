@@ -390,7 +390,6 @@ class BigqueryIncrementalStream(BigqueryResultStream, IncrementalMixin):
         else:
             self._cursor = latest_record_state
         self.state = {self.cursor_field: self._cursor} 
-        # self.checkpoint(self.name, self.state, self.namespace)
         if datetime.now() >= self._checkpoint_time + timedelta(minutes=15):
             self.checkpoint(self.name, self.state, self.namespace)
             self._checkpoint_time = datetime.now()
@@ -561,23 +560,13 @@ class BigqueryCDCStream(BigqueryResultStream, IncrementalMixin):
         else:
             self._cursor = latest_record_state
         self.state = {self.cursor_field: self._cursor} 
-        self.logger.info(f"current state of {self.name} is {self.state}")
         if datetime.now() >= self._checkpoint_time + timedelta(minutes=15):
             self.checkpoint(self.name, self.state, self.namespace)
             self._checkpoint_time = datetime.now()
         return self.state
 
-    def _chunk_dates(self, start_date, end_date, table_start) -> Iterable[Tuple[datetime, datetime]]:
-        slice_range = 1
-        if isinstance(start_date, str):
-            start_date = datetime.strptime(start_date, '%Y-%m-%dT%H:%M:%S.%f%z')
-        if isinstance(end_date, str):
-            end_date = datetime.strptime(end_date, '%Y-%m-%dT%H:%M:%S.%f%z')
-        if isinstance(table_start, str):
-            table_start = datetime.strptime(table_start, '%Y-%m-%dT%H:%M:%S.%f%z')
-        if start_date > end_date:
-            #TODO: maybe raise exception
-            return
+    def _chunk_dates(self, start_date: datetime, end_date: datetime, table_start: datetime) -> Iterable[Tuple[datetime, datetime]]:
+        slice_range = 1 #TODO: get from config
         step = timedelta(minutes=slice_range)
         new_start_date = start_date
         if start_date == end_date:
@@ -585,7 +574,7 @@ class BigqueryCDCStream(BigqueryResultStream, IncrementalMixin):
             return
         while new_start_date < end_date+step:
             before_date = min(end_date+step, new_start_date + step)
-            if before_date < table_start:
+            if table_start and before_date < table_start:
                 before_date = table_start
             yield new_start_date, before_date
             new_start_date = before_date
@@ -593,19 +582,18 @@ class BigqueryCDCStream(BigqueryResultStream, IncrementalMixin):
     def stream_slices(self, stream_state: Mapping[str, Any] = None, cursor_field=None, sync_mode=None, **kwargs) -> Iterable[Optional[Mapping[str, any]]]:
         start_time = next(self.first_record.read_records(sync_mode=SyncMode.full_refresh)).get(self.cursor_field, None)
         end_time = next(self.last_record.read_records(sync_mode=SyncMode.full_refresh)).get(self.cursor_field, None)
+        if isinstance(start_time, str):
+            start_time = datetime.strptime(start_time, '%Y-%m-%dT%H:%M:%S.%f%z')
+        if isinstance(end_time, str):
+            end_time = datetime.strptime(end_time, '%Y-%m-%dT%H:%M:%S.%f%z')
         default_start = self.fallback_start
         if stream_state:
-            self._cursor = stream_state.get(self.cursor_field) #or self._state.get(self.cursor_field)
-        if self._cursor:
-            default_start = self._cursor
-        if start_time and end_time:
+            self._cursor = stream_state.get(self.cursor_field)
+            default_start =  datetime.strptime(self._cursor, '%Y-%m-%dT%H:%M:%S.%f%z')
+        if end_time and default_start <= end_time:
             for start, end in self._chunk_dates(default_start, end_time, start_time):
                 yield {
                     "start" : start.isoformat(timespec='microseconds'), "end": end.isoformat(timespec='microseconds')
-                } 
-        else:
-            yield {
-                    "start" : None, "end": None
                 } 
 
     def request_body_json(
@@ -620,6 +608,8 @@ class BigqueryCDCStream(BigqueryResultStream, IncrementalMixin):
             end = stream_slice.get("end", None)
             if start and end:
                 query_string = f"select * from APPENDS(TABLE `{self.stream_name}`,'{start}','{end}')"
+            elif start:
+                query_string = f"select * from APPENDS(TABLE `{self.stream_name}`,'{start}',NULL)"
         request_body = {
             "kind": "bigquery#queryRequest",
             "query": query_string,
