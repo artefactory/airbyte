@@ -40,7 +40,7 @@ class BigqueryOAuth(TokenAuthenticator):
         Returns:
             str: The current access_token, updated if it was previously expired.
         """
-        if True: #self._credentials.access_token_expired:
+        if self._credentials.access_token_expired:
             self._credentials.refresh(self._http)
             self._token = str(self._credentials.get_access_token().access_token)
             # TODO: emit airbyte_cdk.sources.message
