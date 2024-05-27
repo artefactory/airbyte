@@ -36,7 +36,6 @@ class TableStream(SnowflakeStream, IncrementalMixin):
         self._namespace = None
         self._state_value = None
         self._cursor_field = []
-        self._json_schema_properties = None
         self.checkpoint_time = datetime.now()
         self.ordered_mapping_names_types = None
 
@@ -44,6 +43,9 @@ class TableStream(SnowflakeStream, IncrementalMixin):
 
         self._primary_key = None
         self._is_primary_key_set = False
+
+        self._json_schema = None
+        self._json_schema_set = False
 
         # Pagination
         self.number_of_partitions = None
@@ -238,6 +240,10 @@ class TableStream(SnowflakeStream, IncrementalMixin):
             yield record
 
     def get_json_schema(self) -> Mapping[str, Any]:
+
+        if self._json_schema_set:
+            return self._json_schema
+
         properties = {}
         json_schema = {
             "$schema": "https://json-schema.org/draft-07/schema#",
@@ -255,8 +261,10 @@ class TableStream(SnowflakeStream, IncrementalMixin):
             airbyte_column_type_object = mapping_snowflake_type_airbyte_type[snowflake_column_type]
             properties[column_name] = airbyte_column_type_object
 
-        self._json_schema_properties = properties
-        return json_schema
+        self._json_schema = json_schema
+        self._json_schema_set = True
+
+        return self._json_schema
 
     ######################################
     ###### State, cursor management and checkpointing
@@ -318,6 +326,8 @@ class TableStream(SnowflakeStream, IncrementalMixin):
                 processed_cursor_field = cursor_field[0]
             else:
                 raise ValueError('When cursor_field is a list, its size must be 1')
+        if processed_cursor_field is None:
+            return []
         return processed_cursor_field
 
     def stream_slices(self, stream_state: Mapping[str, Any] = None, cursor_field=None, sync_mode=None, **kwargs) -> Iterable[

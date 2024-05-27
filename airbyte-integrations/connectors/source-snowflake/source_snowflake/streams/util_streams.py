@@ -127,10 +127,11 @@ class StreamLauncher(SnowflakeStream):
     def __init__(self, url_base, config, table_object, current_state, cursor_field, authenticator, where_clause=None,
                  cdc_look_back_time_window=None):
         super().__init__(authenticator=authenticator)
+        self._json_schema_set = False
         self._url_base = url_base
         self._config = config
         self._table_object = table_object
-        self._json_schema_properties = None
+        self._json_schema = None
         self.table_schema_stream = TableSchemaStream(url_base=url_base,
                                                      config=config,
                                                      table_object=table_object,
@@ -208,13 +209,13 @@ class StreamLauncher(SnowflakeStream):
         The schema must have been generated before
         """
         state_sql_condition = f"{self.cursor_field}>={current_state_value}"
-        if self.cursor_field.upper() not in self._json_schema_properties:
+        if self.cursor_field.upper() not in self._json_schema['properties']:
             raise ValueError(f'this field {self.cursor_field} should be present in schema. Make sure the column is present in your stream')
 
-        if self._json_schema_properties[self.cursor_field.upper()]["type"].upper() in date_and_time_snowflake_type_airbyte_type:
+        if self._json_schema['properties'][self.cursor_field.upper()]["type"].upper() in date_and_time_snowflake_type_airbyte_type:
             state_sql_condition = f"TO_TIMESTAMP({self.cursor_field})>=TO_TIMESTAMP({current_state_value})"
 
-        if self._json_schema_properties[self.cursor_field.upper()]["type"].upper() in string_snowflake_type_airbyte_type:
+        if self._json_schema['properties'][self.cursor_field.upper()]["type"].upper() in string_snowflake_type_airbyte_type:
             state_sql_condition = f"{self.cursor_field}>='{current_state_value}'"
 
         return state_sql_condition
@@ -242,6 +243,10 @@ class StreamLauncher(SnowflakeStream):
         return json_payload
 
     def get_json_schema(self) -> Mapping[str, Any]:
+
+        if self._json_schema_set:
+            return self._json_schema
+
         properties = {}
         json_schema = {
             "$schema": "https://json-schema.org/draft-07/schema#",
@@ -259,8 +264,10 @@ class StreamLauncher(SnowflakeStream):
             airbyte_column_type_object = mapping_snowflake_type_airbyte_type[snowflake_column_type]
             properties[column_name] = airbyte_column_type_object
 
-        self._json_schema_properties = properties
-        return json_schema
+        self._json_schema = json_schema
+        self._json_schema_set = True
+
+        return self._json_schema
 
     def parse_response(self, response: requests.Response, **kwargs) -> Iterable[Mapping]:
         """
