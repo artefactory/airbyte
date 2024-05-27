@@ -1,6 +1,6 @@
 {
     "database": "TEST_AIRBYTE",
-    "schema": "TEST",
+    "schema": "INTEGRATION_TEST",
     "streams": [],
     "replication_method": {
         "method": "standard"

@@ -2,7 +2,7 @@
         "streams": [
             {
                 "stream": {
-                    "name": "higher_than_5",
+                    "name": "higher_than_2",
                     "json_schema": {
                         "$schema": "https://json-schema.org/draft-07/schema#",
                         "additionalProperties": true,
@@ -12,11 +12,11 @@
                         "incremental"
                     ],
                     "source_defined_cursor": false,
-                    "default_cursor_field": ["COL1"],
+                    "default_cursor_field": ["ID"],
                     "source_defined_primary_key": []
                 },
                   "sync_mode": "incremental",
-                  "cursor_field": ["COL1"],
+                  "cursor_field": ["ID"],
                   "destination_sync_mode": "append"
 
             }

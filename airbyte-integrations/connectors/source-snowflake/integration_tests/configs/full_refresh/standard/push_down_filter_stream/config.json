@@ -1,13 +1,13 @@
 {
     "streams": [
         {
-            "name": "higher_than_5",
-            "parent_stream": "TEST.TEST_TABLE",
-            "where_clause": "COL1>=5"
+            "name": "higher_than_2",
+            "parent_stream": "INTEGRATION_TEST.TEST_TABLE",
+            "where_clause": "TEST_COLUMN_1>2"
         }
     ],
     "database": "TEST_AIRBYTE",
-    "schema": "TEST",
+    "schema": "INTEGRATION_TEST",
     "replication_method": {
         "method": "standard"
     }

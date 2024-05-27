@@ -2,33 +2,7 @@
         "streams": [
             {
                 "stream": {
-                    "name": "TEST.MIXED_DATA_TYPE",
-                    "json_schema": {
-                        "$schema": "https://json-schema.org/draft-07/schema#",
-                        "additionalProperties": true,
-                        "type": "object",
-                        "properties": {}
-                    },
-                    "supported_sync_modes": [
-                        "full_refresh",
-                        "incremental"
-                    ],
-                    "source_defined_cursor": false,
-                    "default_cursor_field": [],
-                    "source_defined_primary_key": []
-                },
-                  "sync_mode": "full_refresh",
-                  "cursor_field": [],
-                  "destination_sync_mode": "overwrite",
-                  "primary_key": [],
-                  "aliasName": "TEST_TEST_TABLE",
-                  "selected": false,
-                  "suggested": false
-
-            },
-            {
-                "stream": {
-                    "name": "TEST.TEST_TABLE",
+                    "name": "INTEGRATION_TEST.TEST_TABLE",
                     "json_schema": {
                         "$schema": "https://json-schema.org/draft-07/schema#",
                         "additionalProperties": true,
