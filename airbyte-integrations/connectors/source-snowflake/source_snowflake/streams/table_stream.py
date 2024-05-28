@@ -19,7 +19,7 @@ from source_snowflake.schema_builder import mapping_snowflake_type_airbyte_type,
     string_snowflake_type_airbyte_type
 from .snowflake_parent_stream import SnowflakeStream
 from .util_streams import TableSchemaStream, StreamLauncher, PrimaryKeyStream, StreamLauncherChangeDataCapture
-from ..snowflake_exceptions import NotEnabledChangeTrackingOptionError
+from ..snowflake_exceptions import NotEnabledChangeTrackingOptionError, ChangeDataCaptureNotSupportedTypeGeographyError
 
 
 class TableStream(SnowflakeStream, IncrementalMixin):
@@ -39,6 +39,8 @@ class TableStream(SnowflakeStream, IncrementalMixin):
         self._json_schema_properties = None
         self.checkpoint_time = datetime.now()
         self.ordered_mapping_names_types = None
+
+        self._geography_type_present = None
 
         self._primary_key = None
         self._is_primary_key_set = False
@@ -402,6 +404,13 @@ class TableChangeDataCaptureStream(TableStream):
                 f'Here is the command you need to run to enable it:\n'
                 f'ALTER TABLE YOUR_TABLE SET CHANGE_TRACKING = TRUE;')
 
+        if self._geography_type_present:
+            raise ChangeDataCaptureNotSupportedTypeGeographyError(
+                "The GEOGRAPHY type in snowflake blocks change data capture update. Check the documentation for more details.\n"
+                "To resolve this issue, chose the standard update or change the type of the column to object. Airbyte considers it as "
+                "an object when uploading GEOGRAPHY data type to destination"
+            )
+
         stream_launcher = StreamLauncherChangeDataCapture(url_base=self.url_base,
                                                           config=self.config,
                                                           table_object=self.table_object,
@@ -446,6 +455,10 @@ class TableChangeDataCaptureStream(TableStream):
         for column_object in self.table_schema_stream.read_records(sync_mode=SyncMode.full_refresh):
             column_name = column_object['column_name']
             snowflake_column_type = column_object['type'].upper()
+
+            if column_object['extTypeName'] is not None and column_object['extTypeName'].upper() == "GEOGRAPHY":
+                self._geography_type_present = True
+
             if snowflake_column_type not in mapping_snowflake_type_airbyte_type:
                 raise ValueError(f"The type {snowflake_column_type} is not recognized. "
                                  f"Please, contact Airbyte support to update the connector to handle this new type")

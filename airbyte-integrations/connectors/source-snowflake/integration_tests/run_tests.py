@@ -48,8 +48,8 @@ def load_json(file_path):
     with open(file_path) as f:
         return json.load(f)
 
-def enrich_config(file_path, basic_config):
 
+def enrich_config(file_path, basic_config):
     with open(CONFIG_SNOWFLAKE) as f:
         additional_configuration = json.load(f)
 
@@ -126,6 +126,7 @@ def print_report(results):
     # Print the report
     print(report)
 
+
 def print_failed_commands(failed_commands):
     # Print all the commands that went wrong
     if failed_commands:
@@ -136,7 +137,6 @@ def print_failed_commands(failed_commands):
             print("-" * 40)
     else:
         print("All commands went well!")
-
 
 
 def main():

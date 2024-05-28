@@ -11,3 +11,6 @@ class NotEnabledChangeTrackingOptionError(Exception):
         super().__init__()
         self.streams_without_change_tracking_enabled = streams_without_change_tracking_enabled
 
+
+class ChangeDataCaptureNotSupportedTypeGeographyError(Exception):
+    pass

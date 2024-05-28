@@ -82,7 +82,8 @@ class TableSchemaStream(SnowflakeStream):
         # checks in the response nested fields response -> resultSetMetaData -> rowType
         for row_type in response_json.get('resultSetMetaData', {'rowType': []}).get('rowType', []):
             yield {'column_name': row_type['name'],
-                   'type': row_type['type']}
+                   'type': row_type['type'],
+                   'extTypeName': row_type.get('extTypeName', None), }  # Special attribute in metadata to flag geography data
 
     def __str__(self):
         return f"Current stream has this table object as constructor {self.table_object}"
@@ -120,9 +121,11 @@ class PrimaryKeyStream(SnowflakeStream):
     def __str__(self):
         return f"Current stream has this table object as constructor {self.table_object}"
 
+
 class StreamLauncher(SnowflakeStream):
 
-    def __init__(self, url_base, config, table_object, current_state, cursor_field, authenticator, where_clause=None, cdc_look_back_time_window=None):
+    def __init__(self, url_base, config, table_object, current_state, cursor_field, authenticator, where_clause=None,
+                 cdc_look_back_time_window=None):
         super().__init__(authenticator=authenticator)
         self._url_base = url_base
         self._config = config
@@ -136,7 +139,6 @@ class StreamLauncher(SnowflakeStream):
         self._cursor_field = cursor_field
         self.where_clause = where_clause
         self.cdc_look_back_time_window = cdc_look_back_time_window
-
 
     @property
     def cursor_field(self):
@@ -270,6 +272,11 @@ class StreamLauncher(SnowflakeStream):
 
 class StreamLauncherChangeDataCapture(StreamLauncher):
 
+    def __init__(self, url_base, config, table_object, current_state, cursor_field, authenticator, where_clause=None,
+                 cdc_look_back_time_window=None):
+        super().__init__(url_base, config, table_object, current_state, cursor_field, authenticator, where_clause,
+                         cdc_look_back_time_window)
+
     @property
     def statement(self):
         database = self.config["database"]
@@ -278,16 +285,14 @@ class StreamLauncherChangeDataCapture(StreamLauncher):
 
         if self.cdc_look_back_time_window is None:
             raise ValueError(f'{self.cdc_look_back_time_window} should be set. Make sure you have the rights '
-                             f'to read this information from Snowflake. this should have been already checked in check connection.')
-
+                             f'to read this information from Snowflake.')
 
         history_date = datetime.now() - timedelta(seconds=self.cdc_look_back_time_window)
 
         history_date += timedelta(seconds=1)
         history_timestamp = history_date.strftime("%Y-%m-%d %H:%M:%S")
-
         statement = (f'SELECT * FROM "{database}"."{schema}"."{table}" '
-                        f'CHANGES(INFORMATION => DEFAULT) AT(TIMESTAMP => TO_TIMESTAMP_NTZ(\'{history_timestamp}\'))')
+                     f'CHANGES(INFORMATION => DEFAULT) AT(TIMESTAMP => TO_TIMESTAMP_NTZ(\'{history_timestamp}\'))')
 
         if self.where_clause:
             statement = f'{statement} WHERE {self.where_clause}'
@@ -306,6 +311,7 @@ class StreamLauncherChangeDataCapture(StreamLauncher):
         for column_object in self.table_schema_stream.read_records(sync_mode=SyncMode.full_refresh):
             column_name = column_object['column_name']
             snowflake_column_type = column_object['type'].upper()
+
             if snowflake_column_type not in mapping_snowflake_type_airbyte_type:
                 raise ValueError(f"The type {snowflake_column_type} is not recognized. "
                                  f"Please, contact Airbyte support to update the connector to handle this new type")
@@ -342,5 +348,3 @@ class StreamLauncherChangeDataCapture(StreamLauncher):
             json_payload['schema'] = schema
 
         return json_payload
-
-
