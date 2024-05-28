@@ -13,11 +13,11 @@
                         "incremental"
                     ],
                     "source_defined_cursor": false,
-                    "default_cursor_field": ["ID"],
+                    "default_cursor_field": ["TEST_COLUMN_26"],
                     "source_defined_primary_key": []
                 },
                   "sync_mode": "incremental",
-                  "cursor_field": ["ID"],
+                  "cursor_field": ["TEST_COLUMN_26"],
                   "destination_sync_mode": "append"
 
             }
