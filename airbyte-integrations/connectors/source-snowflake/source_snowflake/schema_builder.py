@@ -1,5 +1,5 @@
 import json
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Dict
 
 import pytz
@@ -19,16 +19,15 @@ class SchemaTypes:
 
 
 def get_generic_type_from_schema_type(schema_type):
-    date_key_words = ["date", "time"]
-    number_key_words = ["integer", "number", "boolean"]
-    if "format" in schema_type and any([date_key_word in schema_type['format'] for date_key_word in date_key_words]):
+
+    if schema_type == SchemaTypes.timestamp_with_timezone:
+        return "timestamp_with_timezone"
+
+    if schema_type in (SchemaTypes.timestamp_without_timezone, SchemaTypes.time_without_timezone):
         return "date"
 
-    if "type" in schema_type:
-        if "string" in schema_type["type"]:
-            return "string"
-        if any([number_key_word in schema_type["type"]] for number_key_word in number_key_words):
-            return "number"
+    if schema_type in (SchemaTypes.number, SchemaTypes.integer, SchemaTypes.boolean):
+        return 'number'
 
     # Default consider it a string
     return "string"
@@ -110,19 +109,46 @@ mapping_snowflake_type_airbyte_type = {
 }
 
 
+def convert_tz_time_stamp_suffix_to_offset_hours(tz_time_stamp_suffix):
+    raw_offset_minutes = int(tz_time_stamp_suffix)
+    delta = raw_offset_minutes / 60
+    offset_minutes = delta - 24
+    return offset_minutes
+
+
+def convert_utc_to_timezone(utc_date, offset_hours):
+    offset = timedelta(hours=offset_hours)
+    local_date = utc_date + offset
+    sign = '+' if offset_hours >= 0 else '-'
+    abs_offset_hours = int(abs(offset_hours))
+    abs_offset_minutes = int((abs(offset_hours) * 60) % 60)
+
+    offset_str = f"{sign}{abs_offset_hours:02}:{abs_offset_minutes:02}"
+
+    return local_date.strftime(f'%Y-%m-%dT%H:%M:%S{offset_str}')
+
+
 def format_field(field_value, field_type):
+    if field_type is None:
+        # maybe add warning
+        return field_value
 
     if field_type.upper() in ('OBJECT', 'ARRAY'):
         return json.loads(field_value)
 
     if field_type.upper() in date_and_time_snowflake_type_airbyte_type.keys() and field_value:
         try:
-            if isinstance(field_value, str):
-                ts = float(field_value.split(' ')[0])
+            if isinstance(field_value, str) and ' ' in field_value:  # time_stamp with timezone
+                unix_time_stamp = float(field_value.split(' ')[0])
+                tz_time_stamp_suffix = field_value.split(' ')[1]
+                offset_hours = convert_tz_time_stamp_suffix_to_offset_hours(tz_time_stamp_suffix)
+                utc_date = datetime.fromtimestamp(unix_time_stamp, pytz.timezone("UTC"))
+                return convert_utc_to_timezone(utc_date, offset_hours)
             else:
                 ts = float(field_value)
-            dt = datetime.fromtimestamp(ts, pytz.timezone("UTC"))
-            return dt.isoformat(timespec='microseconds')
+                dt = datetime.fromtimestamp(ts, pytz.timezone("UTC"))
+                return dt.isoformat(timespec='microseconds')
+
         except ValueError:
             # maybe add warning
             return field_value
