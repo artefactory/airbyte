@@ -83,7 +83,7 @@ class BigqueryStream(HttpStream, ABC):
         yield from self.process_records(records)
 
     def path(self, **kwargs) -> str:
-        return self.stream_path
+        return self.stream_path        
 
 
 class BigqueryDatasets(BigqueryStream):
@@ -194,8 +194,9 @@ class BigqueryTableData(BigqueryTable):
 class BigqueryResultStream(BigqueryStream):
     """
     """ 
-    def __init__(self, stream_path: str, stream_name: str, stream_schema, stream_request=None, stream_data=None, **kwargs):
+    def __init__(self, stream_path: str, stream_name: str, stream_schema, stream_request=None, stream_data=None,**kwargs):
         self.request_body = stream_request
+        self.retry_policy = kwargs.pop("retry_policy", None)
         super().__init__(stream_path, stream_name, stream_schema, stream_data, **kwargs)
 
     @property
@@ -209,6 +210,11 @@ class BigqueryResultStream(BigqueryStream):
         next_page_token: Optional[Mapping[str, Any]] = None,
     ) -> Optional[Mapping[str, Any]]:
         return self.request_body
+    
+    def should_retry(self, response: requests.Response) -> bool:
+        if self.retry_policy:
+            return self.retry_policy(response)
+        return False
     
     def process_records(self, record) -> Iterable[Mapping[str, Any]]:
         fields = record.get("schema")["fields"]
@@ -431,7 +437,7 @@ class BigqueryIncrementalStream(BigqueryResultStream, IncrementalMixin):
             "query": query_string,
             "useLegacySql": False,
             "timeoutMs": 30000,
-            "maxResults": 100000
+            "maxResults": 10000
             }
         return request_body
     
@@ -615,7 +621,7 @@ class BigqueryCDCStream(BigqueryResultStream, IncrementalMixin):
             "query": query_string,
             "useLegacySql": False,
             "timeoutMs": 30000,
-            "maxResults": 100000
+            "maxResults": 10000
             }
         return request_body
     
@@ -643,7 +649,7 @@ class TableChangeHistory(BigqueryCDCStream):
     def __init__(self, project_id: list, dataset_id: str, table_id: str, **kwargs):
         self.project_id = project_id
         self.parent_stream = dataset_id + "." + table_id
-        super().__init__(self.path(), self.parent_stream, self.get_json_schema(), **kwargs)
+        super().__init__(self.path(), self.parent_stream, self.get_json_schema(), retry_policy=self.should_retry, **kwargs)
     
     @property
     def name(self):
@@ -686,3 +692,17 @@ class TableChangeHistory(BigqueryCDCStream):
         record = response.json()
         yield record
     
+    def should_retry(self, response: requests.Response) -> bool:
+        """
+        Override to set different conditions for backoff based on the response from the server.
+
+        By default, back off on the following HTTP response statuses:
+         - jobComplete false indicates query job not completed
+
+        Unexpected but transient exceptions (connection timeout, DNS resolution failed, etc..) are retried by default.
+        """
+        retry = False
+        records = response.json()
+        if records.get("jobComplete", None):
+            retry = (records["jobComplete"] == False)
+        return retry
