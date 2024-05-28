@@ -7,7 +7,7 @@ import requests
 from airbyte_protocol.models import SyncMode
 
 from source_snowflake.schema_builder import date_and_time_snowflake_type_airbyte_type, string_snowflake_type_airbyte_type, \
-    mapping_snowflake_type_airbyte_type
+    mapping_snowflake_type_airbyte_type, get_generic_type_from_schema_type
 from source_snowflake.streams.snowflake_parent_stream import SnowflakeStream
 
 
@@ -22,7 +22,6 @@ class TableCatalogStream(SnowflakeStream):
         super().__init__(authenticator=authenticator)
         self._url_base = url_base
         self._config = config
-
 
     @property
     def statement(self):
@@ -64,7 +63,6 @@ class TableSchemaStream(SnowflakeStream):
         self._url_base = url_base
         self._config = config
         self._table_object = table_object
-
 
     @property
     def statement(self):
@@ -208,17 +206,26 @@ class StreamLauncher(SnowflakeStream):
         """
         The schema must have been generated before
         """
+
+        state_sql_condition = None
+
         if not self._json_schema_set:
             self.get_json_schema()
 
-        state_sql_condition = f"{self.cursor_field}>={current_state_value}"
         if self.cursor_field.upper() not in self._json_schema['properties']:
             raise ValueError(f'this field {self.cursor_field} should be present in schema. Make sure the column is present in your stream')
 
-        if self._json_schema['properties'][self.cursor_field.upper()]["type"].upper() in date_and_time_snowflake_type_airbyte_type:
-            state_sql_condition = f"TO_TIMESTAMP({self.cursor_field})>=TO_TIMESTAMP({current_state_value})"
+        schema_type = self._json_schema['properties'][self.cursor_field.upper()]
 
-        if self._json_schema['properties'][self.cursor_field.upper()]["type"].upper() in string_snowflake_type_airbyte_type:
+        generic_type = get_generic_type_from_schema_type(schema_type)
+
+        if generic_type == "date":
+            state_sql_condition = f"TO_TIMESTAMP({self.cursor_field})>=TO_TIMESTAMP('{current_state_value}')"
+
+        elif generic_type == "number":
+            state_sql_condition = f"{self.cursor_field}>={current_state_value}"
+
+        elif generic_type == "string":
             state_sql_condition = f"{self.cursor_field}>='{current_state_value}'"
 
         return state_sql_condition
@@ -231,6 +238,7 @@ class StreamLauncher(SnowflakeStream):
     ) -> Optional[Mapping[str, Any]]:
 
         current_statement = self.get_updated_statement()
+        print('current_statement', current_statement)
         json_payload = {
             "statement": current_statement,
             "role": self.config['role'],

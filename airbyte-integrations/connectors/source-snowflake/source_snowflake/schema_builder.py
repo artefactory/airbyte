@@ -18,6 +18,22 @@ class SchemaTypes:
     object: Dict = {"type": ["null", "object"]}
 
 
+def get_generic_type_from_schema_type(schema_type):
+    date_key_words = ["date", "time"]
+    number_key_words = ["integer", "number", "boolean"]
+    if "format" in schema_type and any([date_key_word in schema_type['format'] for date_key_word in date_key_words]):
+        return "date"
+
+    if "type" in schema_type:
+        if "string" in schema_type["type"]:
+            return "string"
+        if any([number_key_word in schema_type["type"]] for number_key_word in number_key_words):
+            return "number"
+
+    # Default consider it a string
+    return "string"
+
+
 numeric_snowflake_type_airbyte_type = {
     # integers
     "INT": SchemaTypes.integer,
