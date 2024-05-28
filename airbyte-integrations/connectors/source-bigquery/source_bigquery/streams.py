@@ -651,11 +651,11 @@ class TableChangeHistory(BigqueryCDCStream):
     """ 
     primary_key = None
     
-    def __init__(self, project_id: list, dataset_id: str, table_id: str, **kwargs):
+    def __init__(self, project_id: list, dataset_id: str, table_id: str, fallback_start: datetime=None,**kwargs):
         self.project_id = project_id
         self.parent_stream = dataset_id + "." + table_id
         super().__init__(self.path(), self.parent_stream, self.get_json_schema, retry_policy=self.should_retry, **kwargs)
-        self.stream_obj = BigqueryCDCStream(self.path(), self.parent_stream, self.get_json_schema, **kwargs)
+        self.stream_obj = BigqueryCDCStream(self.path(), self.parent_stream, self.get_json_schema, fallback_start=fallback_start,**kwargs)
     
     @property
     def name(self):
