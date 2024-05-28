@@ -581,7 +581,7 @@ class BigqueryCDCStream(BigqueryResultStream, IncrementalMixin):
         while new_start_date < end_date+timedelta(seconds=1):
             before_date = min(end_date+timedelta(seconds=1), new_start_date + step)
             if table_start and before_date < table_start:
-                before_date = table_start
+                before_date = table_start + step
             yield new_start_date, before_date
             new_start_date = before_date
             
@@ -592,7 +592,7 @@ class BigqueryCDCStream(BigqueryResultStream, IncrementalMixin):
             start_time = datetime.strptime(start_time, '%Y-%m-%dT%H:%M:%S.%f%z')
         if isinstance(end_time, str):
             end_time = datetime.strptime(end_time, '%Y-%m-%dT%H:%M:%S.%f%z')
-        default_start = self.fallback_start
+        default_start = self.fallback_start #max(start_time, self.fallback_start)
         if stream_state:
             self._cursor = stream_state.get(self.cursor_field)
             default_start =  datetime.strptime(self._cursor, '%Y-%m-%dT%H:%M:%S.%f%z')
