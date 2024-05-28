@@ -578,8 +578,8 @@ class BigqueryCDCStream(BigqueryResultStream, IncrementalMixin):
         if start_date == end_date:
             yield start_date, start_date + step
             return
-        while new_start_date < end_date+step:
-            before_date = min(end_date+step, new_start_date + step)
+        while new_start_date < end_date+timedelta(seconds=1):
+            before_date = min(end_date+timedelta(seconds=1), new_start_date + step)
             if table_start and before_date < table_start:
                 before_date = table_start
             yield new_start_date, before_date
