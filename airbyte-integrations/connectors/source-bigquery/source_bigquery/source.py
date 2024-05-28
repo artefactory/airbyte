@@ -141,7 +141,7 @@ class SourceBigquery(ConcurrentSourceAdapter):
                         table_obj = IncrementalQueryResult(config["project_id"], dataset_id, table_id, authenticator=self._auth)
                 streams_catalog.append(table_obj.stream)
 
-        state_manager = ConnectorStateManager(stream_instance_map={stream.name: stream for stream in streams}, state=self.state)
+        state_manager = ConnectorStateManager(stream_instance_map={stream.name: stream for stream in streams_catalog}, state=self.state)
         return [
             self._to_concurrent(
                 stream,
@@ -149,7 +149,7 @@ class SourceBigquery(ConcurrentSourceAdapter):
                 timedelta(minutes=1),
                 state_manager,
             )
-            for stream in streams
+            for stream in streams_catalog
         ]
 
     def _to_concurrent(
