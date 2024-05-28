@@ -35,11 +35,13 @@ class TableStream(SnowflakeStream, IncrementalMixin):
                                                      authenticator=authenticator)
         self._namespace = None
         self._state_value = None
-        self._cursor_field = []
         self.checkpoint_time = datetime.now()
         self.ordered_mapping_names_types = None
 
         self._geography_type_present = None
+
+        self._cursor_field = []
+        self._cursor_field_type = None
 
         self._primary_key = None
         self._is_primary_key_set = False
@@ -255,9 +257,14 @@ class TableStream(SnowflakeStream, IncrementalMixin):
         for column_object in self.table_schema_stream.read_records(sync_mode=SyncMode.full_refresh):
             column_name = column_object['column_name']
             snowflake_column_type = column_object['type'].upper()
+
+            if isinstance(self.cursor_field, str) and column_name.lower() == self.cursor_field.lower():  # set cursor field type
+                self._cursor_field_type = snowflake_column_type
+
             if snowflake_column_type not in mapping_snowflake_type_airbyte_type:
                 raise ValueError(f"The type {snowflake_column_type} is not recognized. "
                                  f"Please, contact Airbyte support to update the connector to handle this new type")
+
             airbyte_column_type_object = mapping_snowflake_type_airbyte_type[snowflake_column_type]
             properties[column_name] = airbyte_column_type_object
 
@@ -301,7 +308,10 @@ class TableStream(SnowflakeStream, IncrementalMixin):
         Override to determine the latest state after reading the latest record. This typically compared the cursor_field from the latest record and
         the current state and picks the 'most' recent cursor. This is how a stream's state is determined. Required for incremental.
         """
-        latest_record_state = latest_record[self.cursor_field]
+        if self.cursor_field and not self._cursor_field_type:
+            self.get_json_schema()  # Sets the type of cursor field to perform process on the value
+
+        latest_record_state = format_field(latest_record[self.cursor_field], self._cursor_field_type)
         if self.state is not None and len(self.state) > 0:
             current_state_value = self.state[self.cursor_field]
             self._state_value = max(latest_record_state,
