@@ -45,21 +45,11 @@ class SourceSnowflake(AbstractSource):
         url_base = self.format_url_base(host)
 
         authenticator = SnowflakeJwtAuthenticator.from_config(config)
-        update_method = config.get('replication_method', {'method': 'standard'}).get('method', 'standard')
 
         try:
-
             self.check_existence_of_at_least_one_stream(url_base=url_base, config=config, authenticator=authenticator)
             self.check_push_down_filters_parent_stream_consistency(url_base=url_base, config=config, authenticator=authenticator)
-            if update_method.lower() == 'history':
-                self.check_change_tracking_configuration(url_base, config, authenticator)
 
-        except NotEnabledChangeTrackingOptionError as e:
-            error_message = (f'In order to use CDC, yall the streams must have change tracking option enabled.\n '
-                             f'You have not set the option change_tracking for these streams:\n{e.streams_without_change_tracking_enabled}\n'
-                             f'Here is the command you need to run to enable it:\n'
-                             f'ALTER TABLE YOUR_TABLE SET CHANGE_TRACKING = TRUE;')
-            raise ValueError(error_message)
         except InconsistentPushDownFilterParentStreamNameError as e:
             error_message = (f'You have provided inconsistent pushdown filters configuration. Parent stream not found or mistake in  '
                              f'spelling parent stream name. Correct spelling must be your_schema_name.your_table_name.\n. Here is the '
@@ -86,16 +76,6 @@ class SourceSnowflake(AbstractSource):
         records = check_connection_stream.read_records(sync_mode=SyncMode.full_refresh)
         next(records)
 
-    @classmethod
-    def check_change_tracking_configuration(cls, url_base, config, authenticator):
-        check_connection_stream = CheckConnectionStream(url_base=url_base, config=config, authenticator=authenticator)
-        streams_without_change_tracking_enabled = []
-        for table_configuration_object in check_connection_stream.read_records(sync_mode=SyncMode.full_refresh):
-            if table_configuration_object['change_tracking'].lower() == 'off':
-                streams_without_change_tracking_enabled.append(f"{table_configuration_object['schema']}.{table_configuration_object['table']}")
-
-        if streams_without_change_tracking_enabled:
-            raise NotEnabledChangeTrackingOptionError(streams_without_change_tracking_enabled)
 
 
     @classmethod

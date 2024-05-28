@@ -1,10 +1,12 @@
 import logging
 import uuid
 from abc import ABC
+from datetime import datetime, timedelta
 from typing import Any, Iterable, List, Mapping, MutableMapping, Optional, Union
 
 import requests
 from airbyte_cdk.sources.streams.http import HttpStream
+from airbyte_protocol.models import SyncMode
 
 
 class SnowflakeStream(HttpStream, ABC):
@@ -32,6 +34,7 @@ class SnowflakeStream(HttpStream, ABC):
     """
     url_suffix = "api/v2/statements"
     TIME_OUT_IN_SECONDS = "1000"
+    _delta_time_between_snowflake_and_airbyte_server = None
 
     def __init__(self, authenticator=None):
         super().__init__(authenticator=authenticator)
@@ -39,6 +42,7 @@ class SnowflakeStream(HttpStream, ABC):
         self._url_base = None
         self._config = None
         self._table_object = {}
+        self._delta_time_between_snowflake_and_airbyte_server = None
 
     @property
     def url_base(self):
@@ -139,7 +143,7 @@ class SnowflakeStream(HttpStream, ABC):
         mapping_column_name_to_index = {column_name: -1 for column_name in column_names}
         for current_index, column_object in enumerate(metadata_object["resultSetMetaData"]["rowType"]):
             for column_name in mapping_column_name_to_index:
-                if column_object['name'] == column_name:
+                if column_object['name'].lower() == column_name.lower():
                     mapping_column_name_to_index[column_name] = current_index
 
         column_name_index_updated_filter = [0 if key_word_index == -1 else 1 for key_word_index in mapping_column_name_to_index.values()]

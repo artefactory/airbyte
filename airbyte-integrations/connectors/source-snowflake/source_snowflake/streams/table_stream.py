@@ -19,6 +19,7 @@ from source_snowflake.schema_builder import mapping_snowflake_type_airbyte_type,
     string_snowflake_type_airbyte_type
 from .snowflake_parent_stream import SnowflakeStream
 from .util_streams import TableSchemaStream, StreamLauncher, PrimaryKeyStream, StreamLauncherChangeDataCapture
+from ..snowflake_exceptions import NotEnabledChangeTrackingOptionError
 
 
 class TableStream(SnowflakeStream, IncrementalMixin):
@@ -361,7 +362,7 @@ class TableChangeDataCaptureStream(TableStream):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self.cdc_look_back_time_window = self._get_cdc_look_back_time_window()  # Unit of this duration is days
+        self.cdc_look_back_time_window = self._get_cdc_look_back_time_window()  # Unit of this duration is seconds
 
     @property
     def cursor_field(self):
@@ -381,16 +382,26 @@ class TableChangeDataCaptureStream(TableStream):
             self._state_value = new_state[self.cursor_field]
 
     def _get_cdc_look_back_time_window(self):
-        retention_time = self.table_object['retention_time']
+        retention_time = self.table_object['retention_time']  # given by snowflakes in days
         creation_date = self.table_object['created_on']
 
-        delta_days_from_creation = datetime.now() - datetime.fromtimestamp(float(creation_date))
+        delta_in_seconds_from_creation = datetime.now() - datetime.fromtimestamp(float(creation_date))
+        retention_time_in_seconds = int(retention_time) * 3600 * 24  # converting days to seconds
 
-        return min(delta_days_from_creation.days, int(retention_time))
+        # One additional second to avoid equality in case between now and creation date
+        return min(delta_in_seconds_from_creation.seconds, retention_time_in_seconds) + 1
 
     def set_statement_handle(self):
         if self.statement_handle:
             return
+
+        if self.table_object['change_tracking'].lower() == 'off':
+            # Emit airbyte message
+            raise NotEnabledChangeTrackingOptionError(
+                f'The stream {self.name} cannot be synchronized because the change tracking is not enabled.'
+                f'Here is the command you need to run to enable it:\n'
+                f'ALTER TABLE YOUR_TABLE SET CHANGE_TRACKING = TRUE;')
+
         stream_launcher = StreamLauncherChangeDataCapture(url_base=self.url_base,
                                                           config=self.config,
                                                           table_object=self.table_object,

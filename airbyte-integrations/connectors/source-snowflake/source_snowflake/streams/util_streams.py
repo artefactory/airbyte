@@ -16,6 +16,7 @@ class TableCatalogStream(SnowflakeStream):
     SCHEMA_NAME_COLUMN = "schema_name"
     RETENTION_TIME_COLUMN = "retention_time"
     CREATED_ON_COLUMN = "created_on"
+    CHANGE_TRACKING_COLUMN = "change_tracking"
 
     def __init__(self, url_base, config, authenticator):
         super().__init__(authenticator=authenticator)
@@ -32,26 +33,28 @@ class TableCatalogStream(SnowflakeStream):
 
         return f"SHOW TABLES IN SCHEMA {database}.{schema}"
 
-
     def parse_response(self, response: requests.Response, **kwargs) -> Iterable[Mapping]:
         """
         :return an iterable containing each record in the response
         """
         response_json = response.json()
         column_names_to_be_extracted_from_records = [self.DATABASE_NAME_COLUMN, self.SCHEMA_NAME_COLUMN,
-                                                     self.RETENTION_TIME_COLUMN, self.CREATED_ON_COLUMN]
+                                                     self.RETENTION_TIME_COLUMN, self.CREATED_ON_COLUMN,
+                                                     self.CHANGE_TRACKING_COLUMN]
         index_of_columns_from_names = self.get_index_of_columns_from_names(response_json, column_names_to_be_extracted_from_records)
 
         database_name_index = index_of_columns_from_names[self.DATABASE_NAME_COLUMN]
         schema_name_index = index_of_columns_from_names[self.SCHEMA_NAME_COLUMN]
         retention_time_index = index_of_columns_from_names[self.RETENTION_TIME_COLUMN]
         created_on_index = index_of_columns_from_names[self.CREATED_ON_COLUMN]
+        change_tracking_index = index_of_columns_from_names[self.CHANGE_TRACKING_COLUMN]
 
         for record in response_json.get("data", []):
             yield {'schema': record[schema_name_index],
                    'table': record[database_name_index],
                    'retention_time': record[retention_time_index],
                    'created_on': record[created_on_index],
+                   'change_tracking': record[change_tracking_index],
                    }
 
 
@@ -116,7 +119,6 @@ class PrimaryKeyStream(SnowflakeStream):
 
     def __str__(self):
         return f"Current stream has this table object as constructor {self.table_object}"
-
 
 class StreamLauncher(SnowflakeStream):
 
@@ -274,16 +276,19 @@ class StreamLauncherChangeDataCapture(StreamLauncher):
         schema = self.table_object["schema"]
         table = self.table_object["table"]
 
-        if not self.cdc_look_back_time_window:
+        if self.cdc_look_back_time_window is None:
             raise ValueError(f'{self.cdc_look_back_time_window} should be set. Make sure you have the rights '
                              f'to read this information from Snowflake. this should have been already checked in check connection.')
 
-        history_date = datetime.now() - timedelta(days=self.cdc_look_back_time_window)
+
+        history_date = datetime.now() - timedelta(seconds=self.cdc_look_back_time_window)
+
+        history_date += timedelta(seconds=1)
         history_timestamp = history_date.strftime("%Y-%m-%d %H:%M:%S")
 
         statement = (f'SELECT * FROM "{database}"."{schema}"."{table}" '
-                        f'CHANGES(INFORMATION => DEFAULT) AT(TIMESTAMP => TO_TIMESTAMP(\'{history_timestamp}\'))')
-        print('statement', statement)
+                        f'CHANGES(INFORMATION => DEFAULT) AT(TIMESTAMP => TO_TIMESTAMP_NTZ(\'{history_timestamp}\'))')
+
         if self.where_clause:
             statement = f'{statement} WHERE {self.where_clause}'
 
