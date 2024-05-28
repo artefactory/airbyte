@@ -221,7 +221,6 @@ class StreamLauncher(SnowflakeStream):
     ) -> Optional[Mapping[str, Any]]:
 
         current_statement = self.get_updated_statement()
-        print('current_statement', current_statement)
         json_payload = {
             "statement": current_statement,
             "role": self.config['role'],
