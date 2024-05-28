@@ -43,7 +43,7 @@ The approach here is not authoritative, and devs are free to use their own judge
 
 There are additional required TODOs in the files within the integration_tests folder and the spec.yaml file.
 """
-_DEFAULT_CONCURRENCY = 2
+_DEFAULT_CONCURRENCY = 10
 _MAX_CONCURRENCY = 10
 
 # Source
@@ -52,7 +52,7 @@ class SourceBigquery(ConcurrentSourceAdapter):
     streams_catalog: Iterable[Mapping[str, Any]] = []
     _auth: BigqueryAuth = None
     _SLICE_BOUNDARY_FIELDS_BY_IMPLEMENTATION = {
-        BigqueryIncrementalStream: ("_bigquery_created_time", "_bigquery_created_time"),
+        BigqueryIncrementalStream: ("start", "end"),
         BigqueryCDCStream: ("start", "end"),
     }
 
@@ -122,7 +122,7 @@ class SourceBigquery(ConcurrentSourceAdapter):
         self._auth = BigqueryAuth(config)
         streams = config.get("streams", [])
         sync_method = config["replication_method"]["method"]
-        
+        fallback_start = datetime.now(tz=pytz.timezone("UTC")) - timedelta(days=7)
         if streams:
             for stream in streams:
                 dataset_id, table_id = stream["parent_stream"].split(".")
@@ -186,19 +186,21 @@ class SourceBigquery(ConcurrentSourceAdapter):
                     authenticator=self._auth,
                 ))
             else:
-                streams.append(BigqueryCDCStream(
-                    stream_path=stream["stream_path"],
-                    stream_name=stream["stream"].name,
-                    stream_schema=stream["stream"].json_schema,
-                    stream_request=stream["table_data"],
-                    authenticator=self._auth,
-                ))
+                if stream["stream"].name == "test.test_test_airbyte_dataset_test_airbyte_dataset_MOCK_DATA":
+                    streams.append(BigqueryCDCStream(
+                        stream_path=stream["stream_path"],
+                        stream_name=stream["stream"].name,
+                        stream_schema=stream["stream"].json_schema,
+                        stream_request=stream["table_data"],
+                        fallback_start=fallback_start,
+                        authenticator=self._auth,
+                    ))
         
         state_manager = ConnectorStateManager(stream_instance_map={stream.name: stream for stream in streams}, state=self.state)
         return [
             self._to_concurrent(
                 stream,
-                datetime(2024, 5, 16, 17, 29, 9, 571000, tzinfo=pytz.timezone("UTC")), #TODO: change
+                fallback_start,
                 timedelta(minutes=1),
                 state_manager,
             )
@@ -225,7 +227,7 @@ class SourceBigquery(ConcurrentSourceAdapter):
             cursor = ConcurrentCursor(
                 stream.name,
                 stream.namespace,
-                state_manager.get_stream_state(stream.name, stream.namespace),
+                state,
                 self.message_repository,
                 state_manager,
                 converter,
