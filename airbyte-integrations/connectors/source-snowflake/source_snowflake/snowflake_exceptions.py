@@ -14,3 +14,8 @@ class NotEnabledChangeTrackingOptionError(Exception):
 
 class ChangeDataCaptureNotSupportedTypeGeographyError(Exception):
     pass
+
+class ChangeDataCaptureLookBackWindowUpdateFrequencyError(Exception):
+    pass
+
+

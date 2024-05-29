@@ -20,7 +20,8 @@ from source_snowflake.schema_builder import mapping_snowflake_type_airbyte_type,
     string_snowflake_type_airbyte_type, convert_utc_to_time_zone, convert_utc_to_time_zone_date
 from .snowflake_parent_stream import SnowflakeStream
 from .util_streams import TableSchemaStream, StreamLauncher, PrimaryKeyStream, StreamLauncherChangeDataCapture, CurrentTimeZoneStream
-from ..snowflake_exceptions import NotEnabledChangeTrackingOptionError, ChangeDataCaptureNotSupportedTypeGeographyError
+from ..snowflake_exceptions import NotEnabledChangeTrackingOptionError, ChangeDataCaptureNotSupportedTypeGeographyError, \
+    ChangeDataCaptureLookBackWindowUpdateFrequencyError
 
 
 class TableStream(SnowflakeStream, IncrementalMixin):
@@ -448,12 +449,22 @@ class TableChangeDataCaptureStream(TableStream):
                 "To resolve this issue, chose the standard update or change the type of the column to object. Airbyte considers it as "
                 "an object when uploading GEOGRAPHY data type to destination")
 
-
         current_time_snowflake_time_zone = CurrentTimeZoneStream.get_current_time_snowflake_time_zone(self.url_base,
                                                                                                       self.config,
                                                                                                       self.authenticator)
-
         self.start_history_timestamp = current_time_snowflake_time_zone - timedelta(seconds=self.cdc_look_back_time_window)
+
+        if self._state_value and self._state_value < self.start_history_timestamp:
+            look_back_window_in_days = self.convert_seconds_to_days(self.cdc_look_back_time_window)
+            raise ChangeDataCaptureLookBackWindowUpdateFrequencyError(
+                f"The update have happened after a duration higher than the retention date. Latest update was on {self._state_value}. "
+                f"This will result to data loss. "
+                f"The look back window is {look_back_window_in_days['days']} days, {look_back_window_in_days['hours']} hours.\n"
+                f"To solve this issue, rerun a full refresh and set up a frequency update equal to your retention time in days - 1.")
+
+        if not self._state_value:
+            # TODO: add log to alert user that full refresh is launched because first time cdc
+            self.sync_mode = SyncMode.full_refresh
 
         stream_launcher = StreamLauncherChangeDataCapture(url_base=self.url_base,
                                                           config=self.config,
@@ -471,6 +482,21 @@ class TableChangeDataCaptureStream(TableStream):
             if post_response:
                 json_post_response = post_response[0]
                 self.statement_handle = json_post_response['statementHandle']
+
+    @staticmethod
+    def convert_seconds_to_days(duration):
+        days = duration // (24 * 3600)
+        duration %= (24 * 3600)
+        hours = duration // 3600
+        duration %= 3600
+        minutes = duration // 60
+        seconds = duration % 60
+        return {
+            'days': days,
+            'hours': hours,
+            'minutes': minutes,
+            'seconds': seconds
+        }
 
     def parse_response(self, response: requests.Response, **kwargs) -> Iterable[Mapping]:
         """
