@@ -140,8 +140,11 @@ def convert_utc_to_time_zone_date(utc_date, offset_hours):
 
 
 def format_field(field_value, field_type):
-    if field_type is None:
+    if field_type is None or field_value is None:
         # maybe add warning
+        return field_value
+
+    if isinstance(field_value, datetime):
         return field_value
 
     if field_type.upper() in ('OBJECT', 'ARRAY'):

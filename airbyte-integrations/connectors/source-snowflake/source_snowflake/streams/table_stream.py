@@ -390,10 +390,16 @@ class TableChangeDataCaptureStream(TableStream):
         super().__init__(**kwargs)
         self.cdc_look_back_time_window = self._get_cdc_look_back_time_window()  # Unit of this duration is seconds
         self.start_history_timestamp = None
+        self.sync_mode = SyncMode.full_refresh
 
     @property
     def cursor_field(self):
         return 'last_update_date'
+
+
+    @property
+    def is_full_refresh(self):
+        return True if self.sync_mode == SyncMode.full_refresh else False
 
     @cursor_field.setter
     def cursor_field(self, new_cursor_field):
@@ -440,8 +446,8 @@ class TableChangeDataCaptureStream(TableStream):
             raise ChangeDataCaptureNotSupportedTypeGeographyError(
                 "The GEOGRAPHY type in snowflake blocks change data capture update. Check the documentation for more details.\n"
                 "To resolve this issue, chose the standard update or change the type of the column to object. Airbyte considers it as "
-                "an object when uploading GEOGRAPHY data type to destination"
-            )
+                "an object when uploading GEOGRAPHY data type to destination")
+
 
         current_time_snowflake_time_zone = CurrentTimeZoneStream.get_current_time_snowflake_time_zone(self.url_base,
                                                                                                       self.config,
@@ -456,7 +462,9 @@ class TableChangeDataCaptureStream(TableStream):
                                                           cursor_field=self.cursor_field,
                                                           authenticator=self.authenticator,
                                                           where_clause=self.where_clause,
-                                                          start_history_timestamp=self.start_history_timestamp)
+                                                          start_history_timestamp=self.start_history_timestamp,
+                                                          is_full_refresh=self.is_full_refresh)
+
         post_response_iterable = stream_launcher.read_records(sync_mode=SyncMode.full_refresh)
 
         for post_response in post_response_iterable:
@@ -474,14 +482,25 @@ class TableChangeDataCaptureStream(TableStream):
              for row_type in response_json.get('resultSetMetaData', {'rowType': []}).get('rowType', [])]
         )
 
-        # Type to be validated
+        if self.is_full_refresh:
+            for column_name, column_type in StreamLauncherChangeDataCapture.mapping_cdc_metadata_columns_to_types.items():
+                ordered_mapping_names_types[column_name] = column_type.upper()
+
         ordered_mapping_names_types['updated_at'] = 'TIMESTAMP_TZ'
-        current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        current_time = self.start_history_timestamp + timedelta(seconds=self.cdc_look_back_time_window)
+
+        if self.is_full_refresh:
+            # Fill in CDC values with None in case of full refresh
+            additional_data = ([None] * len(StreamLauncherChangeDataCapture.mapping_cdc_metadata_columns_to_types)
+                               + [current_time])
+        else:
+            additional_data = [current_time]
+
 
         for record in response_json.get("data", []):
-            record.append(current_time)
+            enriched_record = record + additional_data
             yield {column_name: format_field(column_value, ordered_mapping_names_types[column_name])
-                   for column_name, column_value in zip(ordered_mapping_names_types.keys(), record)}
+                   for column_name, column_value in zip(ordered_mapping_names_types.keys(), enriched_record)}
 
     def get_json_schema(self) -> Mapping[str, Any]:
         properties = {}
@@ -502,15 +521,11 @@ class TableChangeDataCaptureStream(TableStream):
             if snowflake_column_type not in mapping_snowflake_type_airbyte_type:
                 raise ValueError(f"The type {snowflake_column_type} is not recognized. "
                                  f"Please, contact Airbyte support to update the connector to handle this new type")
+
             airbyte_column_type_object = mapping_snowflake_type_airbyte_type[snowflake_column_type]
             properties[column_name] = airbyte_column_type_object
 
-        mapping_cdc_metadata_columns_to_types = {
-            "METADATA$ACTION": "text",
-            "METADATA$ISUPDATE": "boolean",
-            "METADATA$ROW_ID": "text",
-        }
-        for column_name, column_type in mapping_cdc_metadata_columns_to_types.items():
+        for column_name, column_type in StreamLauncherChangeDataCapture.mapping_cdc_metadata_columns_to_types.items():
             properties[column_name] = mapping_snowflake_type_airbyte_type[column_type.upper()]
 
         return json_schema
@@ -518,13 +533,16 @@ class TableChangeDataCaptureStream(TableStream):
     def stream_slices(self, stream_state: Mapping[str, Any] = None, cursor_field=None, sync_mode=None, **kwargs) -> Iterable[
         Optional[Mapping[str, any]]]:
 
+        if stream_state:
+            state_string = stream_state.get(self.cursor_field)
+            if state_string:
+                self._state_value = datetime.strptime(state_string, '%Y-%m-%dT%H:%M:%S%z')
+
+        self.sync_mode = sync_mode if sync_mode is not None else self.sync_mode
         self.set_statement_handle()
         slice = {"statement_handle": self.statement_handle}
 
         if sync_mode == SyncMode.incremental:
-            if stream_state:
-                self._state_value = stream_state.get(self.cursor_field)
-
             yield {self.cursor_field: self._state_value, **slice}
         else:
             yield slice

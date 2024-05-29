@@ -335,12 +335,17 @@ class StreamLauncher(SnowflakeStream):
 
 
 class StreamLauncherChangeDataCapture(StreamLauncher):
-
+    mapping_cdc_metadata_columns_to_types = {
+        "METADATA$ACTION": "text",
+        "METADATA$ISUPDATE": "boolean",
+        "METADATA$ROW_ID": "text",
+    }
     def __init__(self, url_base, config, table_object, current_state, cursor_field, authenticator, where_clause=None,
-                 start_history_timestamp=None):
+                 start_history_timestamp=None, is_full_refresh=False):
         super().__init__(url_base, config, table_object, current_state, cursor_field, authenticator, where_clause,
                          start_history_timestamp)
         self.start_history_timestamp = start_history_timestamp
+        self.is_full_refresh = is_full_refresh
 
     @property
     def statement(self):
@@ -351,8 +356,11 @@ class StreamLauncherChangeDataCapture(StreamLauncher):
         if self.start_history_timestamp is None:
             raise ValueError(f'{self.start_history_timestamp} should be set to read history')
 
-        statement = (f'SELECT * FROM "{database}"."{schema}"."{table}" '
-                     f'CHANGES(INFORMATION => DEFAULT) AT(TIMESTAMP => TO_TIMESTAMP_LTZ(\'{self.start_history_timestamp}\'))')
+        if not self.is_full_refresh:
+            statement = (f'SELECT * FROM "{database}"."{schema}"."{table}" '
+                         f'CHANGES(INFORMATION => DEFAULT) AT(TIMESTAMP => TO_TIMESTAMP_LTZ(\'{self.start_history_timestamp}\'))')
+        else:
+            statement = f'SELECT * FROM "{database}"."{schema}"."{table}"'
 
         if self.where_clause:
             statement = f'{statement} WHERE {self.where_clause}'
@@ -378,13 +386,9 @@ class StreamLauncherChangeDataCapture(StreamLauncher):
             airbyte_column_type_object = mapping_snowflake_type_airbyte_type[snowflake_column_type]
             properties[column_name] = airbyte_column_type_object
 
-        mapping_cdc_metadata_columns_to_types = {
-            "METADATA$ACTION": "text",
-            "METADATA$ISUPDATE": "boolean",
-            "METADATA$ROW_ID": "text",
-        }
-        for column_name, column_type in mapping_cdc_metadata_columns_to_types.items():
-            properties[column_name] = mapping_snowflake_type_airbyte_type[column_type.upper()]
+        if not self.is_full_refresh:
+            for column_name, column_type in self.mapping_cdc_metadata_columns_to_types.items():
+                properties[column_name] = mapping_snowflake_type_airbyte_type[column_type.upper()]
 
         return json_schema
 
