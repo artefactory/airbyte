@@ -646,7 +646,7 @@ class BigqueryCDCStream(BigqueryResultStream, IncrementalMixin):
             yield formated_data
 
 
-class TableChangeHistory(BigqueryCDCStream):
+class TableChangeHistory(BigqueryResultStream):
     """  
     """ 
     primary_key = None
