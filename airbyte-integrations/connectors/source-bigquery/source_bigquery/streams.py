@@ -520,15 +520,15 @@ class BigqueryCDCStream(BigqueryResultStream, IncrementalMixin):
     primary_key = None
     state_checkpoint_interval = None
 
-    def __init__(self, stream_path, stream_name, stream_schema, stream_request=None, fallback_start=None,**kwargs):
+    def __init__(self, stream_path, stream_name, project_id, stream_schema, stream_request=None, fallback_start=None,**kwargs):
         super().__init__(stream_path, stream_name, stream_schema, stream_request, **kwargs)
         self.request_body = stream_request
         self._cursor = None
         self._checkpoint_time = datetime.now()
         self.fallback_start = fallback_start
         self.end_date = None
-        self.first_record = TableQueryRecord("sb-airbyte-connector-1ee6", stream_name, "ASC", self.cursor_field, **kwargs)
-        self.last_record = TableQueryRecord("sb-airbyte-connector-1ee6", stream_name, "DESC", self.cursor_field, **kwargs)
+        self.first_record = TableQueryRecord(project_id, stream_name, "ASC", self.cursor_field, **kwargs)
+        self.last_record = TableQueryRecord(project_id, stream_name, "DESC", self.cursor_field, **kwargs)
         # self._stream_slicer_cursor = None
     
     @property
@@ -654,8 +654,8 @@ class TableChangeHistory(BigqueryCDCStream):
     def __init__(self, project_id: list, dataset_id: str, table_id: str, fallback_start: datetime=None,**kwargs):
         self.project_id = project_id
         self.parent_stream = dataset_id + "." + table_id
-        super().__init__(self.path(), self.parent_stream, self.get_json_schema, retry_policy=self.should_retry, **kwargs)
-        self.stream_obj = BigqueryCDCStream(self.path(), self.parent_stream, self.get_json_schema, fallback_start=fallback_start,**kwargs)
+        super().__init__(self.path(), self.parent_stream, self.project_id, self.get_json_schema, retry_policy=self.should_retry, **kwargs)
+        self.stream_obj = BigqueryCDCStream(self.path(), self.parent_stream, self.project_id, self.get_json_schema, fallback_start=fallback_start,**kwargs)
     
     @property
     def name(self):
