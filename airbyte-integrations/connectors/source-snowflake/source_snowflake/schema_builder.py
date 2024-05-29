@@ -125,7 +125,7 @@ def convert_utc_to_timezone(utc_date, offset_hours):
 
     offset_str = f"{sign}{abs_offset_hours:02}:{abs_offset_minutes:02}"
 
-    return local_date.strftime(f'%Y-%m-%dT%H:%M:%S{offset_str}')
+    return local_date.strftime(f'%Y-%m-%dT%H:%M:%S.%f{offset_str}')
 
 
 def format_field(field_value, field_type):
