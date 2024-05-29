@@ -281,19 +281,20 @@ class TableQueryRecord(BigqueryResultStream):
         return request_body
 
     def process_records(self, record) -> Iterable[Mapping[str, Any]]:
-        fields = record.get("schema")["fields"]
         try:
+            fields = record.get("schema")["fields"]
             row = record["rows"][0]
             data = row.get("f")
-        except KeyError:
+        except TypeError as e:
+            self.logger.warning(f"Table has no rows")
             yield {}
-        formated_data =  {
+        else:
+            self.data =  {
                 "_bigquery_table_id": record.get("jobReference")["jobId"],
                 "_bigquery_created_time": None, #TODO: Update this to row insertion time
                 **{CHANGE_FIELDS.get(element["name"], element["name"]): SchemaHelpers.format_field(data[fields.index(element)]["v"], element["type"]) for element in fields},
             }
-        self.data = formated_data
-        yield formated_data
+            yield self.data
 
 
 class TableQueryResult(BigqueryResultStream):
