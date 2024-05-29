@@ -541,4 +541,3 @@ class TableChangeDataCaptureStream(TableStream):
             yield record
 
         self.state = {self.cursor_field: self.start_history_timestamp}
-        print(self.state)
