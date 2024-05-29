@@ -213,10 +213,7 @@ class StreamLauncher(SnowflakeStream):
     def request_params(
             self, stream_state: Mapping[str, Any], stream_slice: Mapping[str, any] = None, next_page_token: Mapping[str, Any] = None
     ) -> MutableMapping[str, Any]:
-        """
-        TODO: Override this method to define any query parameters to be set. Remove this method if you don't need to define request params.
-        Usually contains common params e.g. pagination size etc.
-        """
+
         params = {
             "requestId": str(uuid.uuid4()),
             "async": "true"
@@ -233,7 +230,6 @@ class StreamLauncher(SnowflakeStream):
         current_state_value = None
 
         if self.current_state:
-            # TODO MAKE SURE THE CURSOR IS SINGLE VALUE AND NOT A STARTING AND ENDING VALUE (ex: window)
             current_state_value = self.current_state.get(self.cursor_field, None)
 
         if current_state_value:
