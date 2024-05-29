@@ -35,8 +35,8 @@ The approach here is not authoritative, and devs are free to use their own judge
 There are additional required TODOs in the files within the integration_tests folder and the spec.yaml file.
 """
 URL_BASE: str = "https://bigquery.googleapis.com"
-
 CHANGE_FIELDS = {"_CHANGE_TIMESTAMP": "change_timestamp", "_CHANGE_TYPE": "change_type"}
+PAGE_SIZE = 10000
 
 class BigqueryStream(HttpStream, ABC):
     """
@@ -52,7 +52,6 @@ class BigqueryStream(HttpStream, ABC):
         self.stream_schema = stream_schema
         self.stream_data = stream_data
 
-    
     @property
     def name(self):
         return self.stream_name
@@ -65,7 +64,7 @@ class BigqueryStream(HttpStream, ABC):
         if next_page:
             return next_page
         return None
-
+    
     def process_records(self, record) -> Iterable[Mapping[str, Any]]:
         fields = record.get("schema")["fields"]
         rows = self.stream_data.read_records(sync_mode=SyncMode.full_refresh)
@@ -442,7 +441,7 @@ class BigqueryIncrementalStream(BigqueryResultStream, IncrementalMixin):
             "query": query_string,
             "useLegacySql": False,
             "timeoutMs": 30000,
-            "maxResults": 10000
+            "maxResults": PAGE_SIZE
             }
         return request_body
     
@@ -628,7 +627,7 @@ class BigqueryCDCStream(BigqueryResultStream, IncrementalMixin):
             "query": query_string,
             "useLegacySql": False,
             "timeoutMs": 30000,
-            "maxResults": 10000
+            "maxResults": PAGE_SIZE
             }
         return request_body
     
@@ -675,7 +674,7 @@ class TableChangeHistory(BigqueryResultStream):
         for table in self.read_records(sync_mode=SyncMode.full_refresh):
             return SchemaHelpers.get_json_schema(table)
         return {}
-
+    
     def request_body_json(
         self,
         stream_state: Optional[Mapping[str, Any]],
