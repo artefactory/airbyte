@@ -9,6 +9,7 @@ from airbyte_protocol.models import SyncMode
 from source_snowflake.schema_builder import date_and_time_snowflake_type_airbyte_type, string_snowflake_type_airbyte_type, \
     mapping_snowflake_type_airbyte_type, get_generic_type_from_schema_type, convert_time_zone_time_stamp_suffix_to_offset_hours, \
     convert_utc_to_time_zone, convert_utc_to_time_zone_date
+
 from source_snowflake.streams.snowflake_parent_stream import SnowflakeStream
 
 
@@ -181,7 +182,9 @@ class StreamLauncher(SnowflakeStream):
         self.current_state = current_state
         self._cursor_field = cursor_field
         self.where_clause = where_clause
+
         self.start_history_timestamp = start_history_timestamp
+
 
     @property
     def cursor_field(self):
@@ -412,3 +415,4 @@ class StreamLauncherChangeDataCapture(StreamLauncher):
             json_payload['schema'] = schema
 
         return json_payload
+      
