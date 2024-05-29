@@ -1,9 +1,10 @@
 import logging
 import uuid
 from collections import OrderedDict
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any, Iterable, List, Mapping, MutableMapping, Optional, Tuple, Union
 
+import pytz
 import requests
 from airbyte_cdk.sources import Source
 from airbyte_cdk.sources.streams import IncrementalMixin
@@ -16,9 +17,9 @@ from airbyte_cdk.sources.utils.slice_logger import SliceLogger
 from airbyte_protocol.models import SyncMode, Type, ConfiguredAirbyteStream
 
 from source_snowflake.schema_builder import mapping_snowflake_type_airbyte_type, format_field, date_and_time_snowflake_type_airbyte_type, \
-    string_snowflake_type_airbyte_type
+    string_snowflake_type_airbyte_type, convert_utc_to_time_zone, convert_utc_to_time_zone_date
 from .snowflake_parent_stream import SnowflakeStream
-from .util_streams import TableSchemaStream, StreamLauncher, PrimaryKeyStream, StreamLauncherChangeDataCapture
+from .util_streams import TableSchemaStream, StreamLauncher, PrimaryKeyStream, StreamLauncherChangeDataCapture, CurrentTimeZoneStream
 from ..snowflake_exceptions import NotEnabledChangeTrackingOptionError, ChangeDataCaptureNotSupportedTypeGeographyError
 
 
@@ -37,6 +38,8 @@ class TableStream(SnowflakeStream, IncrementalMixin):
         self._state_value = None
         self.checkpoint_time = datetime.now()
         self.ordered_mapping_names_types = None
+
+        self.where_clause = None
 
         self._geography_type_present = None
 
@@ -189,6 +192,7 @@ class TableStream(SnowflakeStream, IncrementalMixin):
                                          table_object=self.table_object,
                                          current_state=self.state,
                                          cursor_field=self.cursor_field,
+                                         where_clause=self.where_clause,
                                          authenticator=self.authenticator)
         post_response_iterable = stream_launcher.read_records(sync_mode=SyncMode.full_refresh)
         for post_response in post_response_iterable:
@@ -385,6 +389,7 @@ class TableChangeDataCaptureStream(TableStream):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.cdc_look_back_time_window = self._get_cdc_look_back_time_window()  # Unit of this duration is seconds
+        self.start_history_timestamp = None
 
     @property
     def cursor_field(self):
@@ -407,11 +412,18 @@ class TableChangeDataCaptureStream(TableStream):
         retention_time = self.table_object['retention_time']  # given by snowflakes in days
         creation_date = self.table_object['created_on']
 
-        delta_in_seconds_from_creation = datetime.now() - datetime.fromtimestamp(float(creation_date))
+        current_time_snowflake_time_zone = CurrentTimeZoneStream.get_current_time_snowflake_time_zone(self.url_base,
+                                                                                                      self.config,
+                                                                                                      self.authenticator)
+
+        creation_date_utc = datetime.fromtimestamp(float(creation_date), pytz.timezone("UTC"))
+        creation_date_utc_snowflake_time_zone = convert_utc_to_time_zone_date(creation_date_utc, CurrentTimeZoneStream.offset)
+
+        delta_in_seconds_from_creation = current_time_snowflake_time_zone - creation_date_utc_snowflake_time_zone
         retention_time_in_seconds = int(retention_time) * 3600 * 24  # converting days to seconds
 
-        # One additional second to avoid equality in case between now and creation date
-        return min(delta_in_seconds_from_creation.seconds, retention_time_in_seconds) + 1
+        # Minus one second to avoid equality in case between now and creation date
+        return min(delta_in_seconds_from_creation.seconds, retention_time_in_seconds) - 1
 
     def set_statement_handle(self):
         if self.statement_handle:
@@ -431,14 +443,22 @@ class TableChangeDataCaptureStream(TableStream):
                 "an object when uploading GEOGRAPHY data type to destination"
             )
 
+        current_time_snowflake_time_zone = CurrentTimeZoneStream.get_current_time_snowflake_time_zone(self.url_base,
+                                                                                                      self.config,
+                                                                                                      self.authenticator)
+
+        self.start_history_timestamp = current_time_snowflake_time_zone - timedelta(seconds=self.cdc_look_back_time_window)
+
         stream_launcher = StreamLauncherChangeDataCapture(url_base=self.url_base,
                                                           config=self.config,
                                                           table_object=self.table_object,
                                                           current_state=self.state,
                                                           cursor_field=self.cursor_field,
                                                           authenticator=self.authenticator,
-                                                          cdc_look_back_time_window=self.cdc_look_back_time_window)
+                                                          where_clause=self.where_clause,
+                                                          start_history_timestamp=self.start_history_timestamp)
         post_response_iterable = stream_launcher.read_records(sync_mode=SyncMode.full_refresh)
+
         for post_response in post_response_iterable:
             if post_response:
                 json_post_response = post_response[0]
@@ -516,8 +536,9 @@ class TableChangeDataCaptureStream(TableStream):
             stream_slice: Optional[Mapping[str, Any]] = None,
             stream_state: Optional[Mapping[str, Any]] = None,
     ) -> Iterable[StreamData]:
-        state_value_when_update_is_finished = datetime.now()
+
         for record in HttpStream.read_records(self, sync_mode, cursor_field, stream_slice, stream_state):
             yield record
 
-        self.state = {self.cursor_field: state_value_when_update_is_finished}
+        self.state = {self.cursor_field: self.start_history_timestamp}
+        print(self.state)

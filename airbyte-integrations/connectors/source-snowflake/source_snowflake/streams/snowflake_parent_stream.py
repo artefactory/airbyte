@@ -38,7 +38,7 @@ class SnowflakeStream(HttpStream, ABC):
 
     def __init__(self, authenticator=None):
         super().__init__(authenticator=authenticator)
-        self._authenticator= authenticator
+        self._authenticator = authenticator
         self._url_base = None
         self._config = None
         self._table_object = {}

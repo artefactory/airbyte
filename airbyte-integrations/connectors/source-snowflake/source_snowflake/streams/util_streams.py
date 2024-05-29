@@ -1,13 +1,14 @@
 import uuid
 from collections import OrderedDict
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any, Iterable, List, Mapping, MutableMapping, Optional, Union
 
 import requests
 from airbyte_protocol.models import SyncMode
 
 from source_snowflake.schema_builder import date_and_time_snowflake_type_airbyte_type, string_snowflake_type_airbyte_type, \
-    mapping_snowflake_type_airbyte_type, get_generic_type_from_schema_type
+    mapping_snowflake_type_airbyte_type, get_generic_type_from_schema_type, convert_time_zone_time_stamp_suffix_to_offset_hours, \
+    convert_utc_to_time_zone, convert_utc_to_time_zone_date
 from source_snowflake.streams.snowflake_parent_stream import SnowflakeStream
 
 
@@ -120,10 +121,53 @@ class PrimaryKeyStream(SnowflakeStream):
         return f"Current stream has this table object as constructor {self.table_object}"
 
 
+class CurrentTimeZoneStream(SnowflakeStream):
+    CURRENT_TIME_COLUMN_NAME = 'CURRENT_TIME'
+    _is_set = False
+    offset = None
+
+    def __init__(self, url_base, config, authenticator):
+        super().__init__(authenticator=authenticator)
+        self._url_base = url_base
+        self._config = config
+
+
+    @property
+    def statement(self):
+        return f'SELECT TO_TIMESTAMP_TZ(CURRENT_TIMESTAMP()) as {self.CURRENT_TIME_COLUMN_NAME}'
+
+    def parse_response(self, response: requests.Response, **kwargs) -> Iterable[Mapping]:
+        """
+        :return an iterable containing each record in the response
+        """
+        response_json = response.json()
+        column_names_to_be_extracted_from_records = [self.CURRENT_TIME_COLUMN_NAME]
+        index_of_columns_from_names = self.get_index_of_columns_from_names(response_json, column_names_to_be_extracted_from_records)
+
+        current_time_column_name_index = index_of_columns_from_names[self.CURRENT_TIME_COLUMN_NAME]
+        for record in response_json.get("data", []):
+            yield {'current_time': record[current_time_column_name_index]}
+
+
+    @classmethod
+    def set_off_set(cls, url_base, config, authenticator):
+        if not cls._is_set:
+            current_time_zone_stream = cls(url_base, config, authenticator)
+            current_time_record = next(current_time_zone_stream.read_records(SyncMode.full_refresh))
+            current_time_with_time_zone = current_time_record['current_time']
+            current_time_time_zone_suffix = current_time_with_time_zone.split(' ')[1]
+            cls.offset = convert_time_zone_time_stamp_suffix_to_offset_hours(current_time_time_zone_suffix)
+
+    @classmethod
+    def get_current_time_snowflake_time_zone(cls, url_base, config, authenticator):
+        cls.set_off_set(url_base, config, authenticator)
+        current_time_date_utc = datetime.now(timezone.utc)
+        return convert_utc_to_time_zone_date(current_time_date_utc, cls.offset)
+
 class StreamLauncher(SnowflakeStream):
 
     def __init__(self, url_base, config, table_object, current_state, cursor_field, authenticator, where_clause=None,
-                 cdc_look_back_time_window=None):
+                 start_history_timestamp=None):
         super().__init__(authenticator=authenticator)
         self._json_schema_set = False
         self._url_base = url_base
@@ -137,7 +181,7 @@ class StreamLauncher(SnowflakeStream):
         self.current_state = current_state
         self._cursor_field = cursor_field
         self.where_clause = where_clause
-        self.cdc_look_back_time_window = cdc_look_back_time_window
+        self.start_history_timestamp = start_history_timestamp
 
     @property
     def cursor_field(self):
@@ -293,9 +337,10 @@ class StreamLauncher(SnowflakeStream):
 class StreamLauncherChangeDataCapture(StreamLauncher):
 
     def __init__(self, url_base, config, table_object, current_state, cursor_field, authenticator, where_clause=None,
-                 cdc_look_back_time_window=None):
+                 start_history_timestamp=None):
         super().__init__(url_base, config, table_object, current_state, cursor_field, authenticator, where_clause,
-                         cdc_look_back_time_window)
+                         start_history_timestamp)
+        self.start_history_timestamp = start_history_timestamp
 
     @property
     def statement(self):
@@ -303,16 +348,11 @@ class StreamLauncherChangeDataCapture(StreamLauncher):
         schema = self.table_object["schema"]
         table = self.table_object["table"]
 
-        if self.cdc_look_back_time_window is None:
-            raise ValueError(f'{self.cdc_look_back_time_window} should be set. Make sure you have the rights '
-                             f'to read this information from Snowflake.')
+        if self.start_history_timestamp is None:
+            raise ValueError(f'{self.start_history_timestamp} should be set to read history')
 
-        history_date = datetime.now() - timedelta(seconds=self.cdc_look_back_time_window)
-
-        history_date += timedelta(seconds=1)
-        history_timestamp = history_date.strftime("%Y-%m-%d %H:%M:%S")
         statement = (f'SELECT * FROM "{database}"."{schema}"."{table}" '
-                     f'CHANGES(INFORMATION => DEFAULT) AT(TIMESTAMP => TO_TIMESTAMP_NTZ(\'{history_timestamp}\'))')
+                     f'CHANGES(INFORMATION => DEFAULT) AT(TIMESTAMP => TO_TIMESTAMP_LTZ(\'{self.start_history_timestamp}\'))')
 
         if self.where_clause:
             statement = f'{statement} WHERE {self.where_clause}'

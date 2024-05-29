@@ -109,14 +109,14 @@ mapping_snowflake_type_airbyte_type = {
 }
 
 
-def convert_tz_time_stamp_suffix_to_offset_hours(tz_time_stamp_suffix):
+def convert_time_zone_time_stamp_suffix_to_offset_hours(tz_time_stamp_suffix):
     raw_offset_minutes = int(tz_time_stamp_suffix)
     delta = raw_offset_minutes / 60
-    offset_minutes = delta - 24
-    return offset_minutes
+    offset_hours = delta - 24
+    return offset_hours
 
 
-def convert_utc_to_timezone(utc_date, offset_hours):
+def convert_utc_to_time_zone(utc_date, offset_hours):
     offset = timedelta(hours=offset_hours)
     local_date = utc_date + offset
     sign = '+' if offset_hours >= 0 else '-'
@@ -126,6 +126,17 @@ def convert_utc_to_timezone(utc_date, offset_hours):
     offset_str = f"{sign}{abs_offset_hours:02}:{abs_offset_minutes:02}"
 
     return local_date.strftime(f'%Y-%m-%dT%H:%M:%S{offset_str}')
+
+def convert_utc_to_time_zone_date(utc_date, offset_hours):
+    offset = timedelta(hours=offset_hours)
+    local_date = utc_date + offset
+    sign = '+' if offset_hours >= 0 else '-'
+    abs_offset_hours = int(abs(offset_hours))
+    abs_offset_minutes = int((abs(offset_hours) * 60) % 60)
+
+    offset_str = f"{sign}{abs_offset_hours:02}:{abs_offset_minutes:02}"
+
+    return datetime.strptime(local_date.strftime(f'%Y-%m-%dT%H:%M:%S{offset_str}'), '%Y-%m-%dT%H:%M:%S%z')
 
 
 def format_field(field_value, field_type):
@@ -140,10 +151,10 @@ def format_field(field_value, field_type):
         try:
             if isinstance(field_value, str) and ' ' in field_value:  # time_stamp with timezone
                 unix_time_stamp = float(field_value.split(' ')[0])
-                tz_time_stamp_suffix = field_value.split(' ')[1]
-                offset_hours = convert_tz_time_stamp_suffix_to_offset_hours(tz_time_stamp_suffix)
+                time_zone_time_stamp_suffix = field_value.split(' ')[1]
+                offset_hours = convert_time_zone_time_stamp_suffix_to_offset_hours(time_zone_time_stamp_suffix)
                 utc_date = datetime.fromtimestamp(unix_time_stamp, pytz.timezone("UTC"))
-                return convert_utc_to_timezone(utc_date, offset_hours)
+                return convert_utc_to_time_zone(utc_date, offset_hours)
             else:
                 ts = float(field_value)
                 dt = datetime.fromtimestamp(ts, pytz.timezone("UTC"))
