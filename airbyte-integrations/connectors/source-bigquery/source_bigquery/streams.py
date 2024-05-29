@@ -63,8 +63,6 @@ class BigqueryStream(HttpStream, ABC):
 
     def next_page_token(self, response: requests.Response, **kwargs) -> Optional[Mapping[str, Any]]:
         next_page = response.json().get("pageToken", None)
-        # import ipdb
-        # ipdb.set_trace()
         return next_page
 
     def process_records(self, record) -> Iterable[Mapping[str, Any]]:
@@ -585,7 +583,7 @@ class BigqueryCDCStream(BigqueryResultStream, IncrementalMixin):
 
     def _chunk_dates(self, start_date: datetime, end_date: datetime, table_start: datetime) -> Iterable[Tuple[datetime, datetime]]:
         slice_range = 1 #TODO: get from config
-        step = timedelta(hours=slice_range)
+        step = timedelta(minutes=slice_range)
         new_start_date = start_date
         if start_date == end_date:
             yield start_date, start_date + step
