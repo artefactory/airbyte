@@ -391,7 +391,6 @@ class TableChangeDataCaptureStream(TableStream):
         super().__init__(**kwargs)
         self.cdc_look_back_time_window = self._get_cdc_look_back_time_window()  # Unit of this duration is seconds
         self.sync_mode = SyncMode.full_refresh
-        self._next_state = None
 
     @property
     def cursor_field(self):
@@ -452,7 +451,6 @@ class TableChangeDataCaptureStream(TableStream):
         current_time_snowflake_time_zone = CurrentTimeZoneStream.get_current_time_snowflake_time_zone(self.url_base,
                                                                                                       self.config,
                                                                                                       self.authenticator)
-        self._next_state = current_time_snowflake_time_zone
 
         earliest_possible_history_timestamp = current_time_snowflake_time_zone - timedelta(seconds=self.cdc_look_back_time_window)
 
@@ -467,9 +465,11 @@ class TableChangeDataCaptureStream(TableStream):
         if not self._state_value:
             # TODO: add log to alert user that full refresh is launched because first time cdc
             self.sync_mode = SyncMode.full_refresh
-            start_history_timestamp = earliest_possible_history_timestamp
-        else:
-            start_history_timestamp = self._state_value
+
+        start_history_timestamp = self._state_value
+
+        # Updating state
+        self._state_value = current_time_snowflake_time_zone
 
         stream_launcher = StreamLauncherChangeDataCapture(url_base=self.url_base,
                                                           config=self.config,
@@ -518,7 +518,7 @@ class TableChangeDataCaptureStream(TableStream):
                 ordered_mapping_names_types[column_name] = column_type.upper()
 
         ordered_mapping_names_types['updated_at'] = 'TIMESTAMP_TZ'
-        current_time = self._next_state
+        current_time = self._state_value
 
         if self.is_full_refresh:
             # Fill in CDC values with None in case of full refresh
@@ -596,4 +596,4 @@ class TableChangeDataCaptureStream(TableStream):
         for record in HttpStream.read_records(self, sync_mode, cursor_field, stream_slice, stream_state):
             yield record
 
-        self.state = {self.cursor_field: self._next_state}
+        self.state = {self.cursor_field: self._state_value}
