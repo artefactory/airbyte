@@ -529,6 +529,10 @@ class TableChangeDataCaptureStream(TableStream):
                    for column_name, column_value in zip(ordered_mapping_names_types.keys(), enriched_record)}
 
     def get_json_schema(self) -> Mapping[str, Any]:
+
+        if self._json_schema_set:
+            return self._json_schema
+
         properties = {}
         json_schema = {
             "$schema": "https://json-schema.org/draft-07/schema#",
@@ -554,7 +558,10 @@ class TableChangeDataCaptureStream(TableStream):
         for column_name, column_type in StreamLauncherChangeDataCapture.mapping_cdc_metadata_columns_to_types.items():
             properties[column_name] = mapping_snowflake_type_airbyte_type[column_type.upper()]
 
-        return json_schema
+        self._json_schema = json_schema
+        self._json_schema_set = True
+
+        return self._json_schema
 
     def stream_slices(self, stream_state: Mapping[str, Any] = None, cursor_field=None, sync_mode=None, **kwargs) -> Iterable[
         Optional[Mapping[str, any]]]:
