@@ -119,13 +119,17 @@ class SourceBigquery(ConcurrentSourceAdapter):
 
         :param config: A Mapping of the user input configuration as defined in the connector spec.
         """
+        project_id = config["project_id"]
         self._auth = BigqueryAuth(config)
         streams = config.get("streams", [])
         sync_method = config["replication_method"]["method"]
         fallback_start = datetime.now(tz=pytz.timezone("UTC")) - timedelta(days=7)
         partitioner = config.get("partitioner", "_airbyte_extracted_at") #TODO: default to none
         streams_catalog = []
-        
+        for stream in streams:
+                dataset_id, table_id = stream['parent_stream'].split(".")
+                table_obj = TableChangeHistory(project_id, dataset_id, table_id, stream["name"], stream["where_clause"], fallback_start=fallback_start, authenticator=self._auth)
+                streams_catalog.append(table_obj.stream)
         for dataset in BigqueryDatasets(project_id=config["project_id"], authenticator=self._auth).read_records(sync_mode=SyncMode.full_refresh):
             dataset_id = dataset.get("datasetReference")["datasetId"]
             # list and process each table under each base to generate the JSON Schema
@@ -135,7 +139,7 @@ class SourceBigquery(ConcurrentSourceAdapter):
                     table_obj = IncrementalQueryResult(config["project_id"], dataset_id, table_id, fallback_start=fallback_start, partitioner=partitioner,authenticator=self._auth)
                 else:
                     try:
-                        table_obj = TableChangeHistory(config["project_id"], dataset_id, table_id, fallback_start, authenticator=self._auth)
+                        table_obj = TableChangeHistory(project_id, dataset_id, table_id, fallback_start=fallback_start, authenticator=self._auth)
                         next(table_obj.read_records(sync_mode=SyncMode.full_refresh))
                     except Exception as e:
                         self.logger.warn(str(e))
