@@ -6,7 +6,7 @@
 import logging
 import sys
 from abc import ABC
-from typing import Any, Iterable, List, Mapping, MutableMapping, Optional, Tuple
+from typing import Any, Iterable, List, Mapping, MutableMapping, Optional, Tuple, Union
 
 import requests
 import pytz
@@ -550,7 +550,6 @@ class IncrementalQueryResult(BigqueryResultStream):
 class BigqueryCDCStream(BigqueryResultStream, IncrementalMixin):
     """
     """
-    primary_key = None
     state_checkpoint_interval = None
 
     def __init__(self, stream_path, stream_name, project_id, stream_schema, stream_request=None, fallback_start=None,**kwargs):
@@ -561,6 +560,7 @@ class BigqueryCDCStream(BigqueryResultStream, IncrementalMixin):
         self.fallback_start = fallback_start
         self.project_id = project_id
         self.query_job = None
+        self._is_primary_key_set = False
         self.dataset_id, self.table_id = stream_name.split(".")
         cursor_column = next(key for key, value in CHANGE_FIELDS.items() if value == self.cursor_field)
         self.first_record = TableQueryRecord(project_id, stream_name, "ASC", cursor_column, **kwargs)
@@ -596,6 +596,34 @@ class BigqueryCDCStream(BigqueryResultStream, IncrementalMixin):
     def supports_incremental(self) -> bool:
         return True
 
+    @property
+    def primary_key(self) -> Optional[Union[str, List[str], List[List[str]]]]:
+        """
+        :return: string if single primary key, list of strings if composite primary key,
+        list of list of strings if composite primary key consisting of nested fields.
+          If the stream has no primary keys, return None.
+        """
+        if not self._is_primary_key_set:
+            self.set_primary_key()
+        return self._primary_key
+    
+    def set_primary_key(self):
+        self._primary_key = self._get_primary_key()
+        self._is_primary_key_set = True
+
+    def _get_primary_key(self):
+        primary_key_stream = InformationSchemaStream(self.project_id, self.dataset_id, self.table_id, authenticator=self._auth)
+        primary_key_result = []
+        for record in primary_key_stream.read_records(sync_mode=SyncMode.full_refresh):
+            if record["constraint_name"] == f"{self.table_id}.pk$":
+                primary_key_result.append(record['column_name'])
+        if not len(primary_key_result):
+            return None
+        elif len(primary_key_result) == 1:
+            return primary_key_result[0]
+        else:
+            return primary_key_result
+        
     def path(self, **kwargs) -> str:
         """
         Documentation: https://cloud.google.com/bigquery/docs/reference/rest/v2/jobs/query
@@ -877,8 +905,10 @@ class InformationSchemaStream(JobsQueryStream):
     """
     primary_key = None
 
-    def __init__(self, project_id: list, dataset_id: str, table_id: str, page_token: str, **kwargs):
+    def __init__(self, project_id: list, dataset_id: str, table_id: str, **kwargs):
         self.project_id = project_id
+        self.dataset_id = dataset_id
+        self.table_id = table_id
         self.stream_name = project_id + "." + dataset_id + ".INFORMATION_SCHEMA.KEY_COLUMN_USAGE." + table_id
         super().__init__(project_id, dataset_id, table_id, **kwargs)
 
@@ -891,16 +921,35 @@ class InformationSchemaStream(JobsQueryStream):
             return SchemaHelpers.get_json_schema(table)
         return {}
     
+    def request_body_json(
+        self,
+        stream_state: Optional[Mapping[str, Any]],
+        stream_slice: Optional[Mapping[str, Any]] = None,
+        next_page_token: Optional[Mapping[str, Any]] = None,
+    ) -> Optional[Mapping[str, Any]]:
+        query_string = f"SELECT * FROM `{self.project_id}.{self.dataset_id}.INFORMATION_SCHEMA.KEY_COLUMN_USAGE` WHERE table_name='{self.table_id}';"
+        # import ipdb
+        # ipdb.set_trace()
+        request_body = {
+            "kind": "bigquery#queryRequest",
+            "query": query_string,
+            "useLegacySql": False
+            }
+        return request_body
+    
     def process_records(self, record) -> Iterable[Mapping[str, Any]]:
         fields = record.get("schema")["fields"]
-        rows = record.get("rows", [])
-        for row in rows:
-            data = row.get("f")
-            yield {
-                "_bigquery_table_id": record.get("jobReference")["jobId"],
-                "_bigquery_created_time": None, #TODO: Update this to row insertion time
-                **{CHANGE_FIELDS.get(element["name"], element["name"]): SchemaHelpers.format_field(data[fields.index(element)]["v"], element["type"]) for element in fields},
-            }
+        try:
+            rows = record.get("rows", [])
+            for row in rows:
+                data = row.get("f")
+                yield {
+                    "_bigquery_table_id": record.get("jobReference")["jobId"],
+                    "_bigquery_created_time": None, #TODO: Update this to row insertion time
+                    **{CHANGE_FIELDS.get(element["name"], element["name"]): SchemaHelpers.format_field(data[fields.index(element)]["v"], element["type"]) for element in fields},
+                }
+        except KeyError:
+            yield {}
 
     def parse_response(self, response: requests.Response, **kwargs) -> Iterable[Mapping]:
         records = response.json()
