@@ -53,12 +53,16 @@ class TableCatalogStream(SnowflakeStream):
         change_tracking_index = index_of_columns_from_names[self.CHANGE_TRACKING_COLUMN]
 
         for record in response_json.get("data", []):
-            yield {'schema': record[schema_name_index],
-                   'table': record[database_name_index],
-                   'retention_time': record[retention_time_index],
-                   'created_on': record[created_on_index],
-                   'change_tracking': record[change_tracking_index],
-                   }
+            try:
+                yield {'schema': record[schema_name_index],
+                       'table': record[database_name_index],
+                       'retention_time': record[retention_time_index],
+                       'created_on': record[created_on_index],
+                       'change_tracking': record[change_tracking_index],
+                       }
+            except Exception:
+                error_message = 'Unexpected error while reading record'
+                emit_airbyte_error_message(error_message)
 
 
 class TableSchemaStream(SnowflakeStream):
@@ -83,9 +87,13 @@ class TableSchemaStream(SnowflakeStream):
         response_json = response.json()
         # checks in the response nested fields response -> resultSetMetaData -> rowType
         for row_type in response_json.get('resultSetMetaData', {'rowType': []}).get('rowType', []):
-            yield {'column_name': row_type['name'],
-                   'type': row_type['type'],
-                   'extTypeName': row_type.get('extTypeName', None), }  # Special attribute in metadata to flag geography data
+            try:
+                yield {'column_name': row_type['name'],
+                       'type': row_type['type'],
+                       'extTypeName': row_type.get('extTypeName', None), }  # Special attribute in metadata to flag geography data
+            except Exception:
+                error_message = 'Unexpected error while reading record'
+                emit_airbyte_error_message(error_message)
 
     def __str__(self):
         return f"Current stream has this table object as constructor {self.table_object}"
@@ -118,7 +126,11 @@ class PrimaryKeyStream(SnowflakeStream):
 
         primary_column_name_index = index_of_columns_from_names[self.PRIMARY_COLUMN_NAME]
         for record in response_json.get("data", []):
-            yield {'primary_key': record[primary_column_name_index]}
+            try:
+                yield {'primary_key': record[primary_column_name_index]}
+            except Exception:
+                error_message = 'Unexpected error while reading record'
+                emit_airbyte_error_message(error_message)
 
     def __str__(self):
         return f"Current stream has this table object as constructor {self.table_object}"
@@ -149,7 +161,11 @@ class CurrentTimeZoneStream(SnowflakeStream):
 
         current_time_column_name_index = index_of_columns_from_names[self.CURRENT_TIME_COLUMN_NAME]
         for record in response_json.get("data", []):
-            yield {'current_time': record[current_time_column_name_index]}
+            try:
+                yield {'current_time': record[current_time_column_name_index]}
+            except Exception:
+                error_message = 'Unexpected error while reading record'
+                emit_airbyte_error_message(error_message)
 
 
     @classmethod

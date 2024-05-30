@@ -231,8 +231,12 @@ class TableStream(SnowflakeStream, IncrementalMixin):
                                                             response_json.get('resultSetMetaData', {'rowType': []}).get('rowType', [])])
 
         for record in response_json.get("data", []):
-            yield {column_name: format_field(column_value, self.ordered_mapping_names_types[column_name])
-                   for column_name, column_value in zip(self.ordered_mapping_names_types.keys(), record)}
+            try:
+                yield {column_name: format_field(column_value, self.ordered_mapping_names_types[column_name])
+                       for column_name, column_value in zip(self.ordered_mapping_names_types.keys(), record)}
+            except Exception:
+                error_message = 'Unexpected error while reading record'
+                emit_airbyte_error_message(error_message)
 
     def read_records(
             self,
@@ -536,8 +540,13 @@ class TableChangeDataCaptureStream(TableStream):
 
         for record in response_json.get("data", []):
             enriched_record = record + additional_data
-            yield {column_name: format_field(column_value, ordered_mapping_names_types[column_name])
+            try:
+                yield {column_name: format_field(column_value, ordered_mapping_names_types[column_name])
                    for column_name, column_value in zip(ordered_mapping_names_types.keys(), enriched_record)}
+
+            except Exception:
+                error_message = 'Unexpected error while reading record'
+                emit_airbyte_error_message(error_message)
 
     def get_json_schema(self) -> Mapping[str, Any]:
 
@@ -602,6 +611,8 @@ class TableChangeDataCaptureStream(TableStream):
     ) -> Iterable[StreamData]:
 
         for record in HttpStream.read_records(self, sync_mode, cursor_field, stream_slice, stream_state):
-            yield record
-
-        self.state = {self.cursor_field: self._state_value}
+            try:
+                yield record
+            except Exception:
+                error_message = 'Unexpected error while reading record'
+                emit_airbyte_error_message(error_message)
