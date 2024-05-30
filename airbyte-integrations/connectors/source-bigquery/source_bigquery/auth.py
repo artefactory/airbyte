@@ -26,8 +26,8 @@ class BigqueryOAuth(TokenAuthenticator):
                                                         credentials_json["private_key_id"]),\
                                                         scopes=SCOPES, \
                                                         private_key_id=credentials_json["private_key_id"], client_id=credentials_json["client_id"])
-        h = httplib2.Http()
-        self._credentials.authorize(h)
+        self._http = httplib2.Http()
+        self._credentials.authorize(self._http)
         self._token = str(self._credentials.get_access_token().access_token)
         super().__init__(self._token)
 
@@ -41,7 +41,7 @@ class BigqueryOAuth(TokenAuthenticator):
             str: The current access_token, updated if it was previously expired.
         """
         if self._credentials.access_token_expired:
-            self._credentials.refresh()
+            self._credentials.refresh(self._http)
             self._token = str(self._credentials.get_access_token().access_token)
             # TODO: emit airbyte_cdk.sources.message
         return self._token
