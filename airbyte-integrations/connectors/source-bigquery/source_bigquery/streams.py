@@ -200,7 +200,7 @@ class BigqueryResultStream(BigqueryStream):
     @property
     def http_method(self) -> str:
         return "POST"
-
+    
     def request_body_json(
         self,
         stream_state: Optional[Mapping[str, Any]],
@@ -833,6 +833,63 @@ class GetQueryResults(BigqueryStream):
         next_page_token: Optional[Mapping[str, Any]] = None,
     ) -> Optional[Mapping[str, Any]]:
         return None
+    
+    def process_records(self, record) -> Iterable[Mapping[str, Any]]:
+        fields = record.get("schema")["fields"]
+        rows = record.get("rows", [])
+        for row in rows:
+            data = row.get("f")
+            yield {
+                "_bigquery_table_id": record.get("jobReference")["jobId"],
+                "_bigquery_created_time": None, #TODO: Update this to row insertion time
+                **{CHANGE_FIELDS.get(element["name"], element["name"]): SchemaHelpers.format_field(data[fields.index(element)]["v"], element["type"]) for element in fields},
+            }
+
+    def parse_response(self, response: requests.Response, **kwargs) -> Iterable[Mapping]:
+        records = response.json()
+        yield from self.process_records(records)
+
+
+class JobsQueryStream(BigqueryStream):
+    """
+    """
+    def __init__(self, project_id: str, dataset_id: str, table_id, **kwargs):
+        stream_name = dataset_id + "." + table_id
+        self.project_id = project_id
+        super().__init__(self.path(), stream_name, self.get_json_schema, **kwargs)
+
+    @property
+    def http_method(self) -> str:
+        return "POST"
+    
+    def path(self, **kwargs) -> str:
+        """
+        Documentation: https://cloud.google.com/bigquery/docs/reference/rest/v2/jobs/
+        """
+        return f"/bigquery/v2/projects/{self.project_id}/queries"
+    
+    def get_json_schema(self) -> Mapping[str, Any]:
+        return {}
+    
+
+class InformationSchemaStream(JobsQueryStream):
+    """
+    """
+    primary_key = None
+
+    def __init__(self, project_id: list, dataset_id: str, table_id: str, page_token: str, **kwargs):
+        self.project_id = project_id
+        self.stream_name = project_id + "." + dataset_id + ".INFORMATION_SCHEMA.KEY_COLUMN_USAGE." + table_id
+        super().__init__(project_id, dataset_id, table_id, **kwargs)
+
+    @property
+    def name(self):
+        return self.stream_name
+
+    def get_json_schema(self) -> Mapping[str, Any]:
+        for table in self.read_records(sync_mode=SyncMode.full_refresh):
+            return SchemaHelpers.get_json_schema(table)
+        return {}
     
     def process_records(self, record) -> Iterable[Mapping[str, Any]]:
         fields = record.get("schema")["fields"]
