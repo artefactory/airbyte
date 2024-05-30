@@ -1,9 +1,21 @@
 #
 # Copyright (c) 2024 Airbyte, Inc., all rights reserved.
 #
+import logging
 import traceback
-from datetime import datetime
-from typing import Any, List, Mapping, Tuple
+from datetime import datetime, timedelta
+from typing import Any, List, Mapping, Tuple, Iterable, Optional, MutableMapping
+
+import pytz
+from airbyte_cdk.logger import AirbyteLogFormatter
+from airbyte_cdk.sources.concurrent_source.concurrent_source import ConcurrentSource
+from airbyte_cdk.sources.concurrent_source.concurrent_source_adapter import ConcurrentSourceAdapter
+from airbyte_cdk.sources.connector_state_manager import ConnectorStateManager
+from airbyte_cdk.sources.message import InMemoryMessageRepository
+from airbyte_cdk.sources.source import TState
+from airbyte_cdk.sources.streams.concurrent.adapters import StreamFacade
+from airbyte_cdk.sources.streams.concurrent.cursor import FinalStateCursor, CursorField, ConcurrentCursor
+from airbyte_cdk.sources.streams.concurrent.state_converters.datetime_stream_state_converter import IsoMillisConcurrentStreamStateConverter
 
 from source_snowflake.streams.util_streams import TableCatalogStream
 from source_snowflake.streams.table_stream import TableStream, TableChangeDataCaptureStream
@@ -11,19 +23,42 @@ from source_snowflake.streams.check_connection import CheckConnectionStream
 import requests
 from airbyte_cdk.sources import AbstractSource
 from airbyte_cdk.sources.streams import Stream
-from airbyte_protocol.models import SyncMode, AirbyteMessage, AirbyteTraceMessage, TraceType, AirbyteErrorTraceMessage, FailureType
+from airbyte_protocol.models import SyncMode, AirbyteMessage, AirbyteTraceMessage, TraceType, AirbyteErrorTraceMessage, FailureType, Level, \
+    ConfiguredAirbyteCatalog
 from airbyte_cdk.models import Type as AirbyteType
 from .authenticator import SnowflakeJwtAuthenticator
 from .snowflake_exceptions import InconsistentPushDownFilterParentStreamNameError, NotEnabledChangeTrackingOptionError, \
     DuplicatedPushDownFilterStreamNameError, IncorrectHostFormat, emit_airbyte_error_message, UnknownUpdateMethodError
 from .streams.push_down_filter_stream import PushDownFilterStream, PushDownFilterChangeDataCaptureStream
 
+# Concurrency parameters
+_DEFAULT_CONCURRENCY = 10
+_MAX_CONCURRENCY = 10
 
-# Source
-class SourceSnowflake(AbstractSource):
+
+class SourceSnowflake(ConcurrentSourceAdapter):
     SNOWFLAKE_URL_SUFFIX = ".snowflakecomputing.com"
     HTTP_PREFIX = "https://"
     update_methods = ('standard', 'history')
+    logger = logging.getLogger("airbyte")
+    streams_catalog: Iterable[Mapping[str, Any]] = []
+    _auth = None
+    _SLICE_BOUNDARY_FIELDS = ("start", "end")
+
+    message_repository = InMemoryMessageRepository(Level(AirbyteLogFormatter.level_mapping[logger.level]))
+
+    def __init__(self, catalog: Optional[ConfiguredAirbyteCatalog], config: Optional[Mapping[str, Any]], state: Optional[TState], **kwargs):
+        if config:
+            concurrency_level = min(config.get("num_workers", _DEFAULT_CONCURRENCY), _MAX_CONCURRENCY)
+        else:
+            concurrency_level = _DEFAULT_CONCURRENCY
+        self.logger.info(f"Using concurrent cdk with concurrency level {concurrency_level}")
+        concurrent_source = ConcurrentSource.create(
+            concurrency_level, concurrency_level // 2, self.logger, self._slice_logger, self.message_repository
+        )
+        super().__init__(concurrent_source)
+        self.catalog = catalog
+        self.state = state
 
     def check_connection(self, logger, config) -> Tuple[bool, any]:
         """
@@ -42,6 +77,7 @@ class SourceSnowflake(AbstractSource):
             self.check_push_down_filter_name_unicity(config=config)
             url_base = self.format_url_base(host)
             authenticator = SnowflakeJwtAuthenticator.from_config(config)
+            self._auth = authenticator
 
             self.check_existence_of_at_least_one_stream(url_base=url_base, config=config, authenticator=authenticator)
             self.check_push_down_filters_parent_stream_consistency(url_base=url_base, config=config, authenticator=authenticator)
@@ -155,6 +191,7 @@ class SourceSnowflake(AbstractSource):
         host = config['host']
         url_base = self.format_url_base(host)
         authenticator = SnowflakeJwtAuthenticator.from_config(config)
+        self._auth = authenticator
         table_catalog_stream = TableCatalogStream(url_base=url_base,
                                                   config=config,
                                                   authenticator=authenticator)
@@ -175,7 +212,59 @@ class SourceSnowflake(AbstractSource):
                                                                         config, url_base, authenticator, standard_streams)
         streams = list(standard_streams.values()) + push_down_filters_streams
 
-        return streams
+        state_manager = ConnectorStateManager(stream_instance_map={stream.name: stream for stream in streams}, state=self.state)
+
+        fallback_start = datetime.now(tz=pytz.timezone("UTC")) - timedelta(days=7)
+        partitioner = config.get("partitioner", None)
+
+        return [
+            self._to_concurrent(
+                stream,
+                fallback_start,
+                timedelta(minutes=1),
+                state_manager,
+                partitioner
+            )
+            for stream in streams
+        ]
+
+    def _to_concurrent(
+        self, stream: Stream, fallback_start: datetime, slice_range: timedelta, state_manager: ConnectorStateManager, partitioner: str
+    ) -> Stream:
+        if self._stream_state_is_full_refresh(stream.state):
+            return StreamFacade.create_from_stream(
+                stream,
+                self,
+                self.logger,
+                self._create_empty_state(),
+                FinalStateCursor(stream_name=stream.name, stream_namespace=stream.namespace, message_repository=self.message_repository),
+            )
+        state = state_manager.get_stream_state(stream.name, stream.namespace)
+
+        if stream.cursor_field:
+            cursor_field = CursorField(stream.cursor_field) if isinstance(stream.cursor_field, str) else CursorField(stream.cursor_field[0])
+        else:
+            #TODO: check partitioner exists in schema
+            cursor_field = CursorField(partitioner)
+        converter = IsoMillisConcurrentStreamStateConverter()
+        cursor = ConcurrentCursor(
+            stream.name,
+            stream.namespace,
+            state,
+            self.message_repository,
+            state_manager,
+            converter,
+            cursor_field,
+            self._SLICE_BOUNDARY_FIELDS,
+            fallback_start,
+            converter.get_end_provider(),
+            timedelta(minutes=1),
+            slice_range,
+        )
+        return StreamFacade.create_from_stream(stream, self, self.logger, state, cursor)
+
+    def _create_empty_state(self) -> MutableMapping[str, Any]:
+        return {}
 
     @classmethod
     def _get_standard_streams(cls, stream_class, config, url_base, table_catalog_stream, authenticator):

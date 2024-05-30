@@ -126,10 +126,11 @@ class TableStream(SnowflakeStream, IncrementalMixin):
     @property
     def primary_key(self) -> Optional[Union[str, List[str], List[List[str]]]]:
         """
-        :return: string if single primary key, list of strings if composite primary key, list of list of strings if composite primary key consisting of nested fields.
+        :return: string if single primary key, list of strings if composite primary key,
+        list of list of strings if composite primary key consisting of nested fields.
           If the stream has no primary keys, return None.
         """
-        if not self._is_primary_key_set and self.authenticator.get_auth_header():
+        if not self._is_primary_key_set:
             self.set_primary_key()
 
         return self._primary_key
