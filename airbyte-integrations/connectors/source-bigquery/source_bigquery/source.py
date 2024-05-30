@@ -195,5 +195,3 @@ class SourceBigquery(ConcurrentSourceAdapter):
 
     def _create_empty_state(self) -> MutableMapping[str, Any]:
         return {}
-        # for stream in streams_catalog:
-        #     yield stream
