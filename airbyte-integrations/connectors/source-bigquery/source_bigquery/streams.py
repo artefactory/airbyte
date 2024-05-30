@@ -485,7 +485,7 @@ class BigqueryIncrementalStream(BigqueryResultStream, IncrementalMixin):
             data = row.get("f")
             formated_data = {
                 "_bigquery_table_id": record.get("jobReference")["jobId"],
-                "_bigquery_created_time": None, #TODO: Update this to row insertion time
+                "_bigquery_created_time": datetime.now(tz=pytz.timezone("UTC")).isoformat(timespec='microseconds'), #TODO: Update this to row insertion time
                 **{CHANGE_FIELDS.get(element["name"], element["name"]): SchemaHelpers.format_field(data[fields.index(element)]["v"], element["type"]) for element in fields},
             }
             self._updated_state(self.state, formated_data)
@@ -739,7 +739,7 @@ class BigqueryCDCStream(BigqueryResultStream, IncrementalMixin):
                 data = row.get("f")
                 formated_data = {
                     "_bigquery_table_id": job_id,
-                    "_bigquery_created_time": None, #TODO: Update this to row insertion time
+                    "_bigquery_created_time": datetime.now(tz=pytz.timezone("UTC")).isoformat(timespec='microseconds'), #TODO: Update this to row insertion time
                     **{CHANGE_FIELDS.get(element["name"], element["name"]): SchemaHelpers.format_field(data[fields.index(element)]["v"], element["type"]) for element in fields},
                 }
                 yield formated_data
@@ -965,13 +965,11 @@ class InformationSchemaStream(JobsQueryStream):
     
     def process_records(self, record) -> Iterable[Mapping[str, Any]]:
         try:
-            fields = record["schema"]["fields"]
+            fields = record.get("schema")["fields"]
             rows = record.get("rows", [])
             for row in rows:
                 data = row.get("f")
                 yield {
-                    "_bigquery_table_id": record.get("jobReference")["jobId"],
-                    "_bigquery_created_time": None, #TODO: Update this to row insertion time
                     **{CHANGE_FIELDS.get(element["name"], element["name"]): SchemaHelpers.format_field(data[fields.index(element)]["v"], element["type"]) for element in fields},
                 }            
         except TypeError as e:
