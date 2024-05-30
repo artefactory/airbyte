@@ -349,12 +349,13 @@ class BigqueryIncrementalStream(BigqueryResultStream, IncrementalMixin):
     primary_key = None
     state_checkpoint_interval = None
 
-    def __init__(self, project_id, stream_path, stream_name, stream_schema, stream_request=None, partitioner: str=None, **kwargs):
+    def __init__(self, project_id, stream_path, stream_name, stream_schema, fallback_start:str, stream_request=None, partitioner: str=None,**kwargs):
         super().__init__(stream_path, stream_name, stream_schema, stream_request, **kwargs)
         self.request_body = stream_request
         self._cursor = None
         self._checkpoint_time = datetime.now()
         self.partitioner = partitioner
+        self.fallback_start = fallback_start
         self.first_record = TableQueryRecord(project_id, stream_name, "ASC", partitioner, **kwargs)
         self.last_record = TableQueryRecord(project_id, stream_name, "DESC", partitioner, **kwargs)
 
@@ -402,19 +403,48 @@ class BigqueryIncrementalStream(BigqueryResultStream, IncrementalMixin):
             self._checkpoint_time = datetime.now()
         return self.state
 
+    def _extract_borders(self):
+        start_time = next(self.first_record.read_records(sync_mode=SyncMode.full_refresh)).get(self.partitioner, None)
+        end_time = next(self.last_record.read_records(sync_mode=SyncMode.full_refresh)).get(self.partitioner, None)
+        if isinstance(start_time, str):
+            start_time = datetime.strptime(start_time, '%Y-%m-%dT%H:%M:%S.%f%z')
+        if isinstance(end_time, str):
+            end_time = datetime.strptime(end_time, '%Y-%m-%dT%H:%M:%S.%f%z')
+        return start_time, end_time
+
+    def _chunk_dates(self, start_date: datetime, end_date: datetime, table_start: datetime) -> Iterable[Tuple[datetime, datetime]]:
+        slice_range = 1 #TODO: get from config
+        step = timedelta(minutes=slice_range)
+        new_start_date = start_date
+        if start_date == end_date:
+            yield start_date, start_date + step
+            return
+        while new_start_date < end_date+timedelta(seconds=1):
+            before_date = min(end_date+timedelta(seconds=1), new_start_date + step)
+            if table_start and before_date < table_start:
+                before_date = table_start + step
+            yield new_start_date, before_date
+            new_start_date = before_date
+
     def stream_slices(self, stream_state: Mapping[str, Any] = None, cursor_field=None, sync_mode=None, **kwargs) -> Iterable[Optional[Mapping[str, any]]]:
         if isinstance(cursor_field,list) and cursor_field:
             self.cursor_field = cursor_field[0]
         elif cursor_field:
             self.cursor_field = cursor_field
+        start_time, end_time = self._extract_borders()
+        default_start = self.fallback_start
+        slice = {}
         if stream_state:
-            self._cursor = stream_state.get(self.cursor_field) #or self._state.get(self.cursor_field)
-        if self.cursor_field:
-            yield {
-                    self.cursor_field : self._cursor
-                }
+            self._cursor = stream_state.get(self.cursor_field)
+            default_start =  datetime.strptime(self.partitioner, '%Y-%m-%dT%H:%M:%S.%f%z')
+            slice[self.cursor_field] = self._cursor
+        if end_time and default_start <= end_time:
+            for start, end in self._chunk_dates(default_start, end_time, start_time):
+                slice["start"] = start.isoformat(timespec='microseconds')
+                slice["end"] = end.isoformat(timespec='microseconds')
+                yield slice
         else:
-            yield {}
+            yield slice
 
     def request_body_json(
         self,
@@ -426,12 +456,20 @@ class BigqueryIncrementalStream(BigqueryResultStream, IncrementalMixin):
         if self.cursor_field:
             query_string = f"select * from `{self.name}` ORDER BY {self.cursor_field}"
         if stream_slice:
-            self._cursor = stream_slice.get(self.cursor_field, None)
+            if self.cursor_field:
+                self._cursor = stream_slice.get(self.cursor_field, None)
+            start = stream_slice.get("start", None)
+            end = stream_slice.get("end", None)
             if self._cursor:
                 cursor_value = self._cursor
                 if isinstance(self._cursor, str):
                     cursor_value = f"'{self._cursor}'"
-                query_string = f"select * from `{self.name}` where {self.cursor_field}>={cursor_value} ORDER BY {self.cursor_field}"
+            if self._cursor and self.partitioner:
+                query_string = f"SELECT * from `{self.name}` where {self.cursor_field}>={cursor_value} AND {self.partitioner}>='{start}' AND {self.partitioner}<'{end}' ORDER BY {self.partitioner}"
+            elif self.partitioner:
+                query_string = f"SELECT * from `{self.name}` where {self.partitioner}>='{start}' AND {self.partitioner}<'{end}' ORDER BY {self.partitioner}"
+            elif self._cursor:
+                query_string = f"SELECT * from `{self.name}` where {self.cursor_field}>={cursor_value} ORDER BY {self.cursor_field}"
         request_body = {
             "kind": "bigquery#queryRequest",
             "query": query_string,
@@ -460,11 +498,11 @@ class IncrementalQueryResult(BigqueryResultStream):
     """
     primary_key = None
 
-    def __init__(self, project_id: list, dataset_id: str, table_id: str, partitioner: str=None, **kwargs):
+    def __init__(self, project_id: list, dataset_id: str, table_id: str, fallback_start, partitioner: str=None, **kwargs):
         self.project_id = project_id
         self.parent_stream = dataset_id + "." + table_id
         super().__init__(self.path(), self.parent_stream, self.get_json_schema, **kwargs)
-        self.stream_obj = BigqueryIncrementalStream(project_id, self.path(), self.parent_stream, self.get_json_schema, partitioner, **kwargs) #super()
+        self.stream_obj = BigqueryIncrementalStream(project_id, self.path(), self.parent_stream, self.get_json_schema, fallback_start=fallback_start, partitioner=partitioner, **kwargs) #super()
 
     @property
     def name(self):
