@@ -271,7 +271,7 @@ class TableQueryRecord(BigqueryResultStream):
         stream_slice: Optional[Mapping[str, Any]] = None,
         next_page_token: Optional[Mapping[str, Any]] = None,
     ) -> Optional[Mapping[str, Any]]:
-        query_string = f"select * from APPENDS(TABLE `{self.parent_stream}`,NULL,NULL) ORDER BY _CHANGE_TIMESTAMP {self.order} LIMIT 1"
+        query_string = f"select * from APPENDS(TABLE `{self.parent_stream}`,NULL,NULL) ORDER BY {self.column} {self.order} LIMIT 1"
         # query_string = f"select * from `{self.parent_stream}` ORDER BY {self.column} {self.order} LIMIT 1"
         request_body = {
             "kind": "bigquery#queryRequest",
@@ -349,11 +349,14 @@ class BigqueryIncrementalStream(BigqueryResultStream, IncrementalMixin):
     primary_key = None
     state_checkpoint_interval = None
 
-    def __init__(self, stream_path, stream_name, stream_schema, stream_request=None, **kwargs):
+    def __init__(self, project_id, stream_path, stream_name, stream_schema, stream_request=None, partitioner: str=None, **kwargs):
         super().__init__(stream_path, stream_name, stream_schema, stream_request, **kwargs)
         self.request_body = stream_request
         self._cursor = None
         self._checkpoint_time = datetime.now()
+        self.partitioner = partitioner
+        self.first_record = TableQueryRecord(project_id, stream_name, "ASC", partitioner, **kwargs)
+        self.last_record = TableQueryRecord(project_id, stream_name, "DESC", partitioner, **kwargs)
 
     @property
     def name(self):
@@ -452,16 +455,16 @@ class BigqueryIncrementalStream(BigqueryResultStream, IncrementalMixin):
             yield formated_data
 
 
-class IncrementalQueryResult(BigqueryIncrementalStream):
+class IncrementalQueryResult(BigqueryResultStream):
     """
     """
     primary_key = None
 
-    def __init__(self, project_id: list, dataset_id: str, table_id: str, **kwargs):
+    def __init__(self, project_id: list, dataset_id: str, table_id: str, partitioner: str=None, **kwargs):
         self.project_id = project_id
         self.parent_stream = dataset_id + "." + table_id
         super().__init__(self.path(), self.parent_stream, self.get_json_schema, **kwargs)
-        self.stream_obj = BigqueryIncrementalStream(self.path(), self.parent_stream, self.get_json_schema, **kwargs) #super()
+        self.stream_obj = BigqueryIncrementalStream(project_id, self.path(), self.parent_stream, self.get_json_schema, partitioner, **kwargs) #super()
 
     @property
     def name(self):
@@ -521,8 +524,9 @@ class BigqueryCDCStream(BigqueryResultStream, IncrementalMixin):
         self.project_id = project_id
         self.query_job = None
         self.dataset_id, self.table_id = stream_name.split(".")
-        self.first_record = TableQueryRecord(project_id, stream_name, "ASC", self.cursor_field, **kwargs)
-        self.last_record = TableQueryRecord(project_id, stream_name, "DESC", self.cursor_field, **kwargs)
+        cursor_column = next(key for key, value in CHANGE_FIELDS.items() if value == self.cursor_field)
+        self.first_record = TableQueryRecord(project_id, stream_name, "ASC", cursor_column, **kwargs)
+        self.last_record = TableQueryRecord(project_id, stream_name, "DESC", cursor_column, **kwargs)
         # self._stream_slicer_cursor = None
 
     @property
