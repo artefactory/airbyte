@@ -570,11 +570,11 @@ class BigqueryCDCStream(BigqueryResultStream, IncrementalMixin):
 
     @property
     def namespace(self):
-        return self.dataset_id
+        return None # TODO: update to self.dataset_id
     
     @property
     def name(self):
-        return self.given_name or self.table_id
+        return self.given_name or self.stream_name
 
     @property
     def cursor_field(self) -> str:
@@ -763,11 +763,11 @@ class TableChangeHistory(BigqueryResultStream):
 
     @property
     def namespace(self):
-        return self.dataset_id
+        return None # TODO: update to self.dataset_id
     
     @property
     def name(self):
-        return self.given_name or self.table_id
+        return self.given_name or self.table_qualifier
 
     @property
     def stream(self):
