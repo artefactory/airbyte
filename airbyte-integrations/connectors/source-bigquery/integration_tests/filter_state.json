@@ -4,7 +4,7 @@
       "stream": {
         "stream_descriptor": {
           "name": "sub",
-          "namespace": "test"
+          "namespace": null
         },
         "stream_state": {
           "change_timestamp": "2024-05-24T08:54:00.902000+00:00"

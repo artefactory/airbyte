@@ -3,8 +3,8 @@
     "type": "STREAM",
     "stream": {
       "stream_descriptor": {
-        "name": "test_test_airbyte_dataset_test_airbyte_dataset_MOCK_DATA",
-        "namespace": "test"
+        "name": "test.test_test_airbyte_dataset_test_airbyte_dataset_MOCK_DATA",
+        "namespace": null
       },
       "stream_state": {
         "change_timestamp": "2024-05-24T08:54:00.902000+00:00"
