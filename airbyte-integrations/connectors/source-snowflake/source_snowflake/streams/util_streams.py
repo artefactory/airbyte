@@ -9,6 +9,8 @@ from airbyte_protocol.models import SyncMode
 from source_snowflake.schema_builder import date_and_time_snowflake_type_airbyte_type, string_snowflake_type_airbyte_type, \
     mapping_snowflake_type_airbyte_type, get_generic_type_from_schema_type, convert_time_zone_time_stamp_suffix_to_offset_hours, \
     convert_utc_to_time_zone, convert_utc_to_time_zone_date
+from source_snowflake.snowflake_exceptions import CursorFieldNotPresentInSchemaError, emit_airbyte_error_message, \
+    SnowflakeTypeNotRecognizedError, StartHistoryTimeNotSetError
 
 from source_snowflake.streams.snowflake_parent_stream import SnowflakeStream
 
@@ -256,7 +258,9 @@ class StreamLauncher(SnowflakeStream):
             self.get_json_schema()
 
         if self.cursor_field.upper() not in self._json_schema['properties']:
-            raise ValueError(f'this field {self.cursor_field} should be present in schema. Make sure the column is present in your stream')
+            error_message = f'this field {self.cursor_field} should be present in schema. Make sure the column is present in your stream'
+            emit_airbyte_error_message(error_message)
+            raise CursorFieldNotPresentInSchemaError(error_message)
 
         schema_type = self._json_schema['properties'][self.cursor_field.upper()]
 
@@ -315,8 +319,11 @@ class StreamLauncher(SnowflakeStream):
             column_name = column_object['column_name']
             snowflake_column_type = column_object['type'].upper()
             if snowflake_column_type not in mapping_snowflake_type_airbyte_type:
-                raise ValueError(f"The type {snowflake_column_type} is not recognized. "
+                error_message = (f"The type {snowflake_column_type} is not recognized. "
                                  f"Please, contact Airbyte support to update the connector to handle this new type")
+                emit_airbyte_error_message(error_message)
+                raise SnowflakeTypeNotRecognizedError(error_message)
+
             airbyte_column_type_object = mapping_snowflake_type_airbyte_type[snowflake_column_type]
             properties[column_name] = airbyte_column_type_object
 
@@ -352,8 +359,10 @@ class StreamLauncherChangeDataCapture(StreamLauncher):
         schema = self.table_object["schema"]
         table = self.table_object["table"]
 
-        if self.start_history_timestamp is None:
-            raise ValueError(f'{self.start_history_timestamp} should be set to read history')
+        if self.start_history_timestamp is None and not self.is_full_refresh:
+            error_message = f'{self.start_history_timestamp} should be set to read history'
+            emit_airbyte_error_message(error_message)
+            raise StartHistoryTimeNotSetError(error_message)
 
         if not self.is_full_refresh:
             statement = (f'SELECT * FROM "{database}"."{schema}"."{table}" '
@@ -380,8 +389,11 @@ class StreamLauncherChangeDataCapture(StreamLauncher):
             snowflake_column_type = column_object['type'].upper()
 
             if snowflake_column_type not in mapping_snowflake_type_airbyte_type:
-                raise ValueError(f"The type {snowflake_column_type} is not recognized. "
+                error_message = (f"The type {snowflake_column_type} is not recognized. "
                                  f"Please, contact Airbyte support to update the connector to handle this new type")
+                emit_airbyte_error_message(error_message)
+                raise SnowflakeTypeNotRecognizedError(error_message)
+
             airbyte_column_type_object = mapping_snowflake_type_airbyte_type[snowflake_column_type]
             properties[column_name] = airbyte_column_type_object
 

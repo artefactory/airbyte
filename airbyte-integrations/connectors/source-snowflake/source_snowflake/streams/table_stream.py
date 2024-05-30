@@ -21,7 +21,8 @@ from source_snowflake.schema_builder import mapping_snowflake_type_airbyte_type,
 from .snowflake_parent_stream import SnowflakeStream
 from .util_streams import TableSchemaStream, StreamLauncher, PrimaryKeyStream, StreamLauncherChangeDataCapture, CurrentTimeZoneStream
 from ..snowflake_exceptions import NotEnabledChangeTrackingOptionError, ChangeDataCaptureNotSupportedTypeGeographyError, \
-    ChangeDataCaptureLookBackWindowUpdateFrequencyError
+    ChangeDataCaptureLookBackWindowUpdateFrequencyError, SnowflakeTypeNotRecognizedError, emit_airbyte_error_message, \
+    MultipleCursorFieldsError
 
 
 class TableStream(SnowflakeStream, IncrementalMixin):
@@ -267,9 +268,10 @@ class TableStream(SnowflakeStream, IncrementalMixin):
                 self._cursor_field_type = snowflake_column_type
 
             if snowflake_column_type not in mapping_snowflake_type_airbyte_type:
-                raise ValueError(f"The type {snowflake_column_type} is not recognized. "
+                error_message = (f"The type {snowflake_column_type} is not recognized. "
                                  f"Please, contact Airbyte support to update the connector to handle this new type")
-
+                emit_airbyte_error_message(error_message)
+                raise SnowflakeTypeNotRecognizedError(error_message)
             airbyte_column_type_object = mapping_snowflake_type_airbyte_type[snowflake_column_type]
             properties[column_name] = airbyte_column_type_object
 
@@ -340,7 +342,9 @@ class TableStream(SnowflakeStream, IncrementalMixin):
             if len(cursor_field) == 1:
                 processed_cursor_field = cursor_field[0]
             else:
-                raise ValueError('When cursor_field is a list, its size must be 1')
+                error_message = 'When cursor_field is a list, its size must be 1'
+                emit_airbyte_error_message(error_message)
+                raise MultipleCursorFieldsError(error_message)
         if processed_cursor_field is None:
             return []
         return processed_cursor_field
@@ -396,7 +400,6 @@ class TableChangeDataCaptureStream(TableStream):
     def cursor_field(self):
         return 'last_update_date'
 
-
     @property
     def is_full_refresh(self):
         return True if self.sync_mode == SyncMode.full_refresh else False
@@ -436,17 +439,20 @@ class TableChangeDataCaptureStream(TableStream):
             return
 
         if self.table_object['change_tracking'].lower() == 'off':
-            # Emit airbyte message
-            raise NotEnabledChangeTrackingOptionError(
+            error_message = (
                 f'The stream {self.name} cannot be synchronized because the change tracking is not enabled.'
-                f'Here is the command you need to run to enable it:\n'
+                f'Here is the sql command you need to run to enable it:\n'
                 f'ALTER TABLE YOUR_TABLE SET CHANGE_TRACKING = TRUE;')
+            emit_airbyte_error_message(error_message)
+            raise NotEnabledChangeTrackingOptionError(error_message)
 
         if self._geography_type_present:
-            raise ChangeDataCaptureNotSupportedTypeGeographyError(
+            error_message = (
                 "The GEOGRAPHY type in snowflake blocks change data capture update. Check the documentation for more details.\n"
                 "To resolve this issue, chose the standard update or change the type of the column to object. Airbyte considers it as "
                 "an object when uploading GEOGRAPHY data type to destination")
+            emit_airbyte_error_message(error_message)
+            raise ChangeDataCaptureNotSupportedTypeGeographyError(error_message)
 
         current_time_snowflake_time_zone = CurrentTimeZoneStream.get_current_time_snowflake_time_zone(self.url_base,
                                                                                                       self.config,
@@ -456,12 +462,13 @@ class TableChangeDataCaptureStream(TableStream):
 
         if self._state_value and self._state_value < earliest_possible_history_timestamp:
             look_back_window_in_days = self.convert_seconds_to_days(self.cdc_look_back_time_window)
-            raise ChangeDataCaptureLookBackWindowUpdateFrequencyError(
+            error_message = (
                 f"The update have happened after a duration higher than the retention date. Latest update was on {self._state_value}. "
                 f"This will result to data loss. "
                 f"The look back window is {look_back_window_in_days['days']} days, {look_back_window_in_days['hours']} hours.\n"
                 f"To solve this issue, rerun a full refresh and set up a frequency update equal to your retention time in days - 1.")
-
+            emit_airbyte_error_message(error_message)
+            raise ChangeDataCaptureLookBackWindowUpdateFrequencyError(error_message)
         if not self._state_value:
             # TODO: add log to alert user that full refresh is launched because first time cdc
             self.sync_mode = SyncMode.full_refresh
@@ -527,7 +534,6 @@ class TableChangeDataCaptureStream(TableStream):
         else:
             additional_data = [current_time]
 
-
         for record in response_json.get("data", []):
             enriched_record = record + additional_data
             yield {column_name: format_field(column_value, ordered_mapping_names_types[column_name])
@@ -554,8 +560,10 @@ class TableChangeDataCaptureStream(TableStream):
                 self._geography_type_present = True
 
             if snowflake_column_type not in mapping_snowflake_type_airbyte_type:
-                raise ValueError(f"The type {snowflake_column_type} is not recognized. "
+                error_message = (f"The type {snowflake_column_type} is not recognized. "
                                  f"Please, contact Airbyte support to update the connector to handle this new type")
+                emit_airbyte_error_message(error_message)
+                raise SnowflakeTypeNotRecognizedError(error_message)
 
             airbyte_column_type_object = mapping_snowflake_type_airbyte_type[snowflake_column_type]
             properties[column_name] = airbyte_column_type_object
