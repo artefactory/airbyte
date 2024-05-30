@@ -582,7 +582,7 @@ class TableChangeDataCaptureStream(TableStream):
         if stream_state:
             state_string = stream_state.get(self.cursor_field)
             if state_string:
-                self._state_value = datetime.strptime(state_string, '%Y-%m-%dT%H:%M:%S%z')
+                self._state_value = datetime.strptime(state_string, '%Y-%m-%dT%H:%M:%S.%f%z')
 
         self.sync_mode = sync_mode if sync_mode is not None else self.sync_mode
         self.set_statement_handle()
