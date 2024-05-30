@@ -143,7 +143,7 @@ class BigqueryTables(BigqueryDatasets):
             for table in tables:
                 yield table
         except TypeError as e:
-            self.logger.warning(f"Dataset has no tables causing the error {str(e)}")
+            self.logger.warning(f"Dataset named {self.dataset_id} has no tables")
 
 
 class BigqueryTable(BigqueryTables):
