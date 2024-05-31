@@ -17,6 +17,7 @@ from .authenticator import SnowflakeJwtAuthenticator
 from .snowflake_exceptions import InconsistentPushDownFilterParentStreamNameError, NotEnabledChangeTrackingOptionError, \
     DuplicatedPushDownFilterStreamNameError, IncorrectHostFormat, emit_airbyte_error_message, UnknownUpdateMethodError
 from .streams.push_down_filter_stream import PushDownFilterStream, PushDownFilterChangeDataCaptureStream
+from .utils import handle_no_permissions_error
 
 
 # Source
@@ -81,12 +82,21 @@ class SourceSnowflake(AbstractSource):
 
         except requests.exceptions.HTTPError as error:
             error_message = error.__str__()
-            error_code = error.args[0]
-            if error_code == 412:
+            error_code = error.response.status_code
+            if int(error_code) == 412:
                 error_message = ("SQL execution error for check.\n"
                                  "The origin of the error is very likely to be:\n"
                                  "- The configuration provided does not have enough permissions to access the requested database/schema.\n"
                                  "- The configuration is not consistent (example: schema not present is database.")
+            if int(error_code) == 422:
+                try:
+                    error_content = error.response.json()
+                    no_permissions_or_no_table_message = "Object does not exist, or operation cannot be performed."
+                    if "message" in error_content and no_permissions_or_no_table_message in error_content["message"]:
+                        error_message = 'You do not have enough permission to read database/schema or database/schema doest not exist'
+                except ValueError:
+                    pass
+
             emit_airbyte_error_message(error_message=error_message,
                                        failure_type=FailureType.config_error)
             raise requests.exceptions.HTTPError(error_message)
@@ -119,6 +129,7 @@ class SourceSnowflake(AbstractSource):
         next(records)
 
     @classmethod
+    @handle_no_permissions_error
     def check_push_down_filters_parent_stream_consistency(cls, url_base, config, authenticator):
         table_catalog_stream = TableCatalogStream(url_base=url_base,
                                                   config=config,
@@ -141,6 +152,7 @@ class SourceSnowflake(AbstractSource):
 
         if push_down_filters_streams_without_consistent_parent:
             raise InconsistentPushDownFilterParentStreamNameError(push_down_filters_streams_without_consistent_parent)
+
     @classmethod
     def format_url_base(cls, host: str) -> str:
         url_base = host
@@ -178,6 +190,7 @@ class SourceSnowflake(AbstractSource):
         return streams
 
     @classmethod
+    @handle_no_permissions_error
     def _get_standard_streams(cls, stream_class, config, url_base, table_catalog_stream, authenticator):
         standard_streams = {}
         for table_object in table_catalog_stream.read_records(sync_mode=SyncMode.full_refresh):

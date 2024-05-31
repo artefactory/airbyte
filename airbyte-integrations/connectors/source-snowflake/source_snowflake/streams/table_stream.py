@@ -14,7 +14,7 @@ from airbyte_cdk.models import (AirbyteMessage, AirbyteStateMessage, AirbyteStat
 from airbyte_cdk.sources.streams.http import HttpStream
 from airbyte_cdk.sources.utils.schema_helpers import InternalConfig
 from airbyte_cdk.sources.utils.slice_logger import SliceLogger
-from airbyte_protocol.models import SyncMode, Type, ConfiguredAirbyteStream
+from airbyte_protocol.models import SyncMode, Type, ConfiguredAirbyteStream, FailureType
 
 from source_snowflake.schema_builder import mapping_snowflake_type_airbyte_type, format_field, date_and_time_snowflake_type_airbyte_type, \
     string_snowflake_type_airbyte_type, convert_utc_to_time_zone, convert_utc_to_time_zone_date
@@ -23,6 +23,7 @@ from .util_streams import TableSchemaStream, StreamLauncher, PrimaryKeyStream, S
 from ..snowflake_exceptions import NotEnabledChangeTrackingOptionError, ChangeDataCaptureNotSupportedTypeGeographyError, \
     ChangeDataCaptureLookBackWindowUpdateFrequencyError, SnowflakeTypeNotRecognizedError, emit_airbyte_error_message, \
     MultipleCursorFieldsError
+from ..utils import handle_no_permissions_error
 
 
 class TableStream(SnowflakeStream, IncrementalMixin):
@@ -297,6 +298,7 @@ class TableStream(SnowflakeStream, IncrementalMixin):
         """
         return True, None
 
+    @handle_no_permissions_error
     def read(  # type: ignore  # ignoring typing for ConnectorStateManager because of circular dependencies
             self,
             configured_stream: ConfiguredAirbyteStream,
@@ -307,6 +309,7 @@ class TableStream(SnowflakeStream, IncrementalMixin):
             internal_config: InternalConfig,
     ) -> Iterable[StreamData]:
         self.cursor_field = self._process_cursor_field(configured_stream.cursor_field)
+
         return super().read(configured_stream,
                             logger,
                             slice_logger,
@@ -602,6 +605,7 @@ class TableChangeDataCaptureStream(TableStream):
         else:
             yield slice
 
+    @handle_no_permissions_error
     def read_records(
             self,
             sync_mode: SyncMode,

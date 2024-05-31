@@ -5,35 +5,17 @@ from datetime import datetime, timedelta
 from typing import Any, Iterable, List, Mapping, MutableMapping, Optional, Union
 
 import requests
+from airbyte_cdk.sources.streams.core import StreamData
 from airbyte_cdk.sources.streams.http import HttpStream
 from airbyte_protocol.models import SyncMode
 
 from source_snowflake.snowflake_exceptions import emit_airbyte_error_message
+from source_snowflake.utils import handle_no_permissions_error
 
 
 class SnowflakeStream(HttpStream, ABC):
-    """
-    TODO remove this comment
 
-    This class represents a stream output by the connector.
-    This is an abstract base class meant to contain all the common functionality at the API level e.g: the API base URL, pagination strategy,
-    parsing responses etc..
 
-    Each stream should extend this class (or another abstract subclass of it) to specify behavior unique to that stream.
-
-    Typically for REST APIs each stream corresponds to a resource in the API. For example if the API
-    contains the endpoints
-        - GET v1/customers
-        - GET v1/employees
-
-    then you should have three classes:
-    `class SnowflakeStream(HttpStream, ABC)` which is the current class
-
-    If some streams implement incremental sync, it is typical to create another class
-    `class IncrementalSnowflakeStream((SnowflakeStream), ABC)`
-
-    See the reference docs for the full list of configurable options.
-    """
     url_suffix = "api/v2/statements"
     TIME_OUT_IN_SECONDS = "1000"
     _delta_time_between_snowflake_and_airbyte_server = None
@@ -162,3 +144,14 @@ class SnowflakeStream(HttpStream, ABC):
             raise ValueError(error_message)
 
         return mapping_column_name_to_index
+
+    @handle_no_permissions_error
+    def read_records(
+        self,
+        sync_mode: SyncMode,
+        cursor_field: Optional[List[str]] = None,
+        stream_slice: Optional[Mapping[str, Any]] = None,
+        stream_state: Optional[Mapping[str, Any]] = None,
+    ) -> Iterable[StreamData]:
+
+        return super().read_records(sync_mode, cursor_field, stream_slice, stream_state)
