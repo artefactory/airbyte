@@ -19,12 +19,31 @@ class SnowflakeJwtAuthenticator(JwtAuthenticator):
         """
         :return: A dictionary containing all the necessary headers to authenticate.
         """
+
         return {
             'Authorization': f"Bearer {self.token}"
         }
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
+        self._last_refresh_date = datetime.now()
+        self._input_config = None
+
+    @property
+    def token(self) -> str:
+        # Calculate the difference
+        delta = datetime.now() - self._last_refresh_date
+        delta_in_minutes = delta.total_seconds() // 60
+        if delta_in_minutes >= self.TOKEN_DURATION:
+            token = self.get_refreshed_token()
+            self._last_refresh_date = datetime.now()
+            return token
+        else:
+            return f"{self._get_header_prefix()} {self._get_signed_token()}" if self._get_header_prefix() else self._get_signed_token()
+
+    def get_refreshed_token(self):
+        jwt_instance = self.from_config(self._input_config)
+        return jwt_instance.token
 
     @classmethod
     def from_config(cls, config):
@@ -39,7 +58,9 @@ class SnowflakeJwtAuthenticator(JwtAuthenticator):
                   "secret_key": formatted_private_key,
                   'parameters': {},
                   'token_duration': cls.TOKEN_DURATION}
-        return cls(**kwargs)
+        instance = cls(**kwargs)
+        instance._input_config = config
+        return instance
 
     @classmethod
     def get_formatted_password_from_config(cls, config):
