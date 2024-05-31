@@ -64,8 +64,7 @@ class BigqueryStream(HttpStream, ABC):
         return self.stream_schema()
 
     def next_page_token(self, response: requests.Response, **kwargs) -> Optional[Mapping[str, Any]]:
-        next_page = response.json().get("pageToken", None)
-        return next_page
+        return None
 
     def process_records(self, record) -> Iterable[Mapping[str, Any]]:
         fields = record.get("schema")["fields"]
@@ -848,8 +847,6 @@ class BigqueryCDCStream(BigqueryResultStream, IncrementalMixin):
             end = stream_slice.get("end", None)
             if start and end:
                 query_string = f"select * from APPENDS(TABLE `{self.stream_name}`,'{start}','{end}')"
-            elif start:
-                query_string = f"select * from APPENDS(TABLE `{self.stream_name}`,'{start}',NULL)"
         if self.where_clause:
             query_string = query_string + f" WHERE {self.where_clause}"
         request_body = {
