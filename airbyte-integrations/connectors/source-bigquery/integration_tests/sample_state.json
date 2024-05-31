@@ -3,11 +3,11 @@
     "type": "STREAM",
     "stream": {
       "stream_descriptor": {
-        "name": "test.test_test_airbyte_dataset_test_airbyte_dataset_MOCK_DATA",
+        "name": "test.MOCK_DATA",
         "namespace": null
       },
       "stream_state": {
-        "change_timestamp": "2024-05-24T08:54:00.902000+00:00"
+        "change_timestamp": "2024-05-30T23:51:37.107Z"
       }
     }
   }

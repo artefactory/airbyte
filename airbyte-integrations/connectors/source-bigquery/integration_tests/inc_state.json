@@ -6,7 +6,7 @@
           "name": "test_airbyte_dataset.test_airbyte_dataset_MOCK_DATA"
         },
         "stream_state": {
-          "id": 20
+          "_airbyte_extracted_at": "2024-05-07T20:50:38.599Z"
         }
       }
     }
