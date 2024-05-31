@@ -516,25 +516,12 @@ class BigqueryIncrementalStream(BigqueryResultStream, IncrementalMixin):
             self.cursor_field = cursor_field[0]
         elif cursor_field:
             self.cursor_field = cursor_field
-        default_start = self.fallback_start
-        slice = {}
         if stream_state:
             self._cursor = stream_state.get(self.cursor_field)
-            if self._cursor:
-                default_start =  datetime.strptime(self._cursor, '%Y-%m-%dT%H:%M:%S.%f%z') - timedelta(minutes=self.slice_range) #slice range is equal to loopback window
-        if self.cursor_field and sync_mode == SyncMode.incremental:
-            start_time, end_time = self._extract_borders()
-            if not isinstance(start_time, datetime):
-                raise AirbyteTracedException(
-                            internal_message=f"Cursor field should be a timestamp type for stream {self.dataset_id}.{self.table_id}",
-                            failure_type=FailureType.config_error,
-                            message=f"Cursor field should be a timestamp type for stream {self.dataset_id}.{self.table_id}",
-                        )
-            if end_time and default_start <= end_time:
-                for start, end in self._chunk_dates(default_start, end_time, start_time):
-                    slice["start"] = start.isoformat(timespec='microseconds')
-                    slice["end"] = end.isoformat(timespec='microseconds')
-                    yield slice
+        if self.cursor_field:
+            yield {
+                    self.cursor_field : self._cursor
+                }
         else:
             yield
 
@@ -546,10 +533,12 @@ class BigqueryIncrementalStream(BigqueryResultStream, IncrementalMixin):
     ) -> Optional[Mapping[str, Any]]:
         query_string = f"SELECT * FROM `{self.stream_name}`"
         if stream_slice:
-            start = stream_slice.get("start", None)
-            end = stream_slice.get("end", None)
-            if start and end:
-                query_string = f"SELECT * FROM `{self.stream_name}` WHERE {self.cursor_field}>='{start}' AND {self.cursor_field}<'{end}' ORDER BY {self.cursor_field}"
+            self._cursor = stream_slice.get(self.cursor_field, None)
+            if self._cursor:
+                cursor_value = self._cursor
+                if isinstance(self._cursor, str):
+                    cursor_value = f"'{self._cursor}'"
+                query_string = f"select * from `{self.name}` where {self.cursor_field}>={cursor_value} ORDER BY {self.cursor_field}"
         index = query_string.find("ORDER BY")
         if self.where_clause and index==-1:
             query_string = query_string + f" WHERE {self.where_clause}"
@@ -927,7 +916,7 @@ class TableChangeHistory(BigqueryResultStream):
         self.where_clause = where_clause.replace("\"", "'")
         super().__init__(self.path(), self.table_qualifier, self.project_id, self.get_json_schema, retry_policy=self.should_retry, **kwargs)
         self.stream_obj = BigqueryCDCStream(project_id, dataset_id, table_id, self.path(), self.get_json_schema, \
-                                            given_name, where_clause, fallback_start=fallback_start, slice_range=SLICE_RANGE, **kwargs)
+                                            given_name, where_clause, fallback_start=fallback_start, slice_range=slice_range, **kwargs)
 
     @property
     def namespace(self):
@@ -961,6 +950,8 @@ class TableChangeHistory(BigqueryResultStream):
         query_string = f"select * from APPENDS(TABLE `{self.table_qualifier}`,NULL,NULL)"
         if self.where_clause:
             query_string = f"select * from APPENDS(TABLE `{self.table_qualifier}`,NULL,NULL) WHERE {self.where_clause}"
+        # import ipdb
+        # ipdb.set_trace()
         request_body = {
             "kind": "bigquery#queryRequest",
             "query": query_string,
