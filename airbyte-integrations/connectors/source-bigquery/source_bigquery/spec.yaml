@@ -30,7 +30,7 @@ connectionSpecification:
       title: Credentials JSON
       airbyte_secret: true
     slice_range:
-      type: string
+      type: number
       description: The streams partitions range in minutes
       title: Slice Range
     replication_method:
