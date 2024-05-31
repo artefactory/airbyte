@@ -388,6 +388,7 @@ class BigqueryIncrementalStream(BigqueryResultStream, IncrementalMixin):
         self.fallback_start = fallback_start
         self.start_time = None
         self.end_time = None
+        self._is_primary_key_set = False
 
     @property
     def name(self):
@@ -414,6 +415,34 @@ class BigqueryIncrementalStream(BigqueryResultStream, IncrementalMixin):
     def supports_incremental(self) -> bool:
         return True
 
+    @property
+    def primary_key(self) -> Optional[Union[str, List[str], List[List[str]]]]:
+        """
+        :return: string if single primary key, list of strings if composite primary key,
+        list of list of strings if composite primary key consisting of nested fields.
+          If the stream has no primary keys, return None.
+        """
+        if not self._is_primary_key_set:
+            self.set_primary_key()
+        return self._primary_key
+    
+    def set_primary_key(self):
+        self._primary_key = self._get_primary_key()
+        self._is_primary_key_set = True
+
+    def _get_primary_key(self):
+        primary_key_stream = InformationSchemaStream(self.project_id, self.dataset_id, self.table_id, authenticator=self._auth)
+        primary_key_result = []
+        for record in primary_key_stream.read_records(sync_mode=SyncMode.full_refresh):
+            if record["constraint_name"] == f"{self.table_id}.pk$":
+                primary_key_result.append(record['column_name'])
+        if not len(primary_key_result):
+            return None
+        elif len(primary_key_result) == 1:
+            return primary_key_result[0]
+        else:
+            return primary_key_result
+        
     def _updated_state(self, current_stream_state: MutableMapping[str, Any], latest_record: Mapping[str, Any]) -> Mapping[str, Any]:
         """
         Override to determine the latest state after reading the latest record. This typically compared the cursor_field from the latest record and
