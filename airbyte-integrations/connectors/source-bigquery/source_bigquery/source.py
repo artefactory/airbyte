@@ -129,7 +129,17 @@ class SourceBigquery(ConcurrentSourceAdapter):
 
         for stream in streams:
                 dataset_id, table_id = stream['parent_stream'].split(".")
-                table_obj = TableChangeHistory(project_id, dataset_id, table_id, stream["name"], stream["where_clause"], fallback_start=change_history_start, authenticator=self._auth)
+                where_clause = stream["where_clause"]
+                stream_name = stream["name"]
+                if sync_method == "Standard":
+                    table_obj = IncrementalQueryResult(project_id, dataset_id, table_id, stream_name, where_clause, fallback_start=fallback_start,authenticator=self._auth)
+                else:
+                    try:
+                        table_obj = TableChangeHistory(project_id, dataset_id, table_id, stream_name, where_clause=where_clause, fallback_start=change_history_start, authenticator=self._auth)
+                        next(table_obj.read_records(sync_mode=SyncMode.full_refresh))
+                    except Exception as e:
+                        self.logger.warn(str(e))
+                        table_obj = IncrementalQueryResult(project_id, dataset_id, table_id, stream_name, where_clause, fallback_start=fallback_start, authenticator=self._auth)
                 streams_catalog.append(table_obj.stream)
         for dataset in BigqueryDatasets(project_id=config["project_id"], authenticator=self._auth).read_records(sync_mode=SyncMode.full_refresh):
             dataset_id = dataset.get("datasetReference")["datasetId"]
@@ -144,7 +154,7 @@ class SourceBigquery(ConcurrentSourceAdapter):
                         next(table_obj.read_records(sync_mode=SyncMode.full_refresh))
                     except Exception as e:
                         self.logger.warn(str(e))
-                        table_obj = IncrementalQueryResult(config["project_id"], dataset_id, table_id, fallback_start=fallback_start, authenticator=self._auth)
+                        table_obj = IncrementalQueryResult(project_id, dataset_id, table_id, fallback_start=fallback_start, authenticator=self._auth)
                 streams_catalog.append(table_obj.stream)
         state_manager = ConnectorStateManager(stream_instance_map={stream.name: stream for stream in streams_catalog}, state=self.state)
         return [

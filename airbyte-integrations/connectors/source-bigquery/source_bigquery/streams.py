@@ -37,6 +37,7 @@ There are additional required TODOs in the files within the integration_tests fo
 URL_BASE: str = "https://bigquery.googleapis.com"
 CHANGE_FIELDS = {"_CHANGE_TIMESTAMP": "change_timestamp", "_CHANGE_TYPE": "change_type"}
 PAGE_SIZE = 10000
+TIMEOUT = 30000 # 30 seconds
 
 class BigqueryStream(HttpStream, ABC):
     """
@@ -248,11 +249,12 @@ class CHTableQueryRecord(BigqueryResultStream):
     """
     name = "ch_query_record"
 
-    def __init__(self, project_id: list, parent_stream: str, order: str, column: str, **kwargs):
+    def __init__(self, project_id: list, parent_stream: str, order: str, column: str, where_clause, **kwargs):
         self.project_id = project_id
         self.parent_stream = parent_stream
         self.order = order
         self.column = column
+        self.where_clause = where_clause
         self.data = None
         super().__init__(self.path(), self.name, self.get_json_schema(), **kwargs)
 
@@ -272,7 +274,9 @@ class CHTableQueryRecord(BigqueryResultStream):
         next_page_token: Optional[Mapping[str, Any]] = None,
     ) -> Optional[Mapping[str, Any]]:
         query_string = f"select * from APPENDS(TABLE `{self.parent_stream}`,NULL,NULL) ORDER BY {self.column} {self.order} LIMIT 1"
-        # query_string = f"select * from `{self.parent_stream}` ORDER BY {self.column} {self.order} LIMIT 1"
+        if self.where_clause:
+            index = query_string.find("ORDER BY")
+            query_string = query_string[:index] + f" WHERE {self.where_clause} " + query_string[index:]
         request_body = {
             "kind": "bigquery#queryRequest",
             "query": query_string,
@@ -301,12 +305,13 @@ class TableQueryRecord(CHTableQueryRecord):
     """
     name = "query_record"
 
-    def __init__(self, project_id: list, parent_stream: str, order: str, column: str, **kwargs):
+    def __init__(self, project_id: list, parent_stream: str, order: str, column: str, where_clause, **kwargs):
         self.project_id = project_id
         self.parent_stream = parent_stream
         self.order = order
         self.column = column
-        super().__init__(project_id, parent_stream, order, column, **kwargs)
+        self.where_clause = where_clause
+        super().__init__(project_id, parent_stream, order, column, where_clause, **kwargs)
 
     def request_body_json(
         self,
@@ -315,8 +320,9 @@ class TableQueryRecord(CHTableQueryRecord):
         next_page_token: Optional[Mapping[str, Any]] = None,
     ) -> Optional[Mapping[str, Any]]:
         query_string = f"select * from `{self.parent_stream}` ORDER BY {self.column} {self.order} LIMIT 1"
-        # import ipdb
-        # ipdb.set_trace()
+        if self.where_clause:
+            index = query_string.find("ORDER BY")
+            query_string = query_string[:index] + f" WHERE {self.where_clause} " + query_string[index:]
         request_body = {
             "kind": "bigquery#queryRequest",
             "query": query_string,
@@ -377,13 +383,16 @@ class BigqueryIncrementalStream(BigqueryResultStream, IncrementalMixin):
     primary_key = None
     state_checkpoint_interval = None
 
-    def __init__(self, project_id, dataset_id, table_id, stream_path, stream_name, stream_schema, fallback_start:str, stream_request=None, **kwargs):
-        super().__init__(stream_path, stream_name, stream_schema, stream_request, **kwargs)
+    def __init__(self, project_id, dataset_id, table_id, stream_path, stream_schema, fallback_start:str, given_name=None, where_clause=None, stream_request=None, **kwargs):
+        self.stream_name = dataset_id + "." + table_id
+        super().__init__(stream_path, self.stream_name, stream_schema, stream_request, **kwargs)
         self.request_body = stream_request
         self._cursor = None
         self.project_id = project_id
         self.dataset_id = dataset_id
         self.table_id = table_id
+        self.given_name = given_name
+        self.where_clause = where_clause.replace("\"", "'")
         self._checkpoint_time = datetime.now()
         self.fallback_start = fallback_start
         self.start_time = None
@@ -391,8 +400,12 @@ class BigqueryIncrementalStream(BigqueryResultStream, IncrementalMixin):
         self._is_primary_key_set = False
 
     @property
+    def namespace(self):
+        return None # TODO: update to self.dataset_id
+    
+    @property
     def name(self):
-        return self.stream_name
+        return self.given_name or self.stream_name
 
     @property
     def state(self):
@@ -442,7 +455,11 @@ class BigqueryIncrementalStream(BigqueryResultStream, IncrementalMixin):
             return primary_key_result[0]
         else:
             return primary_key_result
-        
+    
+    def next_page_token(self, response: requests.Response, **kwargs) -> Optional[Mapping[str, Any]]:
+        # Always return None as this endpoint always returns the first page
+        return None
+    
     def _updated_state(self, current_stream_state: MutableMapping[str, Any], latest_record: Mapping[str, Any]) -> Mapping[str, Any]:
         """
         Override to determine the latest state after reading the latest record. This typically compared the cursor_field from the latest record and
@@ -464,8 +481,8 @@ class BigqueryIncrementalStream(BigqueryResultStream, IncrementalMixin):
 
     def _extract_borders(self):
         if not self.start_time and not self.end_time:
-            first_record = TableQueryRecord(self.project_id, self.stream_name, "ASC", self.cursor_field, authenticator=self._auth)
-            last_record = TableQueryRecord(self.project_id, self.stream_name, "DESC", self.cursor_field, authenticator=self._auth)
+            first_record = TableQueryRecord(self.project_id, self.stream_name, "ASC", self.cursor_field, self.where_clause, authenticator=self._auth)
+            last_record = TableQueryRecord(self.project_id, self.stream_name, "DESC", self.cursor_field, self.where_clause, authenticator=self._auth)
             self.start_time = next(first_record.read_records(sync_mode=SyncMode.full_refresh)).get(self.cursor_field, None)
             self.end_time = next(last_record.read_records(sync_mode=SyncMode.full_refresh)).get(self.cursor_field, None)
             if isinstance(self.start_time, str):
@@ -520,14 +537,17 @@ class BigqueryIncrementalStream(BigqueryResultStream, IncrementalMixin):
         stream_slice: Optional[Mapping[str, Any]] = None,
         next_page_token: Optional[Mapping[str, Any]] = None,
     ) -> Optional[Mapping[str, Any]]:
-        query_string = f"SELECT * FROM `{self.name}`"
-        if self.cursor_field:
-            query_string = f"SELECT * FROM `{self.name}` ORDER BY {self.cursor_field}"
+        query_string = f"SELECT * FROM `{self.stream_name}`"
         if stream_slice:
             start = stream_slice.get("start", None)
             end = stream_slice.get("end", None)
             if start and end:
-                query_string = f"SELECT * FROM `{self.name}` where {self.cursor_field}>='{start}'  AND {self.cursor_field}<'{end}' ORDER BY {self.cursor_field}"
+                query_string = f"SELECT * FROM `{self.stream_name}` WHERE {self.cursor_field}>='{start}' AND {self.cursor_field}<'{end}' ORDER BY {self.cursor_field}"
+        index = query_string.find("ORDER BY")
+        if self.where_clause and index==-1:
+            query_string = query_string + f" WHERE {self.where_clause}"
+        elif self.where_clause:
+            query_string = query_string[:index] + f" AND {self.where_clause} " + query_string[index:]
         request_body = {
             "kind": "bigquery#queryRequest",
             "query": query_string,
@@ -556,15 +576,21 @@ class IncrementalQueryResult(BigqueryResultStream):
     """
     primary_key = None
 
-    def __init__(self, project_id: list, dataset_id: str, table_id: str, fallback_start, **kwargs):
+    def __init__(self, project_id: list, dataset_id: str, table_id: str, given_name=None, where_clause: str="", fallback_start=None, **kwargs):
         self.project_id = project_id
         self.parent_stream = dataset_id + "." + table_id
+        self.given_name = given_name
+        self.where_clause = where_clause.replace("\"", "'")
         super().__init__(self.path(), self.parent_stream, self.get_json_schema, **kwargs)
-        self.stream_obj = BigqueryIncrementalStream(project_id, dataset_id, table_id, self.path(), self.parent_stream, self.get_json_schema, fallback_start=fallback_start, **kwargs) #super()
+        self.stream_obj = BigqueryIncrementalStream(project_id, dataset_id, table_id, self.path(), self.get_json_schema, fallback_start=fallback_start, given_name=given_name, where_clause=where_clause,**kwargs)
 
     @property
+    def namespace(self):
+        return None # TODO: update to self.dataset_id
+    
+    @property
     def name(self):
-        return self.parent_stream
+        return self.given_name or self.parent_stream
 
     @property
     def stream(self):
@@ -587,7 +613,9 @@ class IncrementalQueryResult(BigqueryResultStream):
         stream_slice: Optional[Mapping[str, Any]] = None,
         next_page_token: Optional[Mapping[str, Any]] = None,
     ) -> Optional[Mapping[str, Any]]:
-        query_string = f"select * from `{self.stream_name}`"
+        query_string = f"select * from `{self.parent_stream}`"
+        if self.where_clause:
+            query_string = query_string + f" WHERE {self.where_clause}"
         request_body = {
             "kind": "bigquery#queryRequest",
             "query": query_string,
@@ -719,8 +747,8 @@ class BigqueryCDCStream(BigqueryResultStream, IncrementalMixin):
     def _extract_borders(self):
         if not self.start_time and not self.end_time:
             cursor_column = next(key for key, value in CHANGE_FIELDS.items() if value == self.cursor_field)
-            first_record = CHTableQueryRecord(self.project_id, self.stream_name, "ASC", cursor_column, authenticator=self._auth)
-            last_record = CHTableQueryRecord(self.project_id, self.stream_name, "DESC", cursor_column, authenticator=self._auth)
+            first_record = CHTableQueryRecord(self.project_id, self.stream_name, "ASC", cursor_column, self.where_clause, authenticator=self._auth)
+            last_record = CHTableQueryRecord(self.project_id, self.stream_name, "DESC", cursor_column, self.where_clause, authenticator=self._auth)
             self.start_time = next(first_record.read_records(sync_mode=SyncMode.full_refresh)).get(self.cursor_field, None)
             self.end_time = next(last_record.read_records(sync_mode=SyncMode.full_refresh)).get(self.cursor_field, None)
             if isinstance(self.start_time, str):
@@ -1012,8 +1040,6 @@ class InformationSchemaStream(JobsQueryStream):
         next_page_token: Optional[Mapping[str, Any]] = None,
     ) -> Optional[Mapping[str, Any]]:
         query_string = f"SELECT * FROM `{self.project_id}.{self.dataset_id}.INFORMATION_SCHEMA.KEY_COLUMN_USAGE` WHERE table_name='{self.table_id}';"
-        # import ipdb
-        # ipdb.set_trace()
         request_body = {
             "kind": "bigquery#queryRequest",
             "query": query_string,
@@ -1032,11 +1058,7 @@ class InformationSchemaStream(JobsQueryStream):
                     **{CHANGE_FIELDS.get(element["name"], element["name"]): SchemaHelpers.format_field(data[fields.index(element)]["v"], element["type"]) for element in fields},
                 }            
         except TypeError as e:
-            raise AirbyteTracedException(
-                            internal_message=str(e),
-                            failure_type=FailureType.config_error,
-                            message=f"Incorrect response to Table {self.dataset_id}.{self.table_id} request to get primary keys",
-                        )
+            self.logger.error(f"Incorrect response to Table {self.dataset_id}.{self.table_id} request to get primary keys gives {str(e)}")
 
     def parse_response(self, response: requests.Response, **kwargs) -> Iterable[Mapping]:
         records = response.json()
