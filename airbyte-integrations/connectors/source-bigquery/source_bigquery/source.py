@@ -128,7 +128,7 @@ class SourceBigquery(ConcurrentSourceAdapter):
         change_history_start = datetime.now(tz=pytz.timezone("UTC")) - timedelta(days=7) + timedelta(seconds=30)
         normal_streams = []
         concurrent_streams = []
-        
+
         for stream in streams:
                 dataset_id, table_id = stream['parent_stream'].split(".")
                 where_clause = stream["where_clause"]
@@ -139,11 +139,13 @@ class SourceBigquery(ConcurrentSourceAdapter):
                     try:
                         table_obj = TableChangeHistory(project_id, dataset_id, table_id, stream_name, where_clause=where_clause, fallback_start=change_history_start, slice_range=slice_range, authenticator=self._auth)
                         next(table_obj.read_records(sync_mode=SyncMode.full_refresh))
-                        concurrent_streams.append(table_obj.stream)
                     except Exception as e:
                         self.logger.warn(str(e))
                         table_obj = IncrementalQueryResult(project_id, dataset_id, table_id, stream_name, where_clause, fallback_start=fallback_start, slice_range=slice_range, authenticator=self._auth)
-                        normal_streams.append(table_obj.stream)
+                if isinstance(table_obj, TableChangeHistory):
+                    concurrent_streams.append(table_obj.stream)
+                else:
+                    normal_streams.append(table_obj.stream)
         for dataset in BigqueryDatasets(project_id=project_id, authenticator=self._auth).read_records(sync_mode=SyncMode.full_refresh):
             dataset_id = dataset.get("datasetReference")["datasetId"]
             # list and process each table under each base to generate the JSON Schema
@@ -151,16 +153,18 @@ class SourceBigquery(ConcurrentSourceAdapter):
                 table_id = table_info.get("tableReference")["tableId"]
                 if sync_method == "Standard":
                     table_obj = IncrementalQueryResult(project_id, dataset_id, table_id, fallback_start=fallback_start, slice_range=slice_range, authenticator=self._auth)
-                    normal_streams.append(table_obj.stream)
                 else:
                     try:
                         table_obj = TableChangeHistory(project_id, dataset_id, table_id, fallback_start=change_history_start, slice_range=slice_range, authenticator=self._auth)
                         next(table_obj.read_records(sync_mode=SyncMode.full_refresh))
-                        concurrent_streams.append(table_obj.stream)
                     except Exception as e:
                         self.logger.warn(str(e))
                         table_obj = IncrementalQueryResult(project_id, dataset_id, table_id, fallback_start=fallback_start, slice_range=slice_range, authenticator=self._auth)
-                        normal_streams.append(table_obj.stream)
+                
+                if isinstance(table_obj, TableChangeHistory):
+                    concurrent_streams.append(table_obj.stream)
+                else:
+                    normal_streams.append(table_obj.stream)
         state_manager = ConnectorStateManager(stream_instance_map={stream.name: stream for stream in concurrent_streams}, state=self.state)
         final_concurrents = [
             self._to_concurrent(
