@@ -560,15 +560,26 @@ class BigqueryIncrementalStream(BigqueryResultStream, IncrementalMixin):
     def process_records(self, record) -> Iterable[Mapping[str, Any]]:
         fields = record.get("schema")["fields"]
         rows = record.get("rows", [])
-        for row in rows:
-            data = row.get("f")
-            formated_data = {
-                "_bigquery_table_id": record.get("jobReference")["jobId"],
-                "_bigquery_created_time": datetime.now(tz=pytz.timezone("UTC")).isoformat(timespec='microseconds'), #TODO: Update this to row insertion time
-                **{CHANGE_FIELDS.get(element["name"], element["name"]): SchemaHelpers.format_field(data[fields.index(element)]["v"], element["type"]) for element in fields},
-            }
-            self._updated_state(self.state, formated_data)
-            yield formated_data
+        job_id = record.get("jobReference")["jobId"]
+        next_page = record.get("pageToken", None)
+        if next_page:
+            query_job = GetQueryResults(self.project_id, self.dataset_id, self.table_id, \
+                                        job_id, record["jobReference"]["location"], \
+                                        next_page, authenticator=self._auth)
+            records = query_job.read_records(sync_mode=SyncMode.full_refresh)
+            for record in records:
+                yield record
+                self._updated_state(self.state, record)
+        else:
+            for row in rows:
+                data = row.get("f")
+                formated_data = {
+                    "_bigquery_table_id": record.get("jobReference")["jobId"],
+                    "_bigquery_created_time": datetime.now(tz=pytz.timezone("UTC")).isoformat(timespec='microseconds'), #TODO: Update this to row insertion time
+                    **{CHANGE_FIELDS.get(element["name"], element["name"]): SchemaHelpers.format_field(data[fields.index(element)]["v"], element["type"]) for element in fields},
+                }
+                self._updated_state(self.state, formated_data)
+                yield formated_data
 
 
 class IncrementalQueryResult(BigqueryResultStream):
