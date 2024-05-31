@@ -123,12 +123,13 @@ class SourceBigquery(ConcurrentSourceAdapter):
         self._auth = BigqueryAuth(config)
         streams = config.get("streams", [])
         sync_method = config["replication_method"]["method"]
-        fallback_start = datetime.now(tz=pytz.timezone("UTC")) - timedelta(days=7)
-        partitioner = config.get("partitioner", "_airbyte_extracted_at") #TODO: default to none
+        fallback_start =  datetime.strptime("0001-01-01T00:00:00.000Z", '%Y-%m-%dT%H:%M:%S.%f%z')
+        change_history_start = datetime.now(tz=pytz.timezone("UTC")) - timedelta(days=7) + timedelta(seconds=30)
+        partitioner = config.get("partitioner", "_airbyte_extracted_at") #TODO: remove
         streams_catalog = []
         for stream in streams:
                 dataset_id, table_id = stream['parent_stream'].split(".")
-                table_obj = TableChangeHistory(project_id, dataset_id, table_id, stream["name"], stream["where_clause"], fallback_start=fallback_start, authenticator=self._auth)
+                table_obj = TableChangeHistory(project_id, dataset_id, table_id, stream["name"], stream["where_clause"], fallback_start=change_history_start, authenticator=self._auth)
                 streams_catalog.append(table_obj.stream)
         for dataset in BigqueryDatasets(project_id=config["project_id"], authenticator=self._auth).read_records(sync_mode=SyncMode.full_refresh):
             dataset_id = dataset.get("datasetReference")["datasetId"]
@@ -139,13 +140,12 @@ class SourceBigquery(ConcurrentSourceAdapter):
                     table_obj = IncrementalQueryResult(config["project_id"], dataset_id, table_id, fallback_start=fallback_start, partitioner=partitioner,authenticator=self._auth)
                 else:
                     try:
-                        table_obj = TableChangeHistory(project_id, dataset_id, table_id, fallback_start=fallback_start, authenticator=self._auth)
+                        table_obj = TableChangeHistory(project_id, dataset_id, table_id, fallback_start=change_history_start, authenticator=self._auth)
                         next(table_obj.read_records(sync_mode=SyncMode.full_refresh))
                     except Exception as e:
                         self.logger.warn(str(e))
                         table_obj = IncrementalQueryResult(config["project_id"], dataset_id, table_id, fallback_start=fallback_start, partitioner=partitioner, authenticator=self._auth)
                 streams_catalog.append(table_obj.stream)
-
         state_manager = ConnectorStateManager(stream_instance_map={stream.name: stream for stream in streams_catalog}, state=self.state)
         return [
             self._to_concurrent(
@@ -161,7 +161,7 @@ class SourceBigquery(ConcurrentSourceAdapter):
     def _to_concurrent(
         self, stream: Stream, fallback_start: datetime, slice_range: timedelta, state_manager: ConnectorStateManager, partitioner: str
     ) -> Stream:
-        if self._stream_state_is_full_refresh(stream.state):
+        if self._stream_state_is_full_refresh(stream.state) or not stream.cursor_field:
             return StreamFacade.create_from_stream(
                 stream,
                 self,
@@ -173,11 +173,7 @@ class SourceBigquery(ConcurrentSourceAdapter):
         state = state_manager.get_stream_state(stream.name, stream.namespace)
         slice_boundary_fields = self._SLICE_BOUNDARY_FIELDS_BY_IMPLEMENTATION.get(type(stream))
         if slice_boundary_fields:
-            if stream.cursor_field:
-                cursor_field = CursorField(stream.cursor_field) if isinstance(stream.cursor_field, str) else CursorField(stream.cursor_field[0])
-            else:
-                #TODO: check partitioner exists in schema
-                cursor_field = CursorField(partitioner)
+            cursor_field = CursorField(stream.cursor_field) if isinstance(stream.cursor_field, str) else CursorField(stream.cursor_field[0])
             converter = IsoMillisConcurrentStreamStateConverter()
             cursor = ConcurrentCursor(
                 stream.name,
