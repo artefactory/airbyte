@@ -31,21 +31,16 @@ connectionSpecification:
             order: 2
             title: Client Secret
             type: string
-          access_token:
-            airbyte_secret: true
-            description: Access Token for making authenticated requests.
-            order: 3
-            title: Access Token
-            type: string
           refresh_token:
             airbyte_secret: true
             description: Refresh Token for making authenticated requests.
-            order: 4
+            order: 3
             title: Refresh Token
             type: string
         required:
         - client_id
         - client_secret
+        - refresh_token
         - auth_type
         title: OAuth2.0
         type: object

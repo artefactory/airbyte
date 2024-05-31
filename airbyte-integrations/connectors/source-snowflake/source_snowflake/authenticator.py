@@ -2,9 +2,12 @@ import base64
 import hashlib
 from datetime import timedelta, datetime, timezone
 from typing import Text, Mapping, Any
+from urllib import parse
 
 from airbyte_cdk.sources.declarative.auth import JwtAuthenticator
 from airbyte_cdk.sources.declarative.auth.jwt import JwtAlgorithm
+from airbyte_cdk.sources.streams.http.requests_native_auth import Oauth2Authenticator
+
 from cryptography.hazmat.primitives._serialization import Encoding, PublicFormat
 from cryptography.hazmat.primitives.serialization import load_pem_private_key
 from cryptography.hazmat.backends import default_backend
@@ -50,7 +53,7 @@ class SnowflakeJwtAuthenticator(JwtAuthenticator):
         sub = cls.get_formatted_account(config['host'], config["credentials"]['user_name'])
         formatted_private_key = cls._format_private_key(config["credentials"]['private_key'])
         password = cls.get_formatted_password_from_config(config)
-        public_key_finger_print = cls.calculate_public_key_fingerprint(formatted_private_key, password,sub)
+        public_key_finger_print = cls.calculate_public_key_fingerprint(formatted_private_key, password, sub)
         kwargs = {"config": {},
                   "algorithm": JwtAlgorithm.RS256,
                   "iss": public_key_finger_print,
@@ -119,3 +122,22 @@ class SnowflakeJwtAuthenticator(JwtAuthenticator):
         content = private_key.split(start_private_key)[1].split(end_private_key)[0]
         content = content.replace(' ', '\n')
         return f'{start_private_key}{content}{end_private_key}'
+
+
+class SnowflakeOAuthAuthenticator(Oauth2Authenticator):
+    def __init__(self, host: str, client_id: str, client_secret: str, refresh_token: str):
+        base_url = host
+        o_auth_url = parse.urljoin(base_url, url="/oauth/token")
+        print("o_auth_url", o_auth_url)
+        super().__init__(o_auth_url,
+                         client_id,
+                         client_secret,
+                         refresh_token)
+
+    @classmethod
+    def from_config(cls, config):
+        host = config['host']
+        client_id = config["credentials"]['client_id']
+        client_secret = config["credentials"]['client_secret']
+        refresh_token = config["credentials"]['refresh_token']
+        return cls(host, client_id, client_secret, refresh_token)

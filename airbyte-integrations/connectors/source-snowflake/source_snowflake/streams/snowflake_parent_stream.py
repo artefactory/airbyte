@@ -1,14 +1,11 @@
-import logging
 import uuid
 from abc import ABC
-from datetime import datetime, timedelta
 from typing import Any, Iterable, List, Mapping, MutableMapping, Optional, Union
 
 import requests
 from airbyte_cdk.sources.streams.core import StreamData
 from airbyte_cdk.sources.streams.http import HttpStream
-from airbyte_protocol.models import SyncMode
-
+from source_snowflake.authenticator import SnowflakeJwtAuthenticator
 from source_snowflake.snowflake_exceptions import emit_airbyte_error_message
 from source_snowflake.utils import handle_no_permissions_error
 
@@ -70,9 +67,15 @@ class SnowflakeStream(HttpStream, ABC):
             stream_slice: Optional[Mapping[str, Any]] = None,
             next_page_token: Optional[Mapping[str, Any]] = None,
     ) -> Mapping[str, Any]:
+
+        if isinstance(self.authenticator, SnowflakeJwtAuthenticator):
+            snowflake_authorization_token_type = 'KEYPAIR_JWT'
+        else:
+            snowflake_authorization_token_type = 'OAUTH'
+
         headers = {
             'User-Agent': 'Airbyte',
-            'X-Snowflake-Authorization-Token-Type': 'KEYPAIR_JWT',  # to be changed when authentication method is set
+            'X-Snowflake-Authorization-Token-Type': snowflake_authorization_token_type,
             'Content-Type': 'application/json',
             'Accept': 'application/json',
         }

@@ -11,11 +11,12 @@ from source_snowflake.streams.check_connection import CheckConnectionStream
 import requests
 from airbyte_cdk.sources import AbstractSource
 from airbyte_cdk.sources.streams import Stream
-from airbyte_protocol.models import SyncMode, AirbyteMessage, AirbyteTraceMessage, TraceType, AirbyteErrorTraceMessage, FailureType
-from airbyte_cdk.models import Type as AirbyteType
-from .authenticator import SnowflakeJwtAuthenticator
-from .snowflake_exceptions import InconsistentPushDownFilterParentStreamNameError, NotEnabledChangeTrackingOptionError, \
+from airbyte_protocol.models import FailureType
+from .snowflake_exceptions import InconsistentPushDownFilterParentStreamNameError, \
     DuplicatedPushDownFilterStreamNameError, IncorrectHostFormat, emit_airbyte_error_message, UnknownUpdateMethodError
+from airbyte_protocol.models import SyncMode
+
+from .authenticator import SnowflakeJwtAuthenticator, SnowflakeOAuthAuthenticator
 from .streams.push_down_filter_stream import PushDownFilterStream, PushDownFilterChangeDataCaptureStream
 from .utils import handle_no_permissions_error
 
@@ -25,6 +26,8 @@ class SourceSnowflake(AbstractSource):
     SNOWFLAKE_URL_SUFFIX = ".snowflakecomputing.com"
     HTTP_PREFIX = "https://"
     update_methods = ('standard', 'history')
+    jwt_token_authentication_label = "JWT Token"
+    OAuth_authentication_label = "OAuth"
 
     def check_connection(self, logger, config) -> Tuple[bool, any]:
         """
@@ -42,7 +45,7 @@ class SourceSnowflake(AbstractSource):
             self.check_update_method(config=config)
             self.check_push_down_filter_name_unicity(config=config)
             url_base = self.format_url_base(host)
-            authenticator = SnowflakeJwtAuthenticator.from_config(config)
+            authenticator = self.get_authenticator(config)
 
             self.check_existence_of_at_least_one_stream(url_base=url_base, config=config, authenticator=authenticator)
             self.check_push_down_filters_parent_stream_consistency(url_base=url_base, config=config, authenticator=authenticator)
@@ -104,6 +107,17 @@ class SourceSnowflake(AbstractSource):
         return True, None
 
     @classmethod
+    def get_authenticator(cls, config):
+        authenticator = None
+        if config['credentials']['auth_type'] == cls.jwt_token_authentication_label:
+            authenticator = SnowflakeJwtAuthenticator.from_config(config)
+
+        elif config['credentials']['auth_type'] == cls.OAuth_authentication_label:
+            authenticator = SnowflakeOAuthAuthenticator.from_config(config)
+
+        return authenticator
+
+    @classmethod
     def check_host_format(cls, host):
         if not host.endswith(cls.SNOWFLAKE_URL_SUFFIX):
             raise IncorrectHostFormat()
@@ -120,7 +134,6 @@ class SourceSnowflake(AbstractSource):
             push_down_filters_names = [stream['name'] for stream in config['streams']]
             if len(push_down_filters_names) != len(set(push_down_filters_names)):
                 raise DuplicatedPushDownFilterStreamNameError()
-
 
     @classmethod
     def check_existence_of_at_least_one_stream(cls, url_base, config, authenticator):
@@ -166,7 +179,7 @@ class SourceSnowflake(AbstractSource):
         """
         host = config['host']
         url_base = self.format_url_base(host)
-        authenticator = SnowflakeJwtAuthenticator.from_config(config)
+        authenticator = self.get_authenticator(config)
         table_catalog_stream = TableCatalogStream(url_base=url_base,
                                                   config=config,
                                                   authenticator=authenticator)
