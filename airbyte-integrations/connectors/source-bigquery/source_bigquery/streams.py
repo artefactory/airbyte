@@ -422,7 +422,11 @@ class BigqueryIncrementalStream(BigqueryResultStream, IncrementalMixin):
     def state(self, value):
         self.cursor_field = list(value.keys())[0]
         self._cursor = value[self.cursor_field]
-
+    
+    @property
+    def supported_sync_modes(self):
+        return [SyncMode.incremental, SyncMode.full_refresh]
+    
     @property
     def source_defined_cursor(self) -> bool:
         return False
@@ -516,8 +520,9 @@ class BigqueryIncrementalStream(BigqueryResultStream, IncrementalMixin):
         slice = {}
         if stream_state:
             self._cursor = stream_state.get(self.cursor_field)
-            default_start =  datetime.strptime(self._cursor, '%Y-%m-%dT%H:%M:%S.%f%z') - timedelta(minutes=self.slice_range) #slice range is equal to loopback window
-        if self.cursor_field:
+            if self._cursor:
+                default_start =  datetime.strptime(self._cursor, '%Y-%m-%dT%H:%M:%S.%f%z') - timedelta(minutes=self.slice_range) #slice range is equal to loopback window
+        if self.cursor_field and sync_mode == SyncMode.incremental:
             start_time, end_time = self._extract_borders()
             if not isinstance(start_time, datetime):
                 raise AirbyteTracedException(
@@ -582,12 +587,28 @@ class BigqueryIncrementalStream(BigqueryResultStream, IncrementalMixin):
                 }
                 self._updated_state(self.state, formated_data)
                 yield formated_data
+    
+    def should_retry(self, response: requests.Response) -> bool:
+        """
+        Override to set different conditions for backoff based on the response from the server.
+
+        By default, back off on the following HTTP response statuses:
+         - jobComplete false indicates query job not completed
+
+        Unexpected but transient exceptions (connection timeout, DNS resolution failed, etc..) are retried by default.
+        """
+        retry = False
+        records = response.json()
+        if records.get("jobComplete", None):
+            retry = (records["jobComplete"] == False)
+        return retry
 
 
 class IncrementalQueryResult(BigqueryResultStream):
     """
     """
     primary_key = None
+    cursor_field = []
 
     def __init__(self, project_id: list, dataset_id: str, table_id: str, given_name=None, where_clause: str="", fallback_start=None, slice_range=SLICE_RANGE, **kwargs):
         self.project_id = project_id
@@ -610,7 +631,19 @@ class IncrementalQueryResult(BigqueryResultStream):
     @property
     def stream(self):
         return self.stream_obj
+    
+    @property
+    def supported_sync_modes(self):
+        return [SyncMode.incremental, SyncMode.full_refresh]
+    
+    @property
+    def source_defined_cursor(self) -> bool:
+        return False
 
+    @property
+    def supports_incremental(self) -> bool:
+        return True
+    
     def path(self, **kwargs) -> str:
         """
         Documentation: https://cloud.google.com/bigquery/docs/reference/rest/v2/jobs/query
@@ -646,6 +679,21 @@ class IncrementalQueryResult(BigqueryResultStream):
         """
         record = response.json()
         yield record
+    
+    def should_retry(self, response: requests.Response) -> bool:
+        """
+        Override to set different conditions for backoff based on the response from the server.
+
+        By default, back off on the following HTTP response statuses:
+         - jobComplete false indicates query job not completed
+
+        Unexpected but transient exceptions (connection timeout, DNS resolution failed, etc..) are retried by default.
+        """
+        retry = False
+        records = response.json()
+        if records.get("jobComplete", None):
+            retry = (records["jobComplete"] == False)
+        return retry
 
 
 class BigqueryCDCStream(BigqueryResultStream, IncrementalMixin):
@@ -704,7 +752,7 @@ class BigqueryCDCStream(BigqueryResultStream, IncrementalMixin):
     @property
     def supports_incremental(self) -> bool:
         return True
-
+    
     @property
     def primary_key(self) -> Optional[Union[str, List[str], List[List[str]]]]:
         """
@@ -847,6 +895,21 @@ class BigqueryCDCStream(BigqueryResultStream, IncrementalMixin):
                 }
                 yield formated_data
                 self._updated_state(self.state, formated_data)
+
+    def should_retry(self, response: requests.Response) -> bool:
+        """
+        Override to set different conditions for backoff based on the response from the server.
+
+        By default, back off on the following HTTP response statuses:
+         - jobComplete false indicates query job not completed
+
+        Unexpected but transient exceptions (connection timeout, DNS resolution failed, etc..) are retried by default.
+        """
+        retry = False
+        records = response.json()
+        if records.get("jobComplete", None):
+            retry = (records["jobComplete"] == False)
+        return retry
 
 
 class TableChangeHistory(BigqueryResultStream):
@@ -1081,3 +1144,18 @@ class InformationSchemaStream(JobsQueryStream):
     def parse_response(self, response: requests.Response, **kwargs) -> Iterable[Mapping]:
         records = response.json()
         yield from self.process_records(records)
+
+    def should_retry(self, response: requests.Response) -> bool:
+        """
+        Override to set different conditions for backoff based on the response from the server.
+
+        By default, back off on the following HTTP response statuses:
+         - jobComplete false indicates query job not completed
+
+        Unexpected but transient exceptions (connection timeout, DNS resolution failed, etc..) are retried by default.
+        """
+        retry = False
+        records = response.json()
+        if records.get("jobComplete", None):
+            retry = (records["jobComplete"] == False)
+        return retry
