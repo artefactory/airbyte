@@ -38,6 +38,7 @@ URL_BASE: str = "https://bigquery.googleapis.com"
 CHANGE_FIELDS = {"_CHANGE_TIMESTAMP": "change_timestamp", "_CHANGE_TYPE": "change_type"}
 PAGE_SIZE = 10000
 TIMEOUT = 30000 # 30 seconds
+SLICE_RANGE = 525600 # 1 year in minutes
 
 class BigqueryStream(HttpStream, ABC):
     """
@@ -383,7 +384,8 @@ class BigqueryIncrementalStream(BigqueryResultStream, IncrementalMixin):
     primary_key = None
     state_checkpoint_interval = None
 
-    def __init__(self, project_id, dataset_id, table_id, stream_path, stream_schema, fallback_start:str, given_name=None, where_clause=None, stream_request=None, **kwargs):
+    def __init__(self, project_id, dataset_id, table_id, stream_path, stream_schema, fallback_start:str, \
+                 given_name=None, where_clause=None, stream_request=None, slice_range=SLICE_RANGE, **kwargs):
         self.stream_name = dataset_id + "." + table_id
         super().__init__(stream_path, self.stream_name, stream_schema, stream_request, **kwargs)
         self.request_body = stream_request
@@ -393,6 +395,7 @@ class BigqueryIncrementalStream(BigqueryResultStream, IncrementalMixin):
         self.table_id = table_id
         self.given_name = given_name
         self.where_clause = where_clause.replace("\"", "'")
+        self.slice_range = slice_range
         self._checkpoint_time = datetime.now()
         self.fallback_start = fallback_start
         self.start_time = None
@@ -492,8 +495,7 @@ class BigqueryIncrementalStream(BigqueryResultStream, IncrementalMixin):
         return self.start_time, self.end_time
 
     def _chunk_dates(self, start_date: datetime, end_date: datetime, table_start: datetime) -> Iterable[Tuple[datetime, datetime]]:
-        slice_range = 1 #TODO: get from config
-        step = timedelta(minutes=slice_range)
+        step = timedelta(minutes=self.slice_range)
         new_start_date = start_date
         if start_date == end_date:
             yield start_date, start_date + step
@@ -587,13 +589,15 @@ class IncrementalQueryResult(BigqueryResultStream):
     """
     primary_key = None
 
-    def __init__(self, project_id: list, dataset_id: str, table_id: str, given_name=None, where_clause: str="", fallback_start=None, **kwargs):
+    def __init__(self, project_id: list, dataset_id: str, table_id: str, given_name=None, where_clause: str="", fallback_start=None, slice_range=SLICE_RANGE, **kwargs):
         self.project_id = project_id
         self.parent_stream = dataset_id + "." + table_id
         self.given_name = given_name
         self.where_clause = where_clause.replace("\"", "'")
         super().__init__(self.path(), self.parent_stream, self.get_json_schema, **kwargs)
-        self.stream_obj = BigqueryIncrementalStream(project_id, dataset_id, table_id, self.path(), self.get_json_schema, fallback_start=fallback_start, given_name=given_name, where_clause=where_clause,**kwargs)
+        self.stream_obj = BigqueryIncrementalStream(project_id, dataset_id, table_id, self.path(), self.get_json_schema, \
+                                                    fallback_start=fallback_start, given_name=given_name, where_clause=where_clause,\
+                                                    slice_range=slice_range, **kwargs)
 
     @property
     def namespace(self):
@@ -649,7 +653,8 @@ class BigqueryCDCStream(BigqueryResultStream, IncrementalMixin):
     """
     state_checkpoint_interval = None
 
-    def __init__(self, project_id, dataset_id, table_id, stream_path, stream_schema, given_name=None, where_clause: str="",fallback_start=None,**kwargs):
+    def __init__(self, project_id, dataset_id, table_id, stream_path, stream_schema, given_name=None, \
+                 where_clause: str="", fallback_start=None, slice_range=SLICE_RANGE, **kwargs):
         self.stream_name = dataset_id + "." + table_id
         super().__init__(stream_path, self.stream_name, stream_schema, **kwargs)
         self._cursor = None
@@ -662,6 +667,7 @@ class BigqueryCDCStream(BigqueryResultStream, IncrementalMixin):
         self.table_id = table_id
         self.given_name = given_name
         self.where_clause = where_clause.replace("\"", "'")
+        self.slice_range = slice_range
         self.start_time = None
         self.end_time = None
         # self._stream_slicer_cursor = None
@@ -769,8 +775,7 @@ class BigqueryCDCStream(BigqueryResultStream, IncrementalMixin):
         return self.start_time, self.end_time
     
     def _chunk_dates(self, start_date: datetime, end_date: datetime, table_start: datetime) -> Iterable[Tuple[datetime, datetime]]:
-        slice_range = 1 #TODO: get from config
-        step = timedelta(minutes=slice_range)
+        step = timedelta(minutes=self.slice_range)
         new_start_date = start_date
         if start_date == end_date:
             yield start_date, start_date + step
@@ -849,7 +854,8 @@ class TableChangeHistory(BigqueryResultStream):
     """
     primary_key = None
 
-    def __init__(self, project_id: list, dataset_id: str, table_id: str, given_name=None, where_clause: str="", fallback_start: datetime=None,**kwargs):
+    def __init__(self, project_id: list, dataset_id: str, table_id: str, given_name=None, \
+                 where_clause: str="", fallback_start: datetime=None, slice_range=SLICE_RANGE, **kwargs):
         self.project_id = project_id
         self.given_name = given_name
         self.table_qualifier = dataset_id + "." + table_id
@@ -857,7 +863,8 @@ class TableChangeHistory(BigqueryResultStream):
         self.table_id = table_id
         self.where_clause = where_clause.replace("\"", "'")
         super().__init__(self.path(), self.table_qualifier, self.project_id, self.get_json_schema, retry_policy=self.should_retry, **kwargs)
-        self.stream_obj = BigqueryCDCStream(project_id, dataset_id, table_id, self.path(), self.get_json_schema, given_name, where_clause, fallback_start=fallback_start,**kwargs)
+        self.stream_obj = BigqueryCDCStream(project_id, dataset_id, table_id, self.path(), self.get_json_schema, \
+                                            given_name, where_clause, fallback_start=fallback_start, slice_range=SLICE_RANGE, **kwargs)
 
     @property
     def namespace(self):
@@ -1069,7 +1076,7 @@ class InformationSchemaStream(JobsQueryStream):
                     **{CHANGE_FIELDS.get(element["name"], element["name"]): SchemaHelpers.format_field(data[fields.index(element)]["v"], element["type"]) for element in fields},
                 }            
         except TypeError as e:
-            self.logger.error(f"Incorrect response to Table {self.dataset_id}.{self.table_id} request to get primary keys gives {str(e)}")
+            self.logger.error(f"Incorrect response {record} to Table {self.dataset_id}.{self.table_id} request to get primary keys gives {str(e)}")
 
     def parse_response(self, response: requests.Response, **kwargs) -> Iterable[Mapping]:
         records = response.json()
