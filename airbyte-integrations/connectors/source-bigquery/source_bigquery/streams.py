@@ -243,10 +243,10 @@ class BigqueryResultStream(BigqueryStream):
         print(state.json(exclude_unset=True))  # Emit state
 
 
-class TableQueryRecord(BigqueryResultStream):
+class CHTableQueryRecord(BigqueryResultStream):
     """
     """
-    name = "query_record"
+    name = "ch_query_record"
 
     def __init__(self, project_id: list, parent_stream: str, order: str, column: str, **kwargs):
         self.project_id = project_id
@@ -295,6 +295,35 @@ class TableQueryRecord(BigqueryResultStream):
             }
             yield self.data
 
+
+class TableQueryRecord(CHTableQueryRecord):
+    """
+    """
+    name = "query_record"
+
+    def __init__(self, project_id: list, parent_stream: str, order: str, column: str, **kwargs):
+        self.project_id = project_id
+        self.parent_stream = parent_stream
+        self.order = order
+        self.column = column
+        super().__init__(project_id, parent_stream, order, column, **kwargs)
+
+    def request_body_json(
+        self,
+        stream_state: Optional[Mapping[str, Any]],
+        stream_slice: Optional[Mapping[str, Any]] = None,
+        next_page_token: Optional[Mapping[str, Any]] = None,
+    ) -> Optional[Mapping[str, Any]]:
+        query_string = f"select * from `{self.parent_stream}` ORDER BY {self.column} {self.order} LIMIT 1"
+        # import ipdb
+        # ipdb.set_trace()
+        request_body = {
+            "kind": "bigquery#queryRequest",
+            "query": query_string,
+            "useLegacySql": False
+            }
+        return request_body
+    
 
 class TableQueryResult(BigqueryResultStream):
     """
@@ -348,15 +377,15 @@ class BigqueryIncrementalStream(BigqueryResultStream, IncrementalMixin):
     primary_key = None
     state_checkpoint_interval = None
 
-    def __init__(self, project_id, stream_path, stream_name, stream_schema, fallback_start:str, stream_request=None, partitioner: str=None,**kwargs):
+    def __init__(self, project_id, stream_path, stream_name, stream_schema, fallback_start:str, stream_request=None, **kwargs):
         super().__init__(stream_path, stream_name, stream_schema, stream_request, **kwargs)
         self.request_body = stream_request
         self._cursor = None
+        self.project_id = project_id
         self._checkpoint_time = datetime.now()
-        self.partitioner = partitioner
         self.fallback_start = fallback_start
-        self.first_record = TableQueryRecord(project_id, stream_name, "ASC", partitioner, **kwargs)
-        self.last_record = TableQueryRecord(project_id, stream_name, "DESC", partitioner, **kwargs)
+        self.start_time = None
+        self.end_time = None
 
     @property
     def name(self):
@@ -403,13 +432,16 @@ class BigqueryIncrementalStream(BigqueryResultStream, IncrementalMixin):
         return self.state
 
     def _extract_borders(self):
-        start_time = next(self.first_record.read_records(sync_mode=SyncMode.full_refresh)).get(self.partitioner, None)
-        end_time = next(self.last_record.read_records(sync_mode=SyncMode.full_refresh)).get(self.partitioner, None)
-        if isinstance(start_time, str):
-            start_time = datetime.strptime(start_time, '%Y-%m-%dT%H:%M:%S.%f%z')
-        if isinstance(end_time, str):
-            end_time = datetime.strptime(end_time, '%Y-%m-%dT%H:%M:%S.%f%z')
-        return start_time, end_time
+        if not self.start_time and not self.end_time:
+            first_record = TableQueryRecord(self.project_id, self.stream_name, "ASC", self.cursor_field, authenticator=self._auth)
+            last_record = TableQueryRecord(self.project_id, self.stream_name, "DESC", self.cursor_field, authenticator=self._auth)
+            self.start_time = next(first_record.read_records(sync_mode=SyncMode.full_refresh)).get(self.cursor_field, None)
+            self.end_time = next(last_record.read_records(sync_mode=SyncMode.full_refresh)).get(self.cursor_field, None)
+            if isinstance(self.start_time, str):
+                self.start_time = datetime.strptime(self.start_time, '%Y-%m-%dT%H:%M:%S.%f%z')
+            if isinstance(self.end_time, str):
+                self.end_time = datetime.strptime(self.end_time, '%Y-%m-%dT%H:%M:%S.%f%z')
+        return self.start_time, self.end_time
 
     def _chunk_dates(self, start_date: datetime, end_date: datetime, table_start: datetime) -> Iterable[Tuple[datetime, datetime]]:
         slice_range = 1 #TODO: get from config
@@ -430,20 +462,20 @@ class BigqueryIncrementalStream(BigqueryResultStream, IncrementalMixin):
             self.cursor_field = cursor_field[0]
         elif cursor_field:
             self.cursor_field = cursor_field
-        start_time, end_time = self._extract_borders()
         default_start = self.fallback_start
         slice = {}
         if stream_state:
             self._cursor = stream_state.get(self.cursor_field)
-            default_start =  datetime.strptime(self.partitioner, '%Y-%m-%dT%H:%M:%S.%f%z')
-            slice[self.cursor_field] = self._cursor
-        if end_time and default_start <= end_time:
-            for start, end in self._chunk_dates(default_start, end_time, start_time):
-                slice["start"] = start.isoformat(timespec='microseconds')
-                slice["end"] = end.isoformat(timespec='microseconds')
-                yield slice
+            default_start =  datetime.strptime(self._cursor, '%Y-%m-%dT%H:%M:%S.%f%z')
+        if self.cursor_field:
+            start_time, end_time = self._extract_borders()
+            if end_time and default_start <= end_time:
+                for start, end in self._chunk_dates(default_start, end_time, start_time):
+                    slice["start"] = start.isoformat(timespec='microseconds')
+                    slice["end"] = end.isoformat(timespec='microseconds')
+                    yield slice
         else:
-            yield slice
+            yield
 
     def request_body_json(
         self,
@@ -451,24 +483,24 @@ class BigqueryIncrementalStream(BigqueryResultStream, IncrementalMixin):
         stream_slice: Optional[Mapping[str, Any]] = None,
         next_page_token: Optional[Mapping[str, Any]] = None,
     ) -> Optional[Mapping[str, Any]]:
-        query_string = f"select * from `{self.name}`"
+        query_string = f"SELECT * FROM `{self.name}`"
         if self.cursor_field:
-            query_string = f"select * from `{self.name}` ORDER BY {self.cursor_field}"
+            query_string = f"SELECT * FROM `{self.name}` ORDER BY {self.cursor_field}"
         if stream_slice:
-            if self.cursor_field:
-                self._cursor = stream_slice.get(self.cursor_field, None)
+            # if self.cursor_field:
+            #     self._cursor = stream_slice.get(self.cursor_field, None)
             start = stream_slice.get("start", None)
             end = stream_slice.get("end", None)
-            if self._cursor:
-                cursor_value = self._cursor
-                if isinstance(self._cursor, str):
-                    cursor_value = f"'{self._cursor}'"
-            if self._cursor and self.partitioner:
-                query_string = f"SELECT * from `{self.name}` where {self.cursor_field}>={cursor_value} AND {self.partitioner}>='{start}' AND {self.partitioner}<'{end}' ORDER BY {self.partitioner}"
-            elif self.partitioner:
-                query_string = f"SELECT * from `{self.name}` where {self.partitioner}>='{start}' AND {self.partitioner}<'{end}' ORDER BY {self.partitioner}"
-            elif self._cursor:
-                query_string = f"SELECT * from `{self.name}` where {self.cursor_field}>={cursor_value} ORDER BY {self.cursor_field}"
+            # if self._cursor:
+                # cursor_value = self._cursor
+                # if isinstance(self._cursor, str):
+                #     cursor_value = f"'{self._cursor}'"
+            if start and end:
+                query_string = f"SELECT * FROM `{self.name}` where {self.cursor_field}>='{start}'  AND {self.cursor_field}<'{end}' ORDER BY {self.cursor_field}"
+            # elif self._cursor:
+            #     query_string = f"SELECT * from `{self.name}` where {self.cursor_field}>={cursor_value} ORDER BY {self.cursor_field}"
+        # import ipdb
+        # ipdb.set_trace()
         request_body = {
             "kind": "bigquery#queryRequest",
             "query": query_string,
@@ -497,11 +529,11 @@ class IncrementalQueryResult(BigqueryResultStream):
     """
     primary_key = None
 
-    def __init__(self, project_id: list, dataset_id: str, table_id: str, fallback_start, partitioner: str=None, **kwargs):
+    def __init__(self, project_id: list, dataset_id: str, table_id: str, fallback_start, **kwargs):
         self.project_id = project_id
         self.parent_stream = dataset_id + "." + table_id
         super().__init__(self.path(), self.parent_stream, self.get_json_schema, **kwargs)
-        self.stream_obj = BigqueryIncrementalStream(project_id, self.path(), self.parent_stream, self.get_json_schema, fallback_start=fallback_start, partitioner=partitioner, **kwargs) #super()
+        self.stream_obj = BigqueryIncrementalStream(project_id, self.path(), self.parent_stream, self.get_json_schema, fallback_start=fallback_start, **kwargs) #super()
 
     @property
     def name(self):
@@ -660,8 +692,8 @@ class BigqueryCDCStream(BigqueryResultStream, IncrementalMixin):
     def _extract_borders(self):
         if not self.start_time and not self.end_time:
             cursor_column = next(key for key, value in CHANGE_FIELDS.items() if value == self.cursor_field)
-            first_record = TableQueryRecord(self.project_id, self.stream_name, "ASC", cursor_column, authenticator=self._auth)
-            last_record = TableQueryRecord(self.project_id, self.stream_name, "DESC", cursor_column, authenticator=self._auth)
+            first_record = CHTableQueryRecord(self.project_id, self.stream_name, "ASC", cursor_column, authenticator=self._auth)
+            last_record = CHTableQueryRecord(self.project_id, self.stream_name, "DESC", cursor_column, authenticator=self._auth)
             self.start_time = next(first_record.read_records(sync_mode=SyncMode.full_refresh)).get(self.cursor_field, None)
             self.end_time = next(last_record.read_records(sync_mode=SyncMode.full_refresh)).get(self.cursor_field, None)
             if isinstance(self.start_time, str):
