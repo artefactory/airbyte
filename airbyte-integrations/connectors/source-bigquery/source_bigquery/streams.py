@@ -377,11 +377,13 @@ class BigqueryIncrementalStream(BigqueryResultStream, IncrementalMixin):
     primary_key = None
     state_checkpoint_interval = None
 
-    def __init__(self, project_id, stream_path, stream_name, stream_schema, fallback_start:str, stream_request=None, **kwargs):
+    def __init__(self, project_id, dataset_id, table_id, stream_path, stream_name, stream_schema, fallback_start:str, stream_request=None, **kwargs):
         super().__init__(stream_path, stream_name, stream_schema, stream_request, **kwargs)
         self.request_body = stream_request
         self._cursor = None
         self.project_id = project_id
+        self.dataset_id = dataset_id
+        self.table_id = table_id
         self._checkpoint_time = datetime.now()
         self.fallback_start = fallback_start
         self.start_time = None
@@ -469,6 +471,12 @@ class BigqueryIncrementalStream(BigqueryResultStream, IncrementalMixin):
             default_start =  datetime.strptime(self._cursor, '%Y-%m-%dT%H:%M:%S.%f%z')
         if self.cursor_field:
             start_time, end_time = self._extract_borders()
+            if not isinstance(start_time, datetime):
+                raise AirbyteTracedException(
+                            internal_message=f"Cursor field should be a timestamp type for stream {self.dataset_id}.{self.table_id}",
+                            failure_type=FailureType.config_error,
+                            message=f"Cursor field should be a timestamp type for stream {self.dataset_id}.{self.table_id}",
+                        )
             if end_time and default_start <= end_time:
                 for start, end in self._chunk_dates(default_start, end_time, start_time):
                     slice["start"] = start.isoformat(timespec='microseconds')
@@ -487,20 +495,10 @@ class BigqueryIncrementalStream(BigqueryResultStream, IncrementalMixin):
         if self.cursor_field:
             query_string = f"SELECT * FROM `{self.name}` ORDER BY {self.cursor_field}"
         if stream_slice:
-            # if self.cursor_field:
-            #     self._cursor = stream_slice.get(self.cursor_field, None)
             start = stream_slice.get("start", None)
             end = stream_slice.get("end", None)
-            # if self._cursor:
-                # cursor_value = self._cursor
-                # if isinstance(self._cursor, str):
-                #     cursor_value = f"'{self._cursor}'"
             if start and end:
                 query_string = f"SELECT * FROM `{self.name}` where {self.cursor_field}>='{start}'  AND {self.cursor_field}<'{end}' ORDER BY {self.cursor_field}"
-            # elif self._cursor:
-            #     query_string = f"SELECT * from `{self.name}` where {self.cursor_field}>={cursor_value} ORDER BY {self.cursor_field}"
-        # import ipdb
-        # ipdb.set_trace()
         request_body = {
             "kind": "bigquery#queryRequest",
             "query": query_string,
@@ -533,7 +531,7 @@ class IncrementalQueryResult(BigqueryResultStream):
         self.project_id = project_id
         self.parent_stream = dataset_id + "." + table_id
         super().__init__(self.path(), self.parent_stream, self.get_json_schema, **kwargs)
-        self.stream_obj = BigqueryIncrementalStream(project_id, self.path(), self.parent_stream, self.get_json_schema, fallback_start=fallback_start, **kwargs) #super()
+        self.stream_obj = BigqueryIncrementalStream(project_id, dataset_id, table_id, self.path(), self.parent_stream, self.get_json_schema, fallback_start=fallback_start, **kwargs) #super()
 
     @property
     def name(self):
