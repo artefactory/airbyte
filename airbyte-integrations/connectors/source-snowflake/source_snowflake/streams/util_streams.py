@@ -176,12 +176,14 @@ class CurrentTimeZoneStream(SnowflakeStream):
             current_time_with_time_zone = current_time_record['current_time']
             current_time_time_zone_suffix = current_time_with_time_zone.split(' ')[1]
             cls.offset = convert_time_zone_time_stamp_suffix_to_offset_hours(current_time_time_zone_suffix)
+            cls._is_set = True
 
     @classmethod
     def get_current_time_snowflake_time_zone(cls, url_base, config, authenticator):
         cls.set_off_set(url_base, config, authenticator)
         current_time_date_utc = datetime.now(timezone.utc)
         return convert_utc_to_time_zone_date(current_time_date_utc, cls.offset)
+
 
 class StreamLauncher(SnowflakeStream):
 
