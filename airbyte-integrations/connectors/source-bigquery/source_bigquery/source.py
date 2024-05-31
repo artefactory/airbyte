@@ -141,13 +141,13 @@ class SourceBigquery(ConcurrentSourceAdapter):
                         self.logger.warn(str(e))
                         table_obj = IncrementalQueryResult(project_id, dataset_id, table_id, stream_name, where_clause, fallback_start=fallback_start, authenticator=self._auth)
                 streams_catalog.append(table_obj.stream)
-        for dataset in BigqueryDatasets(project_id=config["project_id"], authenticator=self._auth).read_records(sync_mode=SyncMode.full_refresh):
+        for dataset in BigqueryDatasets(project_id=project_id, authenticator=self._auth).read_records(sync_mode=SyncMode.full_refresh):
             dataset_id = dataset.get("datasetReference")["datasetId"]
             # list and process each table under each base to generate the JSON Schema
-            for table_info in BigqueryTables(dataset_id=dataset_id, project_id=config["project_id"], authenticator=self._auth).read_records(sync_mode=SyncMode.full_refresh):
+            for table_info in BigqueryTables(dataset_id=dataset_id, project_id=project_id, authenticator=self._auth).read_records(sync_mode=SyncMode.full_refresh):
                 table_id = table_info.get("tableReference")["tableId"]
                 if sync_method == "Standard":
-                    table_obj = IncrementalQueryResult(config["project_id"], dataset_id, table_id, fallback_start=fallback_start,authenticator=self._auth)
+                    table_obj = IncrementalQueryResult(project_id, dataset_id, table_id, fallback_start=fallback_start,authenticator=self._auth)
                 else:
                     try:
                         table_obj = TableChangeHistory(project_id, dataset_id, table_id, fallback_start=change_history_start, authenticator=self._auth)
