@@ -516,7 +516,7 @@ class BigqueryIncrementalStream(BigqueryResultStream, IncrementalMixin):
         slice = {}
         if stream_state:
             self._cursor = stream_state.get(self.cursor_field)
-            default_start =  datetime.strptime(self._cursor, '%Y-%m-%dT%H:%M:%S.%f%z')
+            default_start =  datetime.strptime(self._cursor, '%Y-%m-%dT%H:%M:%S.%f%z') - timedelta(minutes=self.slice_range) #slice range is equal to loopback window
         if self.cursor_field:
             start_time, end_time = self._extract_borders()
             if not isinstance(start_time, datetime):
@@ -554,7 +554,7 @@ class BigqueryIncrementalStream(BigqueryResultStream, IncrementalMixin):
             "kind": "bigquery#queryRequest",
             "query": query_string,
             "useLegacySql": False,
-            "timeoutMs": 30000,
+            "timeoutMs": TIMEOUT,
             "maxResults": self.page_size
             }
         return request_body
@@ -792,7 +792,7 @@ class BigqueryCDCStream(BigqueryResultStream, IncrementalMixin):
         default_start = self.fallback_start #max(start_time, self.fallback_start)
         if stream_state:
             self._cursor = stream_state.get(self.cursor_field)
-            default_start =  datetime.strptime(self._cursor, '%Y-%m-%dT%H:%M:%S.%f%z') #TODO: check type first
+            default_start =  datetime.strptime(self._cursor, '%Y-%m-%dT%H:%M:%S.%f%z') - timedelta(minutes=self.slice_range)
         if end_time and default_start <= end_time:
             for start, end in self._chunk_dates(default_start, end_time, start_time):
                 yield {
@@ -819,7 +819,7 @@ class BigqueryCDCStream(BigqueryResultStream, IncrementalMixin):
             "kind": "bigquery#queryRequest",
             "query": query_string,
             "useLegacySql": False,
-            "timeoutMs": 30000,
+            "timeoutMs": TIMEOUT,
             "maxResults": self.page_size
             }
         return request_body
@@ -928,8 +928,8 @@ class TableChangeHistory(BigqueryResultStream):
         if records.get("jobComplete", None):
             retry = (records["jobComplete"] == False)
         return retry
-
-
+    
+    
 class GetQueryResults(BigqueryStream):
     """
     """
@@ -1062,7 +1062,7 @@ class InformationSchemaStream(JobsQueryStream):
             "kind": "bigquery#queryRequest",
             "query": query_string,
             "useLegacySql": False,
-            "timeoutMs": 30000,
+            "timeoutMs": TIMEOUT
             }
         return request_body
     
