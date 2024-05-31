@@ -171,7 +171,7 @@ class SourceBigquery(ConcurrentSourceAdapter):
     def _to_concurrent(
         self, stream: Stream, fallback_start: datetime, slice_range: timedelta, state_manager: ConnectorStateManager
     ) -> Stream:
-        if not stream.cursor_field:
+        if not stream.cursor_field and self.catalog:
             for configured_stream in self.catalog.streams:
                 if configured_stream.stream.name == stream.name and configured_stream.cursor_field:
                     stream.cursor_field = configured_stream.cursor_field[0]
