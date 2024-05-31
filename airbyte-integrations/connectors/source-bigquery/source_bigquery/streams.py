@@ -255,7 +255,7 @@ class CHTableQueryRecord(BigqueryResultStream):
         self.parent_stream = parent_stream
         self.order = order
         self.column = column
-        self.where_clause = where_clause
+        self.where_clause = where_clause.replace("\"", "'")
         self.data = None
         super().__init__(self.path(), self.name, self.get_json_schema(), **kwargs)
 
@@ -311,7 +311,7 @@ class TableQueryRecord(CHTableQueryRecord):
         self.parent_stream = parent_stream
         self.order = order
         self.column = column
-        self.where_clause = where_clause
+        self.where_clause = where_clause.replace("\"", "'")
         super().__init__(project_id, parent_stream, order, column, where_clause, **kwargs)
 
     def request_body_json(
@@ -340,7 +340,7 @@ class TableQueryResult(BigqueryResultStream):
     def __init__(self, project_id: list, parent_stream: str, where_clause: str, **kwargs):
         self.project_id = project_id
         self.parent_stream = parent_stream
-        self.where_clause = where_clause
+        self.where_clause = where_clause.replace("\"", "'")
         super().__init__(self.path(), self.name, self.get_json_schema(), **kwargs)
 
     def path(self, **kwargs) -> str:
@@ -929,7 +929,7 @@ class TableChangeHistory(BigqueryResultStream):
             retry = (records["jobComplete"] == False)
         return retry
     
-    
+
 class GetQueryResults(BigqueryStream):
     """
     """
