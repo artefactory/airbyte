@@ -13,7 +13,8 @@
           "default_cursor_field": ["_bigquery_created_time"]
         },
         "sync_mode": "incremental",
-        "destination_sync_mode": "overwrite"
+        "destination_sync_mode": "overwrite",
+        "cursor_field": "id"
       }
     ]
   }
