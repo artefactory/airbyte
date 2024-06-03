@@ -103,7 +103,7 @@ class SourceBigquery(ConcurrentSourceAdapter):
             else:
                 error_code = error_data.get("errorCode")
                 if error.response.status_code == codes.FORBIDDEN and error_code == "REQUEST_LIMIT_EXCEEDED":
-                    logger.warn(f"API Call limit is exceeded. Error message: '{error_data.get('message')}'")
+                    self.logger.warning(f"API Call limit is exceeded. Error message: '{error_data.get('message')}'")
                     error_msg = "API Call limit is exceeded. Make sure that you have enough API allocation for your organization needs or retry later. For more information, see https://cloud.google.com/bigquery/quotas"
                     raise AirbyteTracedException(
                         internal_message=error_msg,
