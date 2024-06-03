@@ -139,8 +139,8 @@ class SourceBigquery(ConcurrentSourceAdapter):
                     try:
                         table_obj = TableChangeHistory(project_id, dataset_id, table_id, stream_name, where_clause=where_clause, fallback_start=change_history_start, slice_range=slice_range, authenticator=self._auth)
                         next(table_obj.read_records(sync_mode=SyncMode.full_refresh))
-                    except Exception as e:
-                        self.logger.warn(str(e))
+                    except exceptions.HTTPError as error:
+                        self.logger.warning(f"Table had no inserts in the last seven days so no change history is available causing the error: {str(error.response.text)}")
                         table_obj = IncrementalQueryResult(project_id, dataset_id, table_id, stream_name, where_clause, fallback_start=fallback_start, slice_range=slice_range, authenticator=self._auth)
                 if isinstance(table_obj, TableChangeHistory):
                     concurrent_streams.append(table_obj.stream)
@@ -157,8 +157,8 @@ class SourceBigquery(ConcurrentSourceAdapter):
                     try:
                         table_obj = TableChangeHistory(project_id, dataset_id, table_id, fallback_start=change_history_start, slice_range=slice_range, authenticator=self._auth)
                         next(table_obj.read_records(sync_mode=SyncMode.full_refresh))
-                    except Exception as e:
-                        self.logger.warn(str(e))
+                    except exceptions.HTTPError as error:
+                        self.logger.warning(f"Table had no inserts in the last seven days so no change history is available causing the error: {str(error.response.text)}")
                         table_obj = IncrementalQueryResult(project_id, dataset_id, table_id, fallback_start=fallback_start, slice_range=slice_range, authenticator=self._auth)
                 
                 if isinstance(table_obj, TableChangeHistory):
