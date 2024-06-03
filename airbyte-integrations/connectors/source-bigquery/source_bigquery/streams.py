@@ -116,7 +116,7 @@ class BigqueryDatasets(BigqueryStream):
             raise AirbyteTracedException(
                             internal_message=str(e),
                             failure_type=FailureType.config_error,
-                            message="Provided crendentials do not give access to any datasets or project has no datasets",
+                            message="Provided credentials do not give access to any datasets or project has no datasets",
                         )
 
 
