@@ -16,15 +16,11 @@ CHANGE_FIELDS = {"_CHANGE_TIMESTAMP": "change_timestamp", "_CHANGE_TYPE": "chang
 
 
 class SchemaTypes:
-
     string: Dict = {"type": ["null", "string"]}
-
     number: Dict = {"type": ["null", "number"]}
-
+    integer: Dict = {"type": ["null", "integer"]}
     boolean: Dict = {"type": ["null", "boolean"]}
-
     array: Dict = {"type": ["null", "array"], "items": {}}
-
     object: Dict = {"type": ["null", "object"]}
 
 
@@ -111,6 +107,5 @@ class SchemaHelpers:
             dt = datetime.fromtimestamp(ts, pytz.timezone("UTC")) #TODO: Update to use timestamps' actual zone
             return dt.isoformat(timespec='microseconds')
         if SIMPLE_BIGQUERY_TYPES.get(field_type) == SchemaTypes.number and field:
-            # TODO: update to handle floats as well
-            return int(field)
+            return float(field)
         return field
