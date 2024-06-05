@@ -1,7 +1,7 @@
 data:
   allowedHosts:
     hosts:
-      - ${host#https://}
+      - ${*.snowflakecomputing.com}
   registries:
     oss:
       enabled: true
