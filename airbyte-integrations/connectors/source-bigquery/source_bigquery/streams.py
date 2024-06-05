@@ -277,11 +277,18 @@ class BigqueryTableData(BigqueryTable):
 class BigqueryResultStream(BigqueryStream):
     """
     """
-    def __init__(self, stream_path: str, stream_name: str, stream_schema, stream_request=None, stream_data=None,**kwargs):
+    def __init__(self, project_id, stream_path: str, stream_name: str, stream_schema, stream_request=None, stream_data=None,**kwargs):
         self.request_body = stream_request
+        self.project_id = project_id
         self.retry_policy = kwargs.pop("retry_policy", None)
         super().__init__(stream_path, stream_name, stream_schema, stream_data, **kwargs)
 
+    def path(self, **kwargs) -> str:
+        """
+        Documentation: https://cloud.google.com/bigquery/docs/reference/rest/v2/jobs/query
+        """
+        return f"/bigquery/v2/projects/{self.project_id}/queries"
+    
     @property
     def http_method(self) -> str:
         return "POST"
@@ -340,7 +347,7 @@ class CHTableQueryRecord(BigqueryResultStream):
         self.column = column
         self.where_clause = where_clause.replace("\"", "'")
         self.data = None
-        super().__init__(self.path(), self.name, self.get_json_schema(), **kwargs)
+        super().__init__(project_id, self.path(), self.name, self.get_json_schema(), **kwargs)
 
     def path(self, **kwargs) -> str:
         """
@@ -424,7 +431,7 @@ class TableQueryResult(BigqueryResultStream):
         self.project_id = project_id
         self.parent_stream = parent_stream
         self.where_clause = where_clause.replace("\"", "'")
-        super().__init__(self.path(), self.name, self.get_json_schema(), **kwargs)
+        super().__init__(project_id, self.path(), self.name, self.get_json_schema(), **kwargs)
 
     def path(self, **kwargs) -> str:
         """
@@ -470,7 +477,7 @@ class BigqueryIncrementalStream(BigqueryResultStream, IncrementalMixin):
     def __init__(self, project_id, dataset_id, table_id, stream_path, stream_schema, fallback_start:str, \
                  given_name=None, where_clause=None, stream_request=None, slice_range=SLICE_RANGE, **kwargs):
         self.stream_name = dataset_id + "." + table_id
-        super().__init__(stream_path, self.stream_name, stream_schema, stream_request, **kwargs)
+        super().__init__(project_id, stream_path, self.stream_name, stream_schema, stream_request, **kwargs)
         self.request_body = stream_request
         self._cursor = None
         self.project_id = project_id
@@ -687,7 +694,7 @@ class IncrementalQueryResult(BigqueryResultStream):
         self.parent_stream = dataset_id + "." + table_id
         self.given_name = given_name
         self.where_clause = where_clause.replace("\"", "'")
-        super().__init__(self.path(), self.parent_stream, self.get_json_schema, **kwargs)
+        super().__init__(project_id, self.path(), self.parent_stream, self.get_json_schema, **kwargs)
         self.stream_obj = BigqueryIncrementalStream(project_id, dataset_id, table_id, self.path(), self.get_json_schema, \
                                                     fallback_start=fallback_start, given_name=given_name, where_clause=where_clause,\
                                                     slice_range=slice_range, **kwargs)
@@ -776,7 +783,7 @@ class BigqueryCDCStream(BigqueryResultStream, IncrementalMixin):
     def __init__(self, project_id, dataset_id, table_id, stream_path, stream_schema, given_name=None, \
                  where_clause: str="", fallback_start=None, slice_range=SLICE_RANGE, **kwargs):
         self.stream_name = dataset_id + "." + table_id
-        super().__init__(stream_path, self.stream_name, stream_schema, **kwargs)
+        super().__init__(project_id, stream_path, self.stream_name, stream_schema, **kwargs)
         self._cursor = None
         self._checkpoint_time = datetime.now()
         self.fallback_start = fallback_start
@@ -995,7 +1002,7 @@ class TableChangeHistory(BigqueryResultStream):
         self.dataset_id = dataset_id
         self.table_id = table_id
         self.where_clause = where_clause.replace("\"", "'")
-        super().__init__(self.path(), self.table_qualifier, self.project_id, self.get_json_schema, retry_policy=self.should_retry, **kwargs)
+        super().__init__(project_id, self.path(), self.table_qualifier, self.project_id, self.get_json_schema, retry_policy=self.should_retry, **kwargs)
         self.stream_obj = BigqueryCDCStream(project_id, dataset_id, table_id, self.path(), self.get_json_schema, \
                                             given_name, where_clause, fallback_start=fallback_start, slice_range=slice_range, **kwargs)
 
