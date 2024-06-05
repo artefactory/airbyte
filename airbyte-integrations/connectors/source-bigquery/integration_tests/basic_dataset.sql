@@ -1,6 +1,6 @@
 CREATE
     TABLE
-        ` sat_test_dataset.sat_basic_dataset `(
+        `sat_test_dataset.sat_basic_dataset`(
             id NUMERIC(29),
             test_column_1 int64,
             test_column_10 DECIMAL(
