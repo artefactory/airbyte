@@ -231,9 +231,12 @@ class TableStream(SnowflakeStream, IncrementalMixin):
                                                             for row_type in
                                                             response_json.get('resultSetMetaData', {'rowType': []}).get('rowType', [])])
 
+        CurrentTimeZoneStream.set_off_set(self.url_base, self.config, self.authenticator)
+        local_time_zone_offset_hours = CurrentTimeZoneStream.offset
+
         for record in response_json.get("data", []):
             try:
-                yield {column_name: format_field(column_value, self.ordered_mapping_names_types[column_name])
+                yield {column_name: format_field(column_value, self.ordered_mapping_names_types[column_name], local_time_zone_offset_hours)
                        for column_name, column_value in zip(self.ordered_mapping_names_types.keys(), record)}
             except Exception:
                 error_message = 'Unexpected error while reading record'
@@ -336,7 +339,10 @@ class TableStream(SnowflakeStream, IncrementalMixin):
         if self.cursor_field and not self._cursor_field_type:
             self.get_json_schema()  # Sets the type of cursor field to perform process on the value
 
-        latest_record_state = format_field(latest_record[self.cursor_field], self._cursor_field_type)
+        CurrentTimeZoneStream.set_off_set(self.url_base, self.config, self.authenticator)
+        local_time_zone_offset_hours = CurrentTimeZoneStream.offset
+
+        latest_record_state = format_field(latest_record[self.cursor_field], self._cursor_field_type, local_time_zone_offset_hours)
         if self.state is not None and len(self.state) > 0:
             current_state_value = self.state[self.cursor_field]
             self._state_value = max(latest_record_state,
@@ -552,10 +558,13 @@ class TableChangeDataCaptureStream(TableStream):
         else:
             additional_data = [current_time]
 
+        CurrentTimeZoneStream.set_off_set(self.url_base, self.config, self.authenticator)
+        local_time_zone_offset_hours = CurrentTimeZoneStream.offset
+
         for record in response_json.get("data", []):
             enriched_record = record + additional_data
             try:
-                yield {column_name: format_field(column_value, ordered_mapping_names_types[column_name])
+                yield {column_name: format_field(column_value, ordered_mapping_names_types[column_name], local_time_zone_offset_hours)
                    for column_name, column_value in zip(ordered_mapping_names_types.keys(), enriched_record)}
 
             except Exception:

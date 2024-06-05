@@ -140,7 +140,7 @@ def convert_utc_to_time_zone_date(utc_date, offset_hours):
     return datetime.strptime(local_date.strftime(f'%Y-%m-%dT%H:%M:%S.%f{offset_str}'), '%Y-%m-%dT%H:%M:%S.%f%z')
 
 
-def format_field(field_value, field_type):
+def format_field(field_value, field_type, local_time_zone_offset_hours=None):
 
     if field_type is None or field_value is None:
         # maybe add warning
@@ -155,23 +155,24 @@ def format_field(field_value, field_type):
             airbyte_type = date_and_time_snowflake_type_airbyte_type[field_type.upper()].get('airbyte_type', None)
 
             if airbyte_format == 'date-time' and airbyte_type == 'timestamp_with_timezone':
-                if ' ' in field_value:  # Ensure offset is present
+                if ' ' in field_value:  # offset present in response
                     unix_time_stamp = float(field_value.split(' ')[0])
                     time_zone_time_stamp_suffix = field_value.split(' ')[1]
                     offset_hours = convert_time_zone_time_stamp_suffix_to_offset_hours(time_zone_time_stamp_suffix)
-                    utc_date = datetime.fromtimestamp(unix_time_stamp, pytz.timezone("UTC"))
-                    return convert_utc_to_time_zone(utc_date, offset_hours)
+
                 else:
                     unix_time_stamp = float(field_value)
-                    dt = datetime.fromtimestamp(unix_time_stamp)
-                    return dt.strftime('%Y-%m-%dT%H:%M:%S.%f%z')
+                    offset_hours = local_time_zone_offset_hours
+
+                utc_date = datetime.fromtimestamp(unix_time_stamp, pytz.timezone("UTC"))
+                return convert_utc_to_time_zone(utc_date, offset_hours)
 
             if airbyte_format == 'date':
                 ts = int(field_value)
                 unix_epoch = datetime(year=1970, month=1, day=1)
                 delta_days_offset = timedelta(days=ts)
                 dt = unix_epoch + delta_days_offset
-                return dt.strftime("%d-%m-%Y")
+                return dt.strftime("%Y-%m-%d")
 
             if airbyte_format == 'date-time' and airbyte_type == 'timestamp_without_timezone':
                 ts = float(field_value)
