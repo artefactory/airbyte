@@ -103,6 +103,27 @@ class BigqueryDatasets(BigqueryStream):
     def get_json_schema(self) -> Mapping[str, Any]:
         return {}
 
+    def next_page_token(self, response: requests.Response, **kwargs) -> Optional[Mapping[str, Any]]:
+        record = response.json()
+        next_page = record.get("nextPageToken", None)
+        return next_page
+    
+    def request_params(
+        self,
+        stream_state: Optional[Mapping[str, Any]],
+        stream_slice: Optional[Mapping[str, Any]] = None,
+        next_page_token: Optional[Mapping[str, Any]] = None,
+    ) -> MutableMapping[str, Any]:
+        """
+        Override this method to define the query parameters that should be set on an outgoing HTTP request given the inputs.
+        """
+        params = {
+            "maxResults": self.page_size,
+        }
+        if next_page_token:
+            params["pageToken"] = next_page_token
+        return params
+    
     def parse_response(self, response: requests.Response, **kwargs) -> Iterable[Mapping]:
         """
         Override this method to define how a response is parsed.
@@ -134,6 +155,27 @@ class BigqueryTables(BigqueryDatasets):
         """
         return f"{super().path()}/{self.dataset_id}/tables"
 
+    def next_page_token(self, response: requests.Response, **kwargs) -> Optional[Mapping[str, Any]]:
+        record = response.json()
+        next_page = record.get("nextPageToken", None)
+        return next_page
+    
+    def request_params(
+        self,
+        stream_state: Optional[Mapping[str, Any]],
+        stream_slice: Optional[Mapping[str, Any]] = None,
+        next_page_token: Optional[Mapping[str, Any]] = None,
+    ) -> MutableMapping[str, Any]:
+        """
+        Override this method to define the query parameters that should be set on an outgoing HTTP request given the inputs.
+        """
+        params = {
+            "maxResults": self.page_size,
+        }
+        if next_page_token:
+            params["pageToken"] = next_page_token
+        return params
+    
     def parse_response(self, response: requests.Response, **kwargs) -> Iterable[Mapping]:
         """
         Override this method to define how a response is parsed.
@@ -161,6 +203,27 @@ class BigqueryTable(BigqueryTables):
         """
         return f"{super().path()}/{self.table_id}"
 
+    def next_page_token(self, response: requests.Response, **kwargs) -> Optional[Mapping[str, Any]]:
+        record = response.json()
+        next_page = record.get("nextPageToken", None)
+        return next_page
+    
+    def request_params(
+        self,
+        stream_state: Optional[Mapping[str, Any]],
+        stream_slice: Optional[Mapping[str, Any]] = None,
+        next_page_token: Optional[Mapping[str, Any]] = None,
+    ) -> MutableMapping[str, Any]:
+        """
+        Override this method to define the query parameters that should be set on an outgoing HTTP request given the inputs.
+        """
+        params = {
+            "maxResults": self.page_size,
+        }
+        if next_page_token:
+            params["pageToken"] = next_page_token
+        return params
+    
     def parse_response(self, response: requests.Response, **kwargs) -> Iterable[Mapping]:
         """
 
@@ -182,6 +245,27 @@ class BigqueryTableData(BigqueryTable):
         """
         return f"{super().path()}/data"
 
+    def next_page_token(self, response: requests.Response, **kwargs) -> Optional[Mapping[str, Any]]:
+        record = response.json()
+        next_page = record.get("nextPageToken", None)
+        return next_page
+    
+    def request_params(
+        self,
+        stream_state: Optional[Mapping[str, Any]],
+        stream_slice: Optional[Mapping[str, Any]] = None,
+        next_page_token: Optional[Mapping[str, Any]] = None,
+    ) -> MutableMapping[str, Any]:
+        """
+        Override this method to define the query parameters that should be set on an outgoing HTTP request given the inputs.
+        """
+        params = {
+            "maxResults": self.page_size,
+        }
+        if next_page_token:
+            params["pageToken"] = next_page_token
+        return params
+    
     def parse_response(self, response: requests.Response, **kwargs) -> Iterable[Mapping]:
         """
         :return an iterable containing each record in the response
