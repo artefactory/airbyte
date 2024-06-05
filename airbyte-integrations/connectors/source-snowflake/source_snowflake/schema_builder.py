@@ -73,10 +73,11 @@ logical_snowflake_type_airbyte_type = {
 date_and_time_snowflake_type_airbyte_type = {
     "DATE": SchemaTypes.date,
 
-    "DATETIME": SchemaTypes.timestamp_with_timezone,
+
     "TIMESTAMP_LTZ": SchemaTypes.timestamp_with_timezone,
     "TIMESTAMP_TZ": SchemaTypes.timestamp_with_timezone,
 
+    "DATETIME": SchemaTypes.timestamp_without_timezone,
     "TIMESTAMP_NTZ": SchemaTypes.timestamp_without_timezone,
     "TIMESTAMP": SchemaTypes.timestamp_without_timezone,
 
@@ -140,11 +141,9 @@ def convert_utc_to_time_zone_date(utc_date, offset_hours):
 
 
 def format_field(field_value, field_type):
+
     if field_type is None or field_value is None:
         # maybe add warning
-        return field_value
-
-    if isinstance(field_value, datetime):
         return field_value
 
     if field_type.upper() in ('OBJECT', 'ARRAY'):
@@ -152,26 +151,58 @@ def format_field(field_value, field_type):
 
     if field_type.upper() in date_and_time_snowflake_type_airbyte_type.keys() and field_value:
         try:
-            if isinstance(field_value, str) and ' ' in field_value:  # time_stamp with timezone
-                unix_time_stamp = float(field_value.split(' ')[0])
-                time_zone_time_stamp_suffix = field_value.split(' ')[1]
-                offset_hours = convert_time_zone_time_stamp_suffix_to_offset_hours(time_zone_time_stamp_suffix)
-                utc_date = datetime.fromtimestamp(unix_time_stamp, pytz.timezone("UTC"))
-                return convert_utc_to_time_zone(utc_date, offset_hours)
-            else:
+            airbyte_format = date_and_time_snowflake_type_airbyte_type[field_type.upper()].get('format', None)
+            airbyte_type = date_and_time_snowflake_type_airbyte_type[field_type.upper()].get('airbyte_type', None)
+
+            if airbyte_format == 'date-time' and airbyte_type == 'timestamp_with_timezone':
+                if ' ' in field_value:  # Ensure offset is present
+                    unix_time_stamp = float(field_value.split(' ')[0])
+                    time_zone_time_stamp_suffix = field_value.split(' ')[1]
+                    offset_hours = convert_time_zone_time_stamp_suffix_to_offset_hours(time_zone_time_stamp_suffix)
+                    utc_date = datetime.fromtimestamp(unix_time_stamp, pytz.timezone("UTC"))
+                    return convert_utc_to_time_zone(utc_date, offset_hours)
+                else:
+                    unix_time_stamp = float(field_value)
+                    dt = datetime.fromtimestamp(unix_time_stamp)
+                    return dt.strftime('%Y-%m-%dT%H:%M:%S.%f%z')
+
+            if airbyte_format == 'date':
+                ts = int(field_value)
+                unix_epoch = datetime(year=1970, month=1, day=1)
+                delta_days_offset = timedelta(days=ts)
+                dt = unix_epoch + delta_days_offset
+                return dt.strftime("%d-%m-%Y")
+
+            if airbyte_format == 'date-time' and airbyte_type == 'timestamp_without_timezone':
                 ts = float(field_value)
-                dt = datetime.fromtimestamp(ts, pytz.timezone("UTC"))
-                return dt.isoformat(timespec='microseconds')
+                unix_epoch = datetime(year=1970, month=1, day=1)
+                delta_seconds_offset = timedelta(seconds=ts)
+                dt = unix_epoch + delta_seconds_offset
+                return dt.strftime('%Y-%m-%dT%H:%M:%S.%f')
+
+            if airbyte_format == 'time' and airbyte_type == 'time_without_timezone':
+                ts = float(field_value)
+                dt = datetime.fromtimestamp(ts)
+                return dt.strftime("%H:%M:%S")
 
         except ValueError:
             # maybe add warning
             return field_value
 
     if field_type.upper() in ('INT', 'INTEGER', 'BIGINT', 'SMALLINT', 'TINYINT', 'BYTEINT') and field_value:
-        return int(field_value)
+        return int(str(field_value))
 
     if (field_type.upper() in ('NUMBER', 'DECIMAL', 'NUMERIC', 'FLOAT', 'FLOAT4', 'FLOAT8', 'DOUBLE', 'DOUBLE PRECISION', 'REAL', 'FIXED')
             and field_value):
         return float(field_value)
+
+    if field_type.upper() == 'BOOLEAN':
+        if str(field_value) == "false":
+            return False
+        else:
+            return True
+
+    if field_type.upper() in ('GEOGRAPHY', 'GEOMETRY', 'VECTOR'):
+        return str(json.loads(field_value))
 
     return field_value
