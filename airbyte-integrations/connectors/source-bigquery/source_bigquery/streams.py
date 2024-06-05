@@ -349,12 +349,6 @@ class CHTableQueryRecord(BigqueryResultStream):
         self.data = None
         super().__init__(project_id, self.path(), self.name, self.get_json_schema(), **kwargs)
 
-    def path(self, **kwargs) -> str:
-        """
-        Documentation: https://cloud.google.com/bigquery/docs/reference/rest/v2/jobs/query
-        """
-        return f"/bigquery/v2/projects/{self.project_id}/queries"
-
     def get_json_schema(self) -> Mapping[str, Any]:
         return {}
 
@@ -432,12 +426,6 @@ class TableQueryResult(BigqueryResultStream):
         self.parent_stream = parent_stream
         self.where_clause = where_clause.replace("\"", "'")
         super().__init__(project_id, self.path(), self.name, self.get_json_schema(), **kwargs)
-
-    def path(self, **kwargs) -> str:
-        """
-        Documentation: https://cloud.google.com/bigquery/docs/reference/rest/v2/jobs/query
-        """
-        return f"/bigquery/v2/projects/{self.project_id}/queries"
 
     def get_json_schema(self) -> Mapping[str, Any]:
         return {}
@@ -722,12 +710,6 @@ class IncrementalQueryResult(BigqueryResultStream):
     @property
     def supports_incremental(self) -> bool:
         return True
-    
-    def path(self, **kwargs) -> str:
-        """
-        Documentation: https://cloud.google.com/bigquery/docs/reference/rest/v2/jobs/query
-        """
-        return f"/bigquery/v2/projects/{self.project_id}/queries"
 
     def get_json_schema(self) -> Mapping[str, Any]:
         for table in self.read_records(sync_mode=SyncMode.full_refresh):
@@ -859,12 +841,6 @@ class BigqueryCDCStream(BigqueryResultStream, IncrementalMixin):
             return primary_key_result[0]
         else:
             return primary_key_result
-    
-    def path(self, **kwargs) -> str:
-        """
-        Documentation: https://cloud.google.com/bigquery/docs/reference/rest/v2/jobs/query
-        """
-        return f"/bigquery/v2/projects/{self.project_id}/queries"
 
     def next_page_token(self, response: requests.Response, **kwargs) -> Optional[Mapping[str, Any]]:
         # Always return None as this endpoint always returns the first page
@@ -1017,12 +993,6 @@ class TableChangeHistory(BigqueryResultStream):
     @property
     def stream(self):
         return self.stream_obj
-
-    def path(self, **kwargs) -> str:
-        """
-        Documentation: https://cloud.google.com/bigquery/docs/reference/rest/v2/jobs/query
-        """
-        return f"/bigquery/v2/projects/{self.project_id}/queries"
 
     def get_json_schema(self) -> Mapping[str, Any]:
         for table in self.read_records(sync_mode=SyncMode.full_refresh):
