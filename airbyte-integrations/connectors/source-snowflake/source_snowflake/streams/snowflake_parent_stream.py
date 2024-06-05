@@ -29,6 +29,10 @@ class SnowflakeStream(HttpStream, ABC):
         self._delta_time_between_snowflake_and_airbyte_server = None
 
     @property
+    def authenticator(self):
+        return self._authenticator
+
+    @property
     def url_base(self):
         return self._url_base
 

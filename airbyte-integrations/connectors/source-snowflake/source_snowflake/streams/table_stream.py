@@ -249,8 +249,19 @@ class TableStream(SnowflakeStream, IncrementalMixin):
         for record in super().read_records(sync_mode, cursor_field, stream_slice, stream_state):
             if isinstance(self.cursor_field, str):
                 self.state = self._get_updated_state(record)
-            self.emit_checkpoint_if_required()
-            yield record
+
+            if self.state:
+                self.emit_checkpoint_if_required()
+
+            try:
+                yield record
+            except Exception:
+                error_message = 'Unexpected error while reading record'
+                emit_airbyte_error_message(error_message)
+
+        if not self.state:
+            self.state = {"__ab_full_refresh_sync_complete": True}
+
 
     def get_json_schema(self) -> Mapping[str, Any]:
 
