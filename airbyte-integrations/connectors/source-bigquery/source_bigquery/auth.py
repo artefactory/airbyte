@@ -14,7 +14,7 @@ from airbyte_cdk.sources.streams.http.requests_native_auth import (
 )
 
 
-SCOPES = ['https://www.googleapis.com/auth/bigquery', 'https://www.googleapis.com/auth/cloud-platform', 'https://www.googleapis.com/auth/cloud-platform.read-only']
+SCOPES = ['https://www.googleapis.com/auth/bigquery', 'https://www.googleapis.com/auth/cloud-platform', 'https://www.googleapis.com/auth/cloud-platform.read-only', 'https://www.googleapis.com/auth/bigquery.readonly']
 
 class BigqueryOAuth(TokenAuthenticator):
     """

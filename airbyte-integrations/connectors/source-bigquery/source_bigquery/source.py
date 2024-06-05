@@ -89,7 +89,7 @@ class SourceBigquery(ConcurrentSourceAdapter):
                 dataset_id = dataset.get("datasetReference")["datasetId"]
                 for table_info in BigqueryTables(dataset_id=dataset_id, project_id=config["project_id"], authenticator=self._auth).read_records(sync_mode=SyncMode.full_refresh):
                     table_id = table_info.get("tableReference")["tableId"]
-                    BigqueryTable(dataset_id=dataset_id, project_id=config["project_id"], table_id=table_id, authenticator=self._auth)
+                    BigqueryTable(dataset_id=dataset_id, project_id=config["project_id"], table_id=table_id, authenticator=self._auth) #TODO: do fullrefresh
         except exceptions.HTTPError as error:
             error_msg = f"An error occurred: {error.response.text}"
             try:
