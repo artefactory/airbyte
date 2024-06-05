@@ -1,0 +1,232 @@
+{
+    "connectionSpecification": {
+        "$schema": "http:\/\/json-schema.org\/draft-07\/schema#",
+        "properties": {
+            "credentials": {
+                "oneOf": [
+                    {
+                        "order": 1,
+                        "properties": {
+                            "access_token": {
+                                "airbyte_secret": true,
+                                "description": "Access Token for making authenticated requests.",
+                                "order": 5,
+                                "title": "Access Token",
+                                "type": "string"
+                            },
+                            "auth_type": {
+                                "const": "OAuth",
+                                "order": 2,
+                                "type": "string"
+                            },
+                            "client_id": {
+                                "airbyte_secret": true,
+                                "description": "The Client ID of your Snowflake developer application.",
+                                "order": 3,
+                                "title": "Client ID",
+                                "type": "string"
+                            },
+                            "client_secret": {
+                                "airbyte_secret": true,
+                                "description": "The Client Secret of your Snowflake developer application.",
+                                "order": 4,
+                                "title": "Client Secret",
+                                "type": "string"
+                            },
+                            "refresh_token": {
+                                "airbyte_secret": true,
+                                "description": "Refresh Token for making authenticated requests.",
+                                "order": 6,
+                                "title": "Refresh Token",
+                                "type": "string"
+                            }
+                        },
+                        "required": [
+                            "client_id",
+                            "client_secret",
+                            "auth_type"
+                        ],
+                        "title": "OAuth2.0",
+                        "type": "object"
+                    },
+                    {
+                        "order": 7,
+                        "properties": {
+                            "auth_type": {
+                                "const": "JWT Token",
+                                "order": 6,
+                                "type": "string"
+                            },
+                            "password": {
+                                "airbyte_secret": true,
+                                "description": "The pass of your private key",
+                                "order": 10,
+                                "title": "Password",
+                                "type": "string"
+                            },
+                            "private_key": {
+                                "airbyte_secret": true,
+                                "description": "The private key to generate the JWT Token",
+                                "order": 9,
+                                "title": "Private key",
+                                "type": "string"
+                            },
+                            "user_name": {
+                                "description": "User name",
+                                "order": 8,
+                                "title": "Snowflake user name",
+                                "type": "string"
+                            }
+                        },
+                        "required": [
+                            "private_key",
+                            "user_name"
+                        ],
+                        "title": "JWT Token",
+                        "type": "object"
+                    }
+                ],
+                "order": 0,
+                "title": "Authorization Method",
+                "type": "object"
+            },
+            "database": {
+                "description": "The database you created for Airbyte to access data.",
+                "examples": [
+                    "AIRBYTE_DATABASE"
+                ],
+                "order": 14,
+                "title": "Database",
+                "type": "string"
+            },
+            "host": {
+                "description": "The host domain of the snowflake instance (must include the account, region, cloud environment, and end with snowflakecomputing.com).",
+                "examples": [
+                    "accountname.us-east-2.aws.snowflakecomputing.com"
+                ],
+                "order": 11,
+                "title": "Account Name",
+                "type": "string"
+            },
+            "replication_method": {
+                "default": "standard",
+                "description": "Configures how data is extracted from the database.",
+                "display_type": "radio",
+                "group": "advanced",
+                "oneOf": [
+                    {
+                        "description": "Incrementally detects new inserts and updates using the <a href=\"https:\/\/docs.airbyte.com\/understanding-airbyte\/connections\/incremental-append\/#user-defined-cursor\">cursor column<\/a> chosen when configuring a connection (e.g. created_at, updated_at).",
+                        "properties": {
+                            "method": {
+                                "const": "standard",
+                                "order": 18,
+                                "type": "string"
+                            }
+                        },
+                        "required": [
+                            "method"
+                        ],
+                        "title": "Scan Changes with User Defined Cursor"
+                    },
+                    {
+                        "description": "Incrementally reads new inserts using Snowflake's change history",
+                        "properties": {
+                            "method": {
+                                "const": "history",
+                                "order": 19,
+                                "type": "string"
+                            }
+                        },
+                        "required": [
+                            "method"
+                        ],
+                        "title": "Read Changes using Change History"
+                    }
+                ],
+                "order": 17,
+                "title": "Update Method",
+                "type": "object"
+            },
+            "role": {
+                "description": "The role you created for Airbyte to access Snowflake.",
+                "examples": [
+                    "AIRBYTE_ROLE"
+                ],
+                "order": 12,
+                "title": "Role",
+                "type": "string"
+            },
+            "schema": {
+                "description": "The source Snowflake schema tables. Leave empty to access tables from multiple schemas.",
+                "examples": [
+                    "AIRBYTE_SCHEMA"
+                ],
+                "order": 15,
+                "title": "Schema",
+                "type": "string"
+            },
+            "streams": {
+                "description": "Used to filter out data on the source and creates a dedicated stream",
+                "items": {
+                    "properties": {
+                        "name": {
+                            "description": "The name that will be used to identify the pushdown filter stream in the connection (not nullable)",
+                            "title": "Name",
+                            "type": "string"
+                        },
+                        "namespace": {
+                            "description": "The namespace that will be used to identify the pushdown filter stream in the connection (nullable).",
+                            "title": "Namespace",
+                            "type": "string"
+                        },
+                        "parent_namespace": {
+                            "description": "The namespace of the relevant stream that the filter is being applied on (nullable).",
+                            "title": "Parent namespace",
+                            "type": "string"
+                        },
+                        "parent_stream": {
+                            "description": "The name of the relevant stream that the filter is being applied on (not nullable).",
+                            "title": "Parent stream",
+                            "type": "string"
+                        },
+                        "where_clause": {
+                            "description": "A string that must be a valid where clause in the relevant warehouse (not nullable).",
+                            "title": "Where Clause",
+                            "type": "string"
+                        }
+                    },
+                    "required": [
+                        "name",
+                        "parent_stream",
+                        "where_clause"
+                    ],
+                    "title": "FileBasedStreamConfig",
+                    "type": "object"
+                },
+                "order": 16,
+                "title": "Push Down Filter",
+                "type": "array"
+            },
+            "warehouse": {
+                "description": "The warehouse you created for Airbyte to access data.",
+                "examples": [
+                    "AIRBYTE_WAREHOUSE"
+                ],
+                "order": 13,
+                "title": "Warehouse",
+                "type": "string"
+            }
+        },
+        "required": [
+            "credentials",
+            "host",
+            "warehouse",
+            "database",
+            "role",
+            "replication_method"
+        ],
+        "title": "Snowflake Source Specification",
+        "type": "object"
+    },
+    "documentationUrl": "https:\/\/docs.airbyte.com\/integrations\/sources\/snowflake"
+}
