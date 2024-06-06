@@ -74,7 +74,7 @@ class SourceBigquery(ConcurrentSourceAdapter):
 
     @staticmethod
     def validate_config(config: MutableMapping[str, Any]) -> MutableMapping[str, Any]:
-        slice_range = float(config.get("slice_range", None))
+        slice_range = float(config.get("slice_range", _DEFAULT_SLICE_RANGE))
         if slice_range and slice_range <= 0:
             message = f"Invalid slice range {slice_range}. Please use only positive integer values."
             raise AirbyteTracedException(
