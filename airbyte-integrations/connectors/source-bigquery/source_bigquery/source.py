@@ -140,11 +140,10 @@ class SourceBigquery(ConcurrentSourceAdapter):
                     try:
                         next(table_obj.read_records(sync_mode=SyncMode.full_refresh))
                     except exceptions.HTTPError as error:
-                        self.logger.warning(f"Table had no inserts in the last seven days so no change history is available causing the error: {str(error.response.text)}")
-                        table_obj = IncrementalQueryResult(project_id, dataset_id, table_id, stream_name, where_clause, fallback_start=fallback_start, slice_range=slice_range, authenticator=self._auth)
+                        table_obj = None
                 if isinstance(table_obj, TableChangeHistory):
                     concurrent_streams.append(table_obj.stream)
-                else:
+                elif isinstance(table_obj, IncrementalQueryResult):
                     normal_streams.append(table_obj.stream)
         for dataset in BigqueryDatasets(project_id=project_id, authenticator=self._auth).read_records(sync_mode=SyncMode.full_refresh):
             dataset_id = dataset.get("datasetReference")["datasetId"]
@@ -158,12 +157,10 @@ class SourceBigquery(ConcurrentSourceAdapter):
                     try:
                         next(table_obj.read_records(sync_mode=SyncMode.full_refresh))
                     except exceptions.HTTPError as error:
-                        self.logger.warning(f"Table had no inserts in the last seven days so no change history is available causing the error: {str(error.response.text)}")
-                        table_obj = IncrementalQueryResult(project_id, dataset_id, table_id, fallback_start=fallback_start, slice_range=slice_range, authenticator=self._auth)
-                
+                        table_obj = None                
                 if isinstance(table_obj, TableChangeHistory):
                     concurrent_streams.append(table_obj.stream)
-                else:
+                elif isinstance(table_obj, IncrementalQueryResult):
                     normal_streams.append(table_obj.stream)
         state_manager = ConnectorStateManager(stream_instance_map={stream.name: stream for stream in concurrent_streams}, state=self.state)
         final_concurrents = [
