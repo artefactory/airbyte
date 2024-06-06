@@ -8,6 +8,10 @@ acceptance_tests:
     tests:
       - config_path: "secrets/config.json"
         status: "succeed"
+      - config_path: "secrets/incorrect_host_format_config.json"
+        status: "exception"
+      - config_path: "secrets/duplicated_push_down_filters_config.json"
+        status: "exception"
   discovery:
     tests:
       - config_path: "secrets/config.json"
