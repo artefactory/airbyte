@@ -165,7 +165,11 @@ SHOW PARAMETERS LIKE 'network_policy' IN ACCOUNT;
 SHOW PARAMETERS LIKE 'network_policy' IN USER <username>;
 ```
 
-To read more please check official [Snowflake documentation](https://docs.snowflake.com/en/user-guide/network-policies.html#)
+To read more please check official [Snowflake documentation](https://docs.snowflake.com/en/user-guide/network-policies.html#)  
+
+## Note
+You can find details about allowed retention days here: https://docs.snowflake.com/en/user-guide/data-time-travel  
+
 
 ## Changelog
 
