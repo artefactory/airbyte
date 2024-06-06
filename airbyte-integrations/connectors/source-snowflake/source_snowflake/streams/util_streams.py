@@ -1,3 +1,4 @@
+import threading
 import uuid
 from collections import OrderedDict
 from datetime import datetime, timedelta, timezone
@@ -140,6 +141,7 @@ class CurrentTimeZoneStream(SnowflakeStream):
     CURRENT_TIME_COLUMN_NAME = 'CURRENT_TIME'
     _is_set = False
     offset = None
+    _lock = threading.Lock()
 
     def __init__(self, url_base, config, authenticator):
         super().__init__(authenticator=authenticator)
@@ -170,13 +172,14 @@ class CurrentTimeZoneStream(SnowflakeStream):
 
     @classmethod
     def set_off_set(cls, url_base, config, authenticator):
-        if not cls._is_set:
-            current_time_zone_stream = cls(url_base, config, authenticator)
-            current_time_record = next(current_time_zone_stream.read_records(SyncMode.full_refresh))
-            current_time_with_time_zone = current_time_record['current_time']
-            current_time_time_zone_suffix = current_time_with_time_zone.split(' ')[1]
-            cls.offset = convert_time_zone_time_stamp_suffix_to_offset_hours(current_time_time_zone_suffix)
-            cls._is_set = True
+        with cls._lock:
+            if not cls._is_set:
+                current_time_zone_stream = cls(url_base, config, authenticator)
+                current_time_record = next(current_time_zone_stream.read_records(SyncMode.full_refresh))
+                current_time_with_time_zone = current_time_record['current_time']
+                current_time_time_zone_suffix = current_time_with_time_zone.split(' ')[1]
+                cls.offset = convert_time_zone_time_stamp_suffix_to_offset_hours(current_time_time_zone_suffix)
+                cls._is_set = True
 
     @classmethod
     def get_current_time_snowflake_time_zone(cls, url_base, config, authenticator):
