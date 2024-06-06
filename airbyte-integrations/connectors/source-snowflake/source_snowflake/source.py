@@ -80,7 +80,7 @@ class SourceSnowflake(AbstractSource):
                                  "- The configuration provided does not have enough permissions to access the requested database/schema.\n"
                                  "- The configuration is not consistent (example: schema not present is database.")
 
-            if int(error_code) == 404:
+            if int(error_code) == 401:
                 error_message = "401 Client Error: Unauthorized for url. Make sure you are using the correct credentials"
 
             if int(error_code) == 422:
