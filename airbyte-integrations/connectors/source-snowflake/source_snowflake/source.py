@@ -15,7 +15,8 @@ from airbyte_protocol.models import SyncMode, AirbyteMessage, AirbyteTraceMessag
 from airbyte_cdk.models import Type as AirbyteType
 from .authenticator import SnowflakeJwtAuthenticator
 from .snowflake_exceptions import InconsistentPushDownFilterParentStreamNameError, NotEnabledChangeTrackingOptionError, \
-    DuplicatedPushDownFilterStreamNameError, IncorrectHostFormat, emit_airbyte_error_message, UnknownUpdateMethodError
+    DuplicatedPushDownFilterStreamNameError, IncorrectHostFormat, emit_airbyte_error_message, UnknownUpdateMethodError, \
+    BadPrivateKeyFormatError
 from .streams.push_down_filter_stream import PushDownFilterStream, PushDownFilterChangeDataCaptureStream
 from .utils import handle_no_permissions_error
 
@@ -39,16 +40,20 @@ class SourceSnowflake(AbstractSource):
         try:
             host = config['host']
             self.check_host_format(host)
+            authenticator = SnowflakeJwtAuthenticator.from_config(config)
             self.check_update_method(config=config)
             self.check_push_down_filter_name_unicity(config=config)
             url_base = self.format_url_base(host)
-            authenticator = SnowflakeJwtAuthenticator.from_config(config)
 
             self.check_existence_of_at_least_one_stream(url_base=url_base, config=config, authenticator=authenticator)
             self.check_push_down_filters_parent_stream_consistency(url_base=url_base, config=config, authenticator=authenticator)
 
         except IncorrectHostFormat:
-            error_message = f"your host is not ending with {self.SNOWFLAKE_URL_SUFFIX}"
+            error_message = f"The host provided is not ending with {self.SNOWFLAKE_URL_SUFFIX}"
+
+        except BadPrivateKeyFormatError:
+            error_message = (f'There is an error with the provided private key, it could not be decoded. Please make sure you respect '
+                             f'the PEM format')
 
         except UnknownUpdateMethodError as e:
             error_message = f'Update method {e.unknown_update_method} not recognized'
@@ -57,7 +62,7 @@ class SourceSnowflake(AbstractSource):
             error_message = 'There are pushdown filters with same name which is not possible'
 
         except InconsistentPushDownFilterParentStreamNameError as e:
-            error_message = (f'You have provided inconsistent pushdown filters configuration. Parent stream not found or mistake in  '
+            error_message = (f'There is an inconsistency in the pushdown filters configuration. Parent stream not found or mistake in  '
                              f'spelling parent stream name. Correct spelling must be your_schema_name.your_table_name and make sure '
                              f'you have the rights to read the table.\n. Here is the '
                              f'list of the streams affected by this error: {e.push_down_filters_without_consistent_parent}')

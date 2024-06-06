@@ -51,6 +51,13 @@ class UnknownUpdateMethodError(Exception):
         self.unknown_update_method = unknown_update_method
 
 
+class BadPrivateKeyFormatError(Exception):
+    """
+    This error happens when the user provides a url without the suffix ".snowflakecomputing.com"
+    """
+    pass
+
+
 #######################################################
 ######### Stream Errors errors
 #######################################################

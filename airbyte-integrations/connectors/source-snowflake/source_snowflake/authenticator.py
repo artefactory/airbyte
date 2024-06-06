@@ -9,6 +9,8 @@ from cryptography.hazmat.primitives._serialization import Encoding, PublicFormat
 from cryptography.hazmat.primitives.serialization import load_pem_private_key
 from cryptography.hazmat.backends import default_backend
 
+from source_snowflake.snowflake_exceptions import BadPrivateKeyFormatError
+
 
 class SnowflakeJwtAuthenticator(JwtAuthenticator):
     TOKEN_DURATION = 55
@@ -96,9 +98,12 @@ class SnowflakeJwtAuthenticator(JwtAuthenticator):
         :return: public key fingerprint
         """
         encoded_password = password.encode() if password is not None else None
-        private_key_object = load_pem_private_key(private_key.encode(),
-                                                  encoded_password,
-                                                  default_backend())
+        try:
+            private_key_object = load_pem_private_key(private_key.encode(),
+                                                      encoded_password,
+                                                      default_backend())
+        except ValueError:
+            raise BadPrivateKeyFormatError()
 
         # Get the raw bytes of public key.
         public_key_raw = private_key_object.public_key().public_bytes(Encoding.DER, PublicFormat.SubjectPublicKeyInfo)
@@ -116,6 +121,10 @@ class SnowflakeJwtAuthenticator(JwtAuthenticator):
     def _format_private_key(cls, private_key: Text):
         start_private_key = "-----BEGIN PRIVATE KEY-----"
         end_private_key = "-----END PRIVATE KEY-----"
+
+        if start_private_key not in private_key or end_private_key not in private_key:
+            raise BadPrivateKeyFormatError()
+
         content = private_key.split(start_private_key)[1].split(end_private_key)[0]
         content = content.replace(' ', '\n')
         return f'{start_private_key}{content}{end_private_key}'
