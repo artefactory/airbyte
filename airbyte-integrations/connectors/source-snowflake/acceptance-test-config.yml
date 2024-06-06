@@ -9,11 +9,11 @@ acceptance_tests:
       - config_path: "secrets/config.json"
         status: "succeed"
       - config_path: "secrets/invalid_config.json"
-        status: "exception"
+        status: "failed"
       - config_path: "secrets/incorrect_host_format_config.json"
-        status: "exception"
+        status: "failed"
       - config_path: "secrets/duplicated_push_down_filters_config.json"
-        status: "exception"
+        status: "failed"
   discovery:
     tests:
       - config_path: "secrets/config.json"
