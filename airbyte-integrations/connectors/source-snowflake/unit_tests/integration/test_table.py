@@ -45,6 +45,7 @@ _TABLE = "TEST_TABLE"
 _ROLE = "ROLE"
 _HOST = "host.com"
 _REQUESTID = "123"
+_HANDLE = "123-DUMMY-HANDLE-123"
 
 
 
@@ -88,6 +89,14 @@ def _given_table_with_primary_keys(http_mocker: HttpMocker) -> None:
     )
 
 
+def _given_read_schema(http_mocker:HttpMocker)-> None:
+    http_mocker.post(
+        table_request().with_table(_TABLE).with_get_schema().with_requestID(_REQUESTID).build(),
+        snowflake_response("reponse_get_table","data").with_record(a_snowflake_response("reponse_get_table","data")).build()
+
+    )
+
+
 
 
 def _read(
@@ -106,14 +115,15 @@ class FullRefreshTest(TestCase):
     @mock.patch("source_snowflake.source.SnowflakeJwtAuthenticator")
     @HttpMocker()
     def test_given_one_page_when_read_then_return_records(self,uuid_mock, mock_auth,http_mocker: HttpMocker) -> None:
+        _given_read_schema(http_mocker)
         _given_table_catalog(http_mocker)
         _given_table_with_primary_keys(http_mocker)
         http_mocker.post(
             table_request().with_table(_TABLE).with_requestID(_REQUESTID).with_async().build(),
-            snowflake_response("async_response","statementStatusUrl").with_handle("handle").build()
+            snowflake_response("async_response","statementStatusUrl").with_handle(_HANDLE).build()
         )
         http_mocker.get(
-            table_request().with_handle("handle").build(is_get=True),
+            table_request().with_handle(_HANDLE).build(is_get=True),
             snowflake_response("reponse_get_table","data").with_record(a_snowflake_response("reponse_get_table","data")).build()
         )
         

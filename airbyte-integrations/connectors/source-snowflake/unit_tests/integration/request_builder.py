@@ -29,6 +29,7 @@ class SnowflakeRequestBuilder:
         self._requestID = None
         self._show_primary_keys = False
         self._handle = None
+        self._get_schema=False
 
     def with_table(self ,table:str):
         self._table=table
@@ -57,6 +58,10 @@ class SnowflakeRequestBuilder:
     def with_handle(self, handle:str):
         self._handle = handle
         return self
+    
+    def with_get_schema(self):
+        self._get_schema = True
+        return self
         
 
     def build(self, is_get:bool=False) -> HttpRequest:
@@ -71,6 +76,8 @@ class SnowflakeRequestBuilder:
             query_params["requestId"] = self._requestID
         if self._show_primary_keys and self._table: 
             statement = f'SHOW PRIMARY KEYS IN "{self._database}"."{self._schema}"."{self._table}"'
+        if self._get_schema :
+            statement = f'SELECT TOP 1 * FROM "{self._database}"."{self._schema}"."{self._table}"'
         
         body ={
             'statement':statement,
