@@ -81,7 +81,7 @@ class SourceSnowflake(AbstractSource):
                                  "- The configuration is not consistent (example: schema not present is database.")
 
             if int(error_code) == 401:
-                error_message = "401 Client Error: Unauthorized for url. Make sure you are using the correct credentials"
+                error_message = "401 Client Error: Unauthorized for url. Make sure the credentials are valid and correct"
 
             if int(error_code) == 422:
                 try:
