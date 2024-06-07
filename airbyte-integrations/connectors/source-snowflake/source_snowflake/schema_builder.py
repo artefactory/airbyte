@@ -4,6 +4,7 @@ from typing import Dict
 
 import pytz
 
+TIMESTAMP_OFFSET_SEPARATOR = " "
 
 class SchemaTypes:
     string: Dict = {"type": ["null", "string"]}
@@ -159,9 +160,9 @@ def format_field(field_value, field_type, local_time_zone_offset_hours=None):
             airbyte_type = date_and_time_snowflake_type_airbyte_type[field_type.upper()].get('airbyte_type', None)
 
             if airbyte_format == 'date-time' and airbyte_type == 'timestamp_with_timezone':
-                if ' ' in field_value:  # offset present in response
-                    unix_time_stamp = float(field_value.split(' ')[0])
-                    time_zone_time_stamp_suffix = field_value.split(' ')[1]
+                if TIMESTAMP_OFFSET_SEPARATOR in field_value:  # offset present in response
+                    unix_time_stamp = float(field_value.split(TIMESTAMP_OFFSET_SEPARATOR)[0])
+                    time_zone_time_stamp_suffix = field_value.split(TIMESTAMP_OFFSET_SEPARATOR)[1]
                     offset_hours = convert_time_zone_time_stamp_suffix_to_offset_hours(time_zone_time_stamp_suffix)
 
                 else:
