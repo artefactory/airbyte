@@ -1,0 +1,10 @@
+{
+  "datasets": [
+    {
+      "datasetReference": {
+        "projectId": "bigquery-public-data",
+        "datasetId": "samples"
+      }
+    }
+  ]
+}

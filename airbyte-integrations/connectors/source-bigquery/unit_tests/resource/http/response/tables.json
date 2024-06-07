@@ -1,0 +1,11 @@
+{
+  "tables": [
+    {
+      "tableReference": {
+        "projectId": "bigquery-public-data",
+        "datasetId": "samples",
+        "tableId": "shakespeare"
+      }
+    }
+  ]
+}
