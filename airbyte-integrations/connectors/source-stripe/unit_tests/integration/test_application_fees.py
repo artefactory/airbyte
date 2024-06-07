@@ -41,6 +41,7 @@ _STREAM_NAME = "application_fees"
 _ENDPOINT_TEMPLATE_NAME = "application_fees"
 _NOW = datetime.now(timezone.utc)
 _A_START_DATE = _NOW - timedelta(days=60)
+_A_START_DATE2 = _NOW - timedelta(days=200)
 _ACCOUNT_ID = "account_id"
 _CLIENT_SECRET = "client_secret"
 _NO_STATE = {}
@@ -135,10 +136,10 @@ class FullRefreshTest(TestCase):
         http_mocker.get(
             _application_fees_request().with_created_gte(_A_START_DATE).with_created_lte(_NOW).with_limit(100).build(),
             _application_fees_response().with_record(_an_application_fee()).with_record(_an_application_fee()).build(),
+
         )
-
         output = self._read(_config().with_start_date(_A_START_DATE))
-
+        
         assert len(output.records) == 2
 
     @HttpMocker()
