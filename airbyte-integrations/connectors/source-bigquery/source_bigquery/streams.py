@@ -909,7 +909,7 @@ class BigqueryCDCStream(BigqueryResultStream, IncrementalMixin):
 
     def stream_slices(self, stream_state: Mapping[str, Any] = None, cursor_field=None, sync_mode=None, **kwargs) -> Iterable[Optional[Mapping[str, any]]]:
         start_time, end_time = self._extract_borders()
-        default_start = self.fallback_start #max(start_time, self.fallback_start)
+        default_start = self.fallback_start
         if stream_state:
             self._cursor = stream_state.get(self.cursor_field)
             default_start =  datetime.strptime(self._cursor, '%Y-%m-%dT%H:%M:%S.%f%z') - timedelta(minutes=self.slice_range)
@@ -1031,8 +1031,6 @@ class TableChangeHistory(BigqueryResultStream):
         query_string = f"select * from APPENDS(TABLE `{self.table_qualifier}`,NULL,NULL)"
         if self.where_clause:
             query_string = f"select * from APPENDS(TABLE `{self.table_qualifier}`,NULL,NULL) WHERE {self.where_clause}"
-        # import ipdb
-        # ipdb.set_trace()
         request_body = {
             "kind": "bigquery#queryRequest",
             "query": query_string,
