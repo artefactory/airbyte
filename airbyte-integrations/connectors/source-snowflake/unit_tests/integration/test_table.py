@@ -113,10 +113,11 @@ class FullRefreshTest(TestCase):
             snowflake_response("async_response","statementStatusUrl").with_handle("handle").build()
         )
         http_mocker.get(
-            table_request().build(is_get=True),
-            snowflake_response("async_response","statementStatusUrl").with_record(a_snowflake_response("async_response","statementStatusUrl")).build()
+            table_request().with_handle("handle").build(is_get=True),
+            snowflake_response("reponse_get_table","data").with_record(a_snowflake_response("reponse_get_table","data")).build()
         )
         
 
         output = _read(_config(), sync_mode=SyncMode.full_refresh)
+        print(output.records)
         
