@@ -140,7 +140,10 @@ class SourceBigquery(ConcurrentSourceAdapter):
                     try:
                         next(table_obj.read_records(sync_mode=SyncMode.full_refresh))
                     except exceptions.HTTPError as error:
-                        table_obj = None
+                        if error.response.status_code == 400:
+                            table_obj = None
+                        else:
+                            raise error 
                 if isinstance(table_obj, TableChangeHistory):
                     concurrent_streams.append(table_obj.stream)
                 elif isinstance(table_obj, IncrementalQueryResult):
@@ -157,7 +160,10 @@ class SourceBigquery(ConcurrentSourceAdapter):
                     try:
                         next(table_obj.read_records(sync_mode=SyncMode.full_refresh))
                     except exceptions.HTTPError as error:
-                        table_obj = None                
+                        if error.response.status_code == 400:
+                            table_obj = None
+                        else:
+                            raise error           
                 if isinstance(table_obj, TableChangeHistory):
                     concurrent_streams.append(table_obj.stream)
                 elif isinstance(table_obj, IncrementalQueryResult):
