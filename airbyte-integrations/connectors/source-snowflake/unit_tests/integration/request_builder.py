@@ -1,9 +1,12 @@
+from ctypes import sizeof
 from datetime import datetime
 import json
+from sys import getsizeof
 from typing import Any, List, Optional, Mapping
 
 from airbyte_cdk.test.mock_http import HttpRequest
 from airbyte_cdk.test.mock_http.request import ANY_QUERY_PARAMS
+import requests
 
 
 class SnowflakeRequestBuilder:
@@ -58,15 +61,22 @@ class SnowflakeRequestBuilder:
         body ={
             'statement':statement,
             'role':self._role,
-            'database':self._database,
             'warehouse':self._warehouse,
+            'database':self._database,
             'timeout': "1000"
         } 
 
+        
 
         return HttpRequest(
             url=f"https://{self._host}/api/v2/{self._resource}",
-            headers={'User-Agent': 'Airbyte', 'Accept-Encoding': 'gzip, deflate', 'Accept': 'application/json', 'Connection': 'keep-alive', 'X-Snowflake-Authorization-Token-Type': 'KEYPAIR_JWT', 'Content-Type': 'application/json', 'Content-Length': '139'},
+            headers={'User-Agent': 'Airbyte', 'Accept-Encoding': 'gzip, deflate', 'Accept': 'application/json', 'Connection': 'keep-alive', 'X-Snowflake-Authorization-Token-Type': 'KEYPAIR_JWT', 'Content-Type': 'application/json', 'Content-Length': self.get_content_length(body)},
             body = body,
             query_params=query_params
         )
+
+    def get_content_length(self, body):
+        req = requests.Request('POST','https://dummy.com',json=body)
+        prepared = req.prepare()
+        content_length = prepared.headers.get('Content-Length',0)
+        return content_length
