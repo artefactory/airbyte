@@ -28,6 +28,7 @@ class SnowflakeRequestBuilder:
         self._async = "false"
         self._requestID = None
         self._show_primary_keys = False
+        self._handle = None
 
     def with_table(self ,table:str):
         self._table=table
@@ -51,6 +52,10 @@ class SnowflakeRequestBuilder:
     
     def with_partition(self, partition:int):
         self._partition = partition
+        return self
+    
+    def with_handle(self, handle:str):
+        self._handle = handle
         return self
         
 
@@ -84,9 +89,9 @@ class SnowflakeRequestBuilder:
         
 
         return HttpRequest(
-            url=f"https://{self._host}/api/v2/{self._resource}",
+            url=f"https://{self._host}/api/v2/{self._resource}{'/'+self._handle if self._handle else ''}",
             headers={'User-Agent': 'Airbyte', 'Accept-Encoding': 'gzip, deflate', 'Accept': 'application/json', 'Connection': 'keep-alive', 'X-Snowflake-Authorization-Token-Type': 'KEYPAIR_JWT', 'Content-Type': 'application/json', 'Content-Length': self.get_content_length(body)},
-            body = body,
+            body = json.dumps(body),
             query_params=query_params
         )
 
