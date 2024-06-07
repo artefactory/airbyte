@@ -18,7 +18,9 @@ acceptance_tests:
         status: "failed"
       - config_path: "secrets/inconsistent_parent_name_push_down_filters_config.json"
         status: "failed"
-      - config_path: "secrets/unknown_update_method_config.json.json"
+      - config_path: "secrets/unknown_update_method_config.json"
+        status: "failed"
+      - config_path: "secrets/unknown_schema_config.json"
         status: "failed"
   discovery:
     tests:
