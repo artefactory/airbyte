@@ -10,7 +10,7 @@ from airbyte_protocol.models import SyncMode
 
 from source_snowflake.schema_builder import date_and_time_snowflake_type_airbyte_type, string_snowflake_type_airbyte_type, \
     mapping_snowflake_type_airbyte_type, get_generic_type_from_schema_type, convert_time_zone_time_stamp_suffix_to_offset_hours, \
-    convert_utc_to_time_zone, convert_utc_to_time_zone_date
+    convert_utc_to_time_zone, convert_utc_to_time_zone_date, TIMESTAMP_OFFSET_SEPARATOR
 from source_snowflake.snowflake_exceptions import CursorFieldNotPresentInSchemaError, emit_airbyte_error_message, \
     SnowflakeTypeNotRecognizedError, StartHistoryTimeNotSetError
 
@@ -168,7 +168,7 @@ class TimeZoneStream(SnowflakeStream):
                 error_message = 'Unexpected error while reading record'
                 emit_airbyte_error_message(error_message)
 
-        if current_time and ' ' in current_time:
+        if current_time and TIMESTAMP_OFFSET_SEPARATOR in current_time:
             time_zone_suffix = current_time.split(' ')[1]
             offset = convert_time_zone_time_stamp_suffix_to_offset_hours(time_zone_suffix)
 
