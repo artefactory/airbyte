@@ -27,7 +27,7 @@ class SnowflakeRequestBuilder:
         self._show_catalog = False
         self._async = "false"
         self._requestID = None
-
+        self._show_primary_keys = False
 
     def with_table(self ,table:str):
         self._table=table
@@ -35,6 +35,10 @@ class SnowflakeRequestBuilder:
     
     def with_show_catalog(self):
         self._show_catalog=True
+        return self
+    
+    def with_show_primary_keys(self):
+        self._show_primary_keys = True
         return self
 
     def with_requestID(self, requestID:str):
@@ -44,19 +48,24 @@ class SnowflakeRequestBuilder:
     def with_async(self):
         self._async = "true"
         return self
+    
+    def with_partition(self, partition:int):
+        self._partition = partition
+        return self
         
 
-    def build(self) -> HttpRequest:
+    def build(self, is_get:bool=False) -> HttpRequest:
         body = {}
         query_params = {"requestId":None,"async":self._async}
-        statement = ""
+        statement = None
         if self._table:
-            statement  = f'SELECT * FROM {self._database}.{self._schema}.{self._table}'
+            statement  = f'SELECT * FROM "{self._database}"."{self._schema}"."{self._table}"'
         if self._show_catalog:
             statement = f"SHOW TABLES IN SCHEMA {self._database}.{self._schema}"
         if self._requestID:
             query_params["requestId"] = self._requestID
-
+        if self._show_primary_keys and self._table: 
+            statement = f'SHOW PRIMARY KEYS IN "{self._database}"."{self._schema}"."{self._table}"'
         
         body ={
             'statement':statement,
@@ -65,6 +74,12 @@ class SnowflakeRequestBuilder:
             'database':self._database,
             'timeout': "1000"
         } 
+        
+        if is_get:
+            query_params= None
+
+        
+        
 
         
 

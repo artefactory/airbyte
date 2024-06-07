@@ -300,9 +300,6 @@ class StreamLauncher(SnowflakeStream):
             "timeout": self.TIME_OUT_IN_SECONDS,
         }
 
-        schema = self.table_object.get('schema', '')
-        if schema:
-            json_payload['schema'] = schema
 
         return json_payload
 

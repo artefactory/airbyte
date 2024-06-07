@@ -17,6 +17,6 @@ from airbyte_cdk.test.mock_http.response_builder import PaginationStrategy
 class SnowflakePaginationStrategy(PaginationStrategy):
     @staticmethod
     def update(response: Dict[str, Any]) -> None:
-        response["partitionInfo"] = 2
+        response["partitionInfo"] = [1,2]
 
 

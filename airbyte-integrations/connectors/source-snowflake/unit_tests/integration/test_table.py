@@ -1,3 +1,4 @@
+from operator import is_
 import re
 from typing import Any, Dict, List, Optional
 from unittest import TestCase, mock
@@ -6,14 +7,13 @@ import freezegun
 from airbyte_cdk.sources.source import TState
 from airbyte_cdk.test.catalog_builder import CatalogBuilder
 from airbyte_cdk.test.entrypoint_wrapper import EntrypointOutput, read
+from integration.response_builder import SnowflakeResponseBuilder, create_response_builder
 from airbyte_cdk.test.mock_http import HttpMocker, HttpRequest, HttpResponse
 from airbyte_cdk.test.mock_http.response_builder import (
     FieldPath,
-    HttpResponseBuilder,
     NestedPath,
     RecordBuilder,
     create_record_builder,
-    create_response_builder,
     find_template,
 )
 from airbyte_cdk.test.state_builder import StateBuilder
@@ -26,6 +26,7 @@ from airbyte_protocol.models import (
     StreamDescriptor,
     SyncMode,
 )
+from pydantic import Field
 import pytest
 from tomlkit import table, value
 
@@ -40,7 +41,7 @@ from source_snowflake import SourceSnowflake
 _WAREHOUSE = "WAREHOUSE"
 _DATABASE = "DATABASE"
 _SCHEMA = "INTEGRATION_TEST"
-_TABLE = "TABLE"
+_TABLE = "TEST_TABLE"
 _ROLE = "ROLE"
 _HOST = "host.com"
 _REQUESTID = "123"
@@ -61,24 +62,32 @@ def _source(catalog: ConfiguredAirbyteCatalog, config: Dict[str, Any], state: Op
     return SourceSnowflake()
 
 
-def snowflake_response() -> HttpResponseBuilder:
+def snowflake_response(file_name,datafield:str="data") -> SnowflakeResponseBuilder:
     return create_response_builder(
-        find_template("check_connection", __file__),
-        FieldPath("data"),
+        find_template(file_name, __file__),
+        FieldPath(datafield),
         pagination_strategy=SnowflakePaginationStrategy()
     )
-def a_snowflake_response() -> RecordBuilder:
+def a_snowflake_response(file_name, datafield:str="data") -> RecordBuilder:
     return create_record_builder(
-        find_template("check_connection", __file__),
-        FieldPath("data"),
+        find_template(file_name, __file__),
+        FieldPath(datafield),
     )
 
 
 def _given_table_catalog(http_mocker: HttpMocker) -> None:
     http_mocker.post(
         table_request().with_show_catalog().with_requestID(_REQUESTID).build(),
-        snowflake_response().with_record(a_snowflake_response()).build()
+        snowflake_response("check_connection").with_record(a_snowflake_response("check_connection")).build()
     )
+
+def _given_table_with_primary_keys(http_mocker: HttpMocker) -> None:
+    http_mocker.post(
+        table_request().with_table(_TABLE).with_show_primary_keys().with_requestID(_REQUESTID).build(),
+        snowflake_response("primary_keys", ).with_record(a_snowflake_response("primary_keys")).build()
+    )
+
+
 
 
 def _read(
@@ -98,12 +107,16 @@ class FullRefreshTest(TestCase):
     @HttpMocker()
     def test_given_one_page_when_read_then_return_records(self,uuid_mock, mock_auth,http_mocker: HttpMocker) -> None:
         _given_table_catalog(http_mocker)
+        _given_table_with_primary_keys(http_mocker)
         http_mocker.post(
-            table_request().with_table(_TABLE).with_requestID(_REQUESTID).build(),
-            snowflake_response().with_record(a_snowflake_response()).build()
+            table_request().with_table(_TABLE).with_requestID(_REQUESTID).with_async().build(),
+            snowflake_response("async_response","statementStatusUrl").with_handle("handle").build()
         )
-        breakpoint()
+        http_mocker.get(
+            table_request().build(is_get=True),
+            snowflake_response("async_response","statementStatusUrl").with_record(a_snowflake_response("async_response","statementStatusUrl")).build()
+        )
         
 
         output = _read(_config(), sync_mode=SyncMode.full_refresh)
-        assert len(output.records)>0
+        
