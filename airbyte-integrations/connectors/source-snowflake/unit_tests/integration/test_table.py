@@ -43,6 +43,7 @@ _SCHEMA = "SCHEMA"
 _TABLE = "TABLE"
 _ROLE = "ROLE"
 _HOST = "host.com"
+_REQUESTID = "123"
 
 
 
@@ -50,7 +51,7 @@ def _config() -> ConfigBuilder:
     return ConfigBuilder(jwt_token="123", host=_HOST, schema=_SCHEMA, database=_DATABASE, role=_ROLE, warehouse=_WAREHOUSE)
 
 def table_request()->SnowflakeRequestBuilder :
-    return SnowflakeRequestBuilder(resource="test",jwt_token="123",host=_HOST, schema=_SCHEMA, database=_DATABASE, role=_ROLE, warehouse=_WAREHOUSE)
+    return SnowflakeRequestBuilder.statement_endpoint(jwt_token="123",host=_HOST, schema=_SCHEMA, database=_DATABASE, role=_ROLE, warehouse=_WAREHOUSE)
 
 def _catalog(sync_mode: SyncMode) -> ConfiguredAirbyteCatalog:
     return CatalogBuilder().with_stream("test.test", sync_mode).build()
@@ -73,8 +74,8 @@ def a_snowflake_response() -> RecordBuilder:
     )
 
 def _given_show_table(http_mocker: HttpMocker) -> None:
-    http_mocker.get(
-        table_request().with_show_catalog().build(),
+    http_mocker.post(
+        table_request().with_show_catalog().with_requestID(_REQUESTID).build(),
         snowflake_response().with_record(a_snowflake_response()).build()
     )
 
@@ -91,14 +92,16 @@ def _read(
 
 
 class FullRefreshTest(TestCase):
+    @mock.patch("source_snowflake.streams.snowflake_parent_stream.uuid.uuid4", return_value=_REQUESTID)
     @mock.patch("source_snowflake.source.SnowflakeJwtAuthenticator")
     @HttpMocker()
-    def test_given_one_page_when_read_then_return_records(self,mock_auth,http_mocker: HttpMocker) -> None:
+    def test_given_one_page_when_read_then_return_records(self,uuid_mock, mock_auth,http_mocker: HttpMocker) -> None:
         _given_show_table(http_mocker)
-        http_mocker.get(
-            table_request().with_table(_TABLE).build(),
+        http_mocker.post(
+            table_request().with_table(_TABLE).with_requestID(_REQUESTID).build(),
             snowflake_response().with_record(a_snowflake_response()).build()
         )
+        breakpoint()
         
 
         output = _read(_config(), sync_mode=SyncMode.full_refresh)
