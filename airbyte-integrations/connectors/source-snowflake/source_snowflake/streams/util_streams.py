@@ -1,5 +1,6 @@
 import threading
 import uuid
+from abc import ABC
 from collections import OrderedDict
 from datetime import datetime, timedelta, timezone
 from typing import Any, Iterable, List, Mapping, MutableMapping, Optional, Union
@@ -136,18 +137,13 @@ class PrimaryKeyStream(SnowflakeStream):
     def __str__(self):
         return f"Current stream has this table object as constructor {self.table_object}"
 
-
-class CurrentTimeZoneStream(SnowflakeStream):
+class TimeZoneStream(SnowflakeStream):
     CURRENT_TIME_COLUMN_NAME = 'CURRENT_TIME'
-    _is_set = False
-    offset = None
-    _lock = threading.Lock()
 
     def __init__(self, url_base, config, authenticator):
         super().__init__(authenticator=authenticator)
         self._url_base = url_base
         self._config = config
-
 
     @property
     def statement(self):
@@ -158,34 +154,25 @@ class CurrentTimeZoneStream(SnowflakeStream):
         :return an iterable containing each record in the response
         """
         response_json = response.json()
+        current_time = None
+        offset = 0
         column_names_to_be_extracted_from_records = [self.CURRENT_TIME_COLUMN_NAME]
         index_of_columns_from_names = self.get_index_of_columns_from_names(response_json, column_names_to_be_extracted_from_records)
 
         current_time_column_name_index = index_of_columns_from_names[self.CURRENT_TIME_COLUMN_NAME]
+
         for record in response_json.get("data", []):
             try:
-                yield {'current_time': record[current_time_column_name_index]}
+                current_time = record[current_time_column_name_index]
             except Exception:
                 error_message = 'Unexpected error while reading record'
                 emit_airbyte_error_message(error_message)
 
+        if current_time and ' ' in current_time:
+            time_zone_suffix = current_time.split(' ')[1]
+            offset = convert_time_zone_time_stamp_suffix_to_offset_hours(time_zone_suffix)
 
-    @classmethod
-    def set_off_set(cls, url_base, config, authenticator):
-        with cls._lock:
-            if not cls._is_set:
-                current_time_zone_stream = cls(url_base, config, authenticator)
-                current_time_record = next(current_time_zone_stream.read_records(SyncMode.full_refresh))
-                current_time_with_time_zone = current_time_record['current_time']
-                current_time_time_zone_suffix = current_time_with_time_zone.split(' ')[1]
-                cls.offset = convert_time_zone_time_stamp_suffix_to_offset_hours(current_time_time_zone_suffix)
-                cls._is_set = True
-
-    @classmethod
-    def get_current_time_snowflake_time_zone(cls, url_base, config, authenticator):
-        cls.set_off_set(url_base, config, authenticator)
-        current_time_date_utc = datetime.now(timezone.utc)
-        return convert_utc_to_time_zone_date(current_time_date_utc, cls.offset)
+        yield {"offset": offset}
 
 
 class StreamLauncher(SnowflakeStream):
@@ -207,7 +194,6 @@ class StreamLauncher(SnowflakeStream):
         self.where_clause = where_clause
 
         self.start_history_timestamp = start_history_timestamp
-
 
     @property
     def cursor_field(self):
@@ -367,6 +353,7 @@ class StreamLauncherChangeDataCapture(StreamLauncher):
         "METADATA$ISUPDATE": "boolean",
         "METADATA$ROW_ID": "text",
     }
+
     def __init__(self, url_base, config, table_object, current_state, cursor_field, authenticator, where_clause=None,
                  start_history_timestamp=None, is_full_refresh=False):
         super().__init__(url_base, config, table_object, current_state, cursor_field, authenticator, where_clause,
@@ -444,4 +431,3 @@ class StreamLauncherChangeDataCapture(StreamLauncher):
             json_payload['schema'] = schema
 
         return json_payload
-      

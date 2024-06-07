@@ -5,7 +5,7 @@ import traceback
 from datetime import datetime
 from typing import Any, List, Mapping, Tuple
 
-from source_snowflake.streams.util_streams import TableCatalogStream
+from source_snowflake.streams.util_streams import TableCatalogStream, TimeZoneStream
 from source_snowflake.streams.table_stream import TableStream, TableChangeDataCaptureStream
 from source_snowflake.streams.check_connection import CheckConnectionStream
 import requests
@@ -121,7 +121,6 @@ class SourceSnowflake(AbstractSource):
             if len(push_down_filters_names) != len(set(push_down_filters_names)):
                 raise DuplicatedPushDownFilterStreamNameError()
 
-
     @classmethod
     def check_existence_of_at_least_one_stream(cls, url_base, config, authenticator):
         check_connection_stream = CheckConnectionStream(url_base=url_base, config=config, authenticator=authenticator)
@@ -170,6 +169,11 @@ class SourceSnowflake(AbstractSource):
         table_catalog_stream = TableCatalogStream(url_base=url_base,
                                                   config=config,
                                                   authenticator=authenticator)
+        time_zone_stream = TimeZoneStream(url_base=url_base,
+                                          config=config,
+                                          authenticator=authenticator)
+        time_zone_offset = next(time_zone_stream.read_records(SyncMode.full_refresh)).get("offset", None)
+
         update_method = config.get('replication_method', {'method': 'standard'}).get('method', 'standard')
         stream_class = None
         push_down_filters_class = None
@@ -182,28 +186,30 @@ class SourceSnowflake(AbstractSource):
             stream_class = TableChangeDataCaptureStream
             push_down_filters_class = PushDownFilterChangeDataCaptureStream
 
-        standard_streams = self._get_standard_streams(stream_class, config, url_base, table_catalog_stream, authenticator)
+        standard_streams = self._get_standard_streams(stream_class, config, url_base, table_catalog_stream, authenticator, time_zone_offset)
         push_down_filters_streams = self._get_push_down_filters_streams(push_down_filters_class,
-                                                                        config, url_base, authenticator, standard_streams)
+                                                                        config, url_base, authenticator, standard_streams, time_zone_offset)
         streams = list(standard_streams.values()) + push_down_filters_streams
 
         return streams
 
     @classmethod
     @handle_no_permissions_error
-    def _get_standard_streams(cls, stream_class, config, url_base, table_catalog_stream, authenticator):
+    def _get_standard_streams(cls, stream_class, config, url_base, table_catalog_stream, authenticator, time_zone_offset):
         standard_streams = {}
         for table_object in table_catalog_stream.read_records(sync_mode=SyncMode.full_refresh):
             standard_stream = stream_class(url_base=url_base,
                                            config=config,
                                            authenticator=authenticator,
-                                           table_object=table_object)
+                                           table_object=table_object,
+                                           time_zone_offset=time_zone_offset)
             standard_streams[standard_stream.name] = standard_stream
 
         return standard_streams
 
     @classmethod
-    def _get_push_down_filters_streams(cls, push_down_filter_stream_class, config, url_base, authenticator, standard_streams):
+    def _get_push_down_filters_streams(cls, push_down_filter_stream_class, config, url_base, authenticator, standard_streams,
+                                       time_zone_offset):
         push_down_filters_streams = []
         if 'streams' in config and config['streams']:
             for push_down_filter_stream_config in config['streams']:
@@ -223,7 +229,8 @@ class SourceSnowflake(AbstractSource):
                                                                         where_clause=push_down_filter_stream_config['where_clause'],
                                                                         parent_stream=parent_stream,
                                                                         namespace=push_down_filter_namespace,
-                                                                        authenticator=authenticator, )
+                                                                        authenticator=authenticator,
+                                                                        time_zone_offset=time_zone_offset)
                 push_down_filters_streams.append(push_down_filter_stream)
 
         return push_down_filters_streams

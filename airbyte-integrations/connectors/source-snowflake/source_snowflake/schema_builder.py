@@ -150,6 +150,10 @@ def format_field(field_value, field_type, local_time_zone_offset_hours=None):
         return json.loads(field_value)
 
     if field_type.upper() in date_and_time_snowflake_type_airbyte_type.keys() and field_value:
+
+        if isinstance(field_value, datetime):  # Already formatted date
+            return field_value
+
         try:
             airbyte_format = date_and_time_snowflake_type_airbyte_type[field_type.upper()].get('format', None)
             airbyte_type = date_and_time_snowflake_type_airbyte_type[field_type.upper()].get('airbyte_type', None)
@@ -162,7 +166,7 @@ def format_field(field_value, field_type, local_time_zone_offset_hours=None):
 
                 else:
                     unix_time_stamp = float(field_value)
-                    offset_hours = local_time_zone_offset_hours
+                    offset_hours = local_time_zone_offset_hours if local_time_zone_offset_hours is not None else 0
 
                 utc_date = datetime.fromtimestamp(unix_time_stamp, pytz.timezone("UTC"))
                 return convert_utc_to_time_zone(utc_date, offset_hours)
