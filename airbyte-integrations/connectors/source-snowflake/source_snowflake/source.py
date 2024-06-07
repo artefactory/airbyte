@@ -211,8 +211,9 @@ class SourceSnowflake(AbstractSource):
     def _get_push_down_filters_streams(cls, push_down_filter_stream_class, config, url_base, authenticator, standard_streams,
                                        time_zone_offset):
         push_down_filters_streams = []
-        if 'streams' in config and config['streams']:
-            for push_down_filter_stream_config in config['streams']:
+        config_streams = config.get('streams')
+        if config_streams:
+            for push_down_filter_stream_config in config_streams:
                 push_down_filter_namespace = push_down_filter_stream_config.get('namespace', None)
 
                 parent_stream_name = push_down_filter_stream_config['parent_stream']
