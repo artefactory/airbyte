@@ -16,6 +16,8 @@ acceptance_tests:
         status: "failed"
       - config_path: "secrets/duplicated_push_down_filters_config.json"
         status: "failed"
+      - config_path: "secrets/inconsistent_parent_name_push_down_filters_config.json"
+        status: "failed"
   discovery:
     tests:
       - config_path: "secrets/config.json"
