@@ -39,7 +39,7 @@ from source_snowflake import SourceSnowflake
 
 _WAREHOUSE = "WAREHOUSE"
 _DATABASE = "DATABASE"
-_SCHEMA = "SCHEMA"
+_SCHEMA = "INTEGRATION_TEST"
 _TABLE = "TABLE"
 _ROLE = "ROLE"
 _HOST = "host.com"
@@ -54,7 +54,7 @@ def table_request()->SnowflakeRequestBuilder :
     return SnowflakeRequestBuilder.statement_endpoint(jwt_token="123",host=_HOST, schema=_SCHEMA, database=_DATABASE, role=_ROLE, warehouse=_WAREHOUSE)
 
 def _catalog(sync_mode: SyncMode) -> ConfiguredAirbyteCatalog:
-    return CatalogBuilder().with_stream("test.test", sync_mode).build()
+    return CatalogBuilder().with_stream(f"{_SCHEMA}.TEST_TABLE", sync_mode).build()
 
 
 def _source(catalog: ConfiguredAirbyteCatalog, config: Dict[str, Any], state: Optional[List[AirbyteStateMessage]]) -> SourceSnowflake:
@@ -63,17 +63,18 @@ def _source(catalog: ConfiguredAirbyteCatalog, config: Dict[str, Any], state: Op
 
 def snowflake_response() -> HttpResponseBuilder:
     return create_response_builder(
-        find_template("table_stream", __file__),
+        find_template("check_connection", __file__),
         FieldPath("data"),
         pagination_strategy=SnowflakePaginationStrategy()
     )
 def a_snowflake_response() -> RecordBuilder:
     return create_record_builder(
-        find_template("table_stream", __file__),
+        find_template("check_connection", __file__),
         FieldPath("data"),
     )
 
-def _given_show_table(http_mocker: HttpMocker) -> None:
+
+def _given_table_catalog(http_mocker: HttpMocker) -> None:
     http_mocker.post(
         table_request().with_show_catalog().with_requestID(_REQUESTID).build(),
         snowflake_response().with_record(a_snowflake_response()).build()
@@ -96,7 +97,7 @@ class FullRefreshTest(TestCase):
     @mock.patch("source_snowflake.source.SnowflakeJwtAuthenticator")
     @HttpMocker()
     def test_given_one_page_when_read_then_return_records(self,uuid_mock, mock_auth,http_mocker: HttpMocker) -> None:
-        _given_show_table(http_mocker)
+        _given_table_catalog(http_mocker)
         http_mocker.post(
             table_request().with_table(_TABLE).with_requestID(_REQUESTID).build(),
             snowflake_response().with_record(a_snowflake_response()).build()
