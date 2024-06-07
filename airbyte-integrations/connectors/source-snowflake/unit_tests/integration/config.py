@@ -3,23 +3,26 @@ from typing import Any, Dict
 
 
 class ConfigBuilder:
-    def __init__(self) -> None:
+    def __init__(self, jwt_token: str, host:str, schema:str, database:str, role:str,warehouse:str) -> None:
         self._config: Dict[str, Any] = {
-            "jwt_token": "ConfigBuilder default client secret",
-            "account_identifier": "ConfigBuilder default account id",
+            "credentials": {
+                        "auth_type": "JWT Token",
+                        "user_name": "ConfigBuilder default username",
+                        "private_key": "-----BEGIN PRIVATE KEY-----key-----END PRIVATE KEY-----",
+
+            },
+            "host": host,
+            "role": role,
+            "schema": schema,
+            "database": database,
+            "warehouse": warehouse,
+            "replication_method": {
+                "method":"standard"
+            }
         }
-
-    def with_account_id(self, account_identifier: str) -> "ConfigBuilder":
-        self._config["account_identifier"] = account_identifier
-        return self
-
-    def with_jwt_token(self, jwt_token: str) -> "ConfigBuilder":
-        self._config["jwt_token"] = jwt_token
-        return self
-
-    def with_cursor_field(self, cursor_field: str) -> "ConfigBuilder":
-        self._config["cursor_field"] = cursor_field
-        return self
+    
 
     def build(self) -> Dict[str, Any]:
         return self._config
+    
+

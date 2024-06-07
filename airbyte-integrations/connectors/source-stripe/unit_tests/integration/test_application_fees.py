@@ -138,7 +138,7 @@ class FullRefreshTest(TestCase):
         )
 
         output = self._read(_config().with_start_date(_A_START_DATE))
-
+        
         assert len(output.records) == 2
 
     @HttpMocker()
