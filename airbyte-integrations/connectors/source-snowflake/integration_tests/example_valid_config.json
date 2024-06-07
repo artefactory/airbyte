@@ -7,5 +7,8 @@
     "streams": [],
     "host": "https://XXXXXXXXXXX.snowflakecomputing.com",
     "role": "ROLE",
-    "warehouse": "WAREHOUSE"
+    "warehouse": "WAREHOUSE",
+    "database": "DATABASE",
+    "schema": "SCHEMA",
+    "replication_method":{"method":"standard"}
 }
