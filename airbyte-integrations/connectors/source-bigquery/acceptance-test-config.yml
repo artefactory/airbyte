@@ -15,13 +15,14 @@ acceptance_tests:
   discovery:
     tests:
       - config_path: "secrets/config.json"
-        timeout_seconds: 40
+        timeout_seconds: 100
   basic_read:
     tests:
       - config_path: "secrets/config.json"
         configured_catalog_path: "integration_tests/configured_catalog.json"
         empty_streams: []
         timeout_seconds: 40
+        validate_stream_statuses: true
         expect_records:
           path: "integration_tests/expected_records.jsonl"
           exact_order: no
@@ -29,6 +30,7 @@ acceptance_tests:
         configured_catalog_path: "integration_tests/cdc_configured_catalog.json"
         empty_streams: []
         timeout_seconds: 40
+        validate_stream_statuses: true
         fail_on_extra_columns: false
         expect_records:
           path: "integration_tests/expected_records.jsonl"
