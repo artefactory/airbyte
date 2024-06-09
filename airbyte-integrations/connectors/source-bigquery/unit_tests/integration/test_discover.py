@@ -43,7 +43,7 @@ _NO_CATALOG = CatalogBuilder().build()
 class DiscoverTest(TestCase):
 
     @HttpMocker()
-    def test_given_one_page_when_read_then_return_records(self, http_mocker: HttpMocker) -> None:
+    def test_simple_discovery(self, http_mocker: HttpMocker) -> None:
         config = ConfigBuilder().default().build()
 
         dataset_ids = ["dataset_id_1", "dataset_id_2"]
