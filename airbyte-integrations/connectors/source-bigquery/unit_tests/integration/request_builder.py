@@ -52,6 +52,7 @@ class BigqueryRequestBuilder:
         self._starting_after_id: Optional[str] = None
         self._types: List[str] = []
         self._expands: List[str] = []
+        self._body: Optional[dict] = None
 
     def with_created_gte(self, created_gte: datetime) -> "BigqueryRequestBuilder":
         self._created_gte = created_gte
@@ -84,6 +85,10 @@ class BigqueryRequestBuilder:
     def with_expands(self, expands: List[str]) -> "BigqueryRequestBuilder":
         self._expands = expands
         return self
+    
+    def with_body(self, body: dict) -> "BigqueryRequestBuilder":
+        self._body = body
+        return self
 
     def build(self) -> HttpRequest:
         query_params = {}
@@ -111,4 +116,5 @@ class BigqueryRequestBuilder:
             url=f"https://bigquery.googleapis.com/{self._resource}",
             query_params=query_params,
             # headers={"Authorization": f"Bearer toto"},
+            body=self._body,
         )

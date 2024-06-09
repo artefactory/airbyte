@@ -8,4 +8,4 @@ from airbyte_cdk.test.mock_http.response_builder import PaginationStrategy
 class BigqueryPaginationStrategy(PaginationStrategy):
     @staticmethod
     def update(response: Dict[str, Any]) -> None:
-        response["has_more"] = True
+        response["nextPageToken"] = "XXXXXX"

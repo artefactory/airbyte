@@ -49,22 +49,43 @@ class DiscoverTest(TestCase):
         dataset_ids = ["dataset_id_1", "dataset_id_2"]
         tables_ids = ["table_id_1", "table_id_2"]
 
-        datasets_req = BigqueryRequestBuilder.datasets_endpoint(project_id=config["project_id"]).build()
-        datasets_resp = BigqueryResponseBuilder.datasets(dataset_ids=dataset_ids).build()
-        http_mocker.get(datasets_req, datasets_resp)
+        http_mocker.get(
+            BigqueryRequestBuilder.datasets_endpoint(project_id=config["project_id"]).build(),
+            BigqueryResponseBuilder.datasets(dataset_ids=dataset_ids).build()
+        )
 
         for dataset_id in dataset_ids:
-            tables_req = BigqueryRequestBuilder.tables_endpoint(project_id=config["project_id"], dataset_id=dataset_id).build()
-            tables_resp = BigqueryResponseBuilder.tables(table_ids=tables_ids).build()
-            http_mocker.get(tables_req, tables_resp)
+            http_mocker.get(
+                BigqueryRequestBuilder.tables_endpoint(project_id=config["project_id"], dataset_id=dataset_id).build(),
+                BigqueryResponseBuilder.tables(table_ids=tables_ids).build()
+            )
 
-        queries_req = BigqueryRequestBuilder.queries_endpoint(project_id=config["project_id"]).build()
-        queries_resp = BigqueryResponseBuilder.queries().build()
-        http_mocker.post(queries_req, queries_resp)
+            for table_id in tables_ids:
+                http_mocker.post(
+                    BigqueryRequestBuilder.queries_endpoint(project_id=config["project_id"]).with_body({
+                        "kind": "bigquery#queryRequest",
+                        "query": f"select * from `{dataset_id}.{table_id}`",
+                        "useLegacySql": False,
+                        "dryRun": True,
+                    }).build(),
+                    BigqueryResponseBuilder.queries().build()
+                )
+                http_mocker.post(
+                    BigqueryRequestBuilder.queries_endpoint(project_id=config["project_id"]).with_body({
+                        "kind": "bigquery#queryRequest",
+                        "query": f"SELECT * FROM `{config['project_id']}.{dataset_id}.INFORMATION_SCHEMA.KEY_COLUMN_USAGE` WHERE table_name='{table_id}';",
+                        "useLegacySql": False,
+                        "timeoutMs": 30000,
+                    }).build(),
+                    BigqueryResponseBuilder.queries().build()
+                )
 
         source = SourceBigquery(_NO_CATALOG, config, _NO_STATE)
         
         output = discover(source, config, expecting_exception=False)
-        errors = output.errors
-        breakpoint()
-        assert len(output.records) == 2
+
+        assert [
+            stream.name for stream in output._messages[0].catalog.streams
+        ] == [
+            f"{dataset_id}.{table_id}" for dataset_id in dataset_ids for table_id in tables_ids
+        ]

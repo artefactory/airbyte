@@ -36,18 +36,44 @@ class BigqueryResponseBuilder:
 
     @classmethod
     def datasets(cls, dataset_ids: List[str]) -> HttpResponseBuilder:
-        http_response_builder = _a_response("datasets", FieldPath("datasets"))
+        http_response_builder = _a_response(
+            "datasets",
+            FieldPath("datasets")
+        )
 
         for dataset_id in dataset_ids:
-            http_response_builder = http_response_builder.with_record(_a_record("datasets", FieldPath("datasets"), NestedPath(["datasetReference", "datasetId"]), None).with_field(NestedPath(["datasetReference", "datasetId"]), dataset_id))
+            http_response_builder = http_response_builder.with_record(
+                _a_record(
+                    "datasets",
+                    FieldPath("datasets"),
+                    NestedPath(["datasetReference", "datasetId"]),
+                    None
+                ).with_field(
+                    NestedPath(["datasetReference", "datasetId"]),
+                    dataset_id
+                )
+            )
         return http_response_builder
 
     @classmethod
     def tables(cls, table_ids: List[str]) -> HttpResponseBuilder:
-        http_response_builder = _a_response("tables", FieldPath("tables"))
+        http_response_builder = _a_response(
+            "tables",
+            FieldPath("tables")
+        )
 
         for table_id in table_ids:
-            http_response_builder = http_response_builder.with_record(_a_record("tables", FieldPath("tables"), NestedPath(["tableReference", "tableId"]), None).with_field(NestedPath(["tableReference", "tableId"]), table_id))
+            http_response_builder = http_response_builder.with_record(
+                _a_record(
+                    "tables",
+                    FieldPath("tables"),
+                    NestedPath(["tableReference", "tableId"]),
+                    None
+                ).with_field(
+                    NestedPath(["tableReference", "tableId"]),
+                    table_id
+                )
+            )
         return http_response_builder
 
     @classmethod
@@ -60,7 +86,10 @@ class BigqueryResponseBuilder:
 
     @classmethod
     def queries(cls) -> HttpResponseBuilder:
-        http_response_builder = _a_response("queries", FieldPath("queries"))
+        http_response_builder = _a_response(
+            "queries",
+            FieldPath("rows")
+        )
 
         return http_response_builder
 

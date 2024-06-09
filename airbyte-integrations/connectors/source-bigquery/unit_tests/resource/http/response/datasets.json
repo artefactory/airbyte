@@ -1,10 +1,22 @@
 {
+  "kind": "bigquery#datasetList",
+  "etag": "etag123456789",
+  "nextPageToken": "tokenABCDEF",
   "datasets": [
     {
+      "kind": "bigquery#dataset",
+      "id": "my_project:my_dataset_1",
       "datasetReference": {
-        "projectId": "bigquery-public-data",
-        "datasetId": "samples"
-      }
+        "projectId": "my_project",
+        "datasetId": "my_dataset_1"
+      },
+      "labels": {
+        "env": "prod",
+        "team": "analytics"
+      },
+      "friendlyName": "My First Dataset",
+      "location": "US"
     }
-  ]
+  ],
+  "unreachable": []
 }
