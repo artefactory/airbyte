@@ -2,7 +2,7 @@
     "streams": [
       {
         "stream": {
-          "name": "test.test_MOCK_DATA",
+          "name": "sat_test_dataset.sat_basic_dataset",
           "json_schema": {
             "$schema": "http://json-schema.org/draft-07/schema#",
             "type": "object",

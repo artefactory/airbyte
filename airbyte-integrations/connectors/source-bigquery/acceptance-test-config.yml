@@ -15,6 +15,7 @@ acceptance_tests:
   discovery:
     tests:
       - config_path: "secrets/config.json"
+        timeout_seconds: 30
   basic_read:
     tests:
       - config_path: "secrets/config.json"
@@ -24,15 +25,37 @@ acceptance_tests:
         expect_records:
           path: "integration_tests/expected_records.jsonl"
           exact_order: no
+      - config_path: "secrets/cdc_config.json"
+        configured_catalog_path: "integration_tests/cdc_configured_catalog.json"
+        empty_streams: []
+        timeout_seconds: 30
+        fail_on_extra_columns: false
+        expect_records:
+          path: "integration_tests/expected_records.jsonl"
+          exact_order: no
   incremental: 
    tests:
-     - config_path: "secrets/config.json"
-       configured_catalog_path: "integration_tests/configured_catalog.json"
-       timeout_seconds: 30
-       future_state:
-          future_state_path: "integration_tests/abnormal_state.json"
+    - config_path: "secrets/config.json"
+      configured_catalog_path: "integration_tests/inc_configured_catalog.json"
+      timeout_seconds: 30
+      future_state:
+        future_state_path: "integration_tests/inc_abnormal_state.json"
+    - config_path: "secrets/cdc_config.json"
+      configured_catalog_path: "integration_tests/cdc_configured_catalog.json"
+      timeout_seconds: 30
+      future_state:
+        future_state_path: "integration_tests/cdc_abnormal_state.json"
   full_refresh:
     tests:
       - config_path: "secrets/config.json"
         configured_catalog_path: "integration_tests/configured_catalog.json"
+        timeout_seconds: 30
+      - config_path: "secrets/cdc_config.json"
+        configured_catalog_path: "integration_tests/cdc_configured_catalog.json"
+        timeout_seconds: 30
+  connector_attributes:
+    tests:
+      - config_path: "secrets/config.json"
+        timeout_seconds: 30
+      - config_path: "secrets/cdc_config.json"
         timeout_seconds: 30
