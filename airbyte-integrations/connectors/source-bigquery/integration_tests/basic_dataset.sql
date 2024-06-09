@@ -236,3 +236,5 @@ INSERT
         - 0.123456789,
         - 0.123456789
     );
+
+ALTER TABLE sat_test_dataset.sat_basic_dataset ADD PRIMARY KEY (id) NOT ENFORCED;
