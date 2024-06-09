@@ -95,8 +95,9 @@ class SourceBigquery(ConcurrentSourceAdapter):
         :param logger:  logger object
         :return Tuple[bool, any]: (True, None) if the input config can be used to connect to the API successfully, (False, error) otherwise.
         """
-        self.validate_config(config)
+        
         try:
+            self.validate_config(config)
             self._auth = BigqueryAuth(config)
             # try reading first table from each dataset, to check the connectivity,
             for dataset in BigqueryDatasets(project_id=config["project_id"], authenticator=self._auth).read_records(sync_mode=SyncMode.full_refresh):
@@ -124,6 +125,9 @@ class SourceBigquery(ConcurrentSourceAdapter):
                         failure_type=FailureType.transient_error,
                         message=error_msg,
                     )
+            return False, error_msg
+        except Exception as error:
+            error_msg = f"An error occurred: {error}"
             return False, error_msg
         return True, None
     
