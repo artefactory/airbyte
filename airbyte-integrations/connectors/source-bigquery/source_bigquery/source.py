@@ -124,7 +124,7 @@ class SourceBigquery(ConcurrentSourceAdapter):
                         failure_type=FailureType.transient_error,
                         message=error_msg,
                     )
-            return True, error_msg
+            return False, error_msg
         return True, None
     
     def streams(self, config: Mapping[str, Any]) -> List[Stream]:
