@@ -16,6 +16,8 @@ acceptance_tests:
     tests:
       - config_path: "secrets/config.json"
         timeout_seconds: 100
+      - config_path: "secrets/config_with_dataset.json"
+        timeout_seconds: 100
   basic_read:
     tests:
       - config_path: "secrets/config.json"

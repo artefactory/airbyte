@@ -143,7 +143,7 @@ class SourceBigquery(ConcurrentSourceAdapter):
         """
         self.validate_config(config)
         project_id = config["project_id"]
-        dataset_id = config["dataset_id"]
+        dataset_id = config.get("dataset_id", None)
         self._auth = BigqueryAuth(config)
         streams = config.get("streams", [])
         sync_method = config["replication_method"]["method"]
@@ -168,9 +168,13 @@ class SourceBigquery(ConcurrentSourceAdapter):
                 self._concurrent_streams.append(table_obj.stream)
             elif isinstance(table_obj, IncrementalQueryResult):
                 self._normal_streams.append(table_obj.stream)
-        for dataset in BigqueryDatasets(project_id=project_id, authenticator=self._auth).read_records(sync_mode=SyncMode.full_refresh):
-            dataset_id = dataset.get("datasetReference")["datasetId"]
+
+        if dataset_id:
             self._get_tables(project_id, dataset_id, sync_method, slice_range)
+        else:
+            for dataset in BigqueryDatasets(project_id=project_id, authenticator=self._auth).read_records(sync_mode=SyncMode.full_refresh):
+                dataset_id = dataset.get("datasetReference")["datasetId"]
+                self._get_tables(project_id, dataset_id, sync_method, slice_range)
 
         state_manager = ConnectorStateManager(stream_instance_map={stream.name: stream for stream in self._concurrent_streams}, state=self.state)
         final_concurrents = [
