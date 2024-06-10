@@ -154,27 +154,18 @@ class SourceBigquery(ConcurrentSourceAdapter):
             filter_dataset_id, table_id = stream['parent_stream'].split(".")
             where_clause = stream["where_clause"]
             stream_name = stream["name"]
-            if sync_method == "Standard":
-                table_obj = IncrementalQueryResult(project_id, filter_dataset_id, table_id, stream_name, where_clause, fallback_start=FALLBACK_START, slice_range=slice_range, authenticator=self._auth)
-            else:
-                table_obj = TableChangeHistory(project_id, filter_dataset_id, table_id, stream_name, where_clause=where_clause, fallback_start=CHANGE_HISTORY_START, slice_range=slice_range, authenticator=self._auth)
-                try:
-                    next(table_obj.read_records(sync_mode=SyncMode.full_refresh))
-                except exceptions.HTTPError as error:
-                    if error.response.status_code == 400:
-                        table_obj = None
-                    else:
-                        raise error 
-            if table_obj:
-                self._add_stream(table_obj)
-                self._discovered_streams.append(table_obj)
+            self._get_tables(project_id, filter_dataset_id, table_id, sync_method, slice_range, stream_name, where_clause)
 
         if dataset_id:
-            self._get_tables(project_id, dataset_id, sync_method, slice_range)
+            for table_info in BigqueryTables(dataset_id=dataset_id, project_id=project_id, authenticator=self._auth).read_records(sync_mode=SyncMode.full_refresh):
+                table_id = table_info.get("tableReference")["tableId"]
+                self._get_tables(project_id, dataset_id, table_id, sync_method, slice_range)
         else:
             for dataset in BigqueryDatasets(project_id=project_id, authenticator=self._auth).read_records(sync_mode=SyncMode.full_refresh):
                 dataset_id = dataset.get("datasetReference")["datasetId"]
-                self._get_tables(project_id, dataset_id, sync_method, slice_range)
+                for table_info in BigqueryTables(dataset_id=dataset_id, project_id=project_id, authenticator=self._auth).read_records(sync_mode=SyncMode.full_refresh):
+                    table_id = table_info.get("tableReference")["tableId"]
+                    self._get_tables(project_id, dataset_id, table_id, sync_method, slice_range)
 
         if not self.catalog:
             return self._discovered_streams
@@ -192,24 +183,22 @@ class SourceBigquery(ConcurrentSourceAdapter):
 
             return self._normal_streams + final_concurrents
     
-    def _get_tables(self, project_id, dataset_id, sync_method, slice_range):
+    def _get_tables(self, project_id, dataset_id, table_id, sync_method, slice_range, stream_name=None, where_clause=""):
         # list and process each table under each base to generate the JSON Schema
-        for table_info in BigqueryTables(dataset_id=dataset_id, project_id=project_id, authenticator=self._auth).read_records(sync_mode=SyncMode.full_refresh):
-            table_id = table_info.get("tableReference")["tableId"]
-            if sync_method == "Standard":
-                table_obj = IncrementalQueryResult(project_id, dataset_id, table_id, fallback_start=FALLBACK_START, slice_range=slice_range, authenticator=self._auth)
-            else:
-                table_obj = TableChangeHistory(project_id, dataset_id, table_id, fallback_start=CHANGE_HISTORY_START, slice_range=slice_range, authenticator=self._auth)
-                try:
-                    next(table_obj.read_records(sync_mode=SyncMode.full_refresh))
-                except exceptions.HTTPError as error:
-                    if error.response.status_code == 400:
-                        table_obj = None
-                    else:
-                        raise error 
-            if table_obj:
-                self._discovered_streams.append(table_obj)          
-                self._add_stream(table_obj)
+        if sync_method == "Standard":
+            table_obj = IncrementalQueryResult(project_id, dataset_id, table_id, given_name=stream_name, where_clause=where_clause, fallback_start=FALLBACK_START, slice_range=slice_range, authenticator=self._auth)
+        else:
+            table_obj = TableChangeHistory(project_id, dataset_id, table_id, given_name=stream_name, where_clause=where_clause, fallback_start=CHANGE_HISTORY_START, slice_range=slice_range, authenticator=self._auth)
+            try:
+                next(table_obj.read_records(sync_mode=SyncMode.full_refresh))
+            except exceptions.HTTPError as error:
+                if error.response.status_code == 400:
+                    table_obj = None
+                else:
+                    raise error 
+        if table_obj:
+            self._discovered_streams.append(table_obj)          
+            self._add_stream(table_obj)
     
     def _add_stream(self, table_obj):
         if isinstance(table_obj, TableChangeHistory):
