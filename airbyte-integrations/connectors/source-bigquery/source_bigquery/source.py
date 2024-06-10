@@ -75,6 +75,7 @@ class SourceBigquery(ConcurrentSourceAdapter):
         self.state = state
         self._normal_streams = []
         self._concurrent_streams = []
+        self._discovered_streams = []
 
     @staticmethod
     def validate_config(config: MutableMapping[str, Any]) -> MutableMapping[str, Any]:
@@ -148,7 +149,7 @@ class SourceBigquery(ConcurrentSourceAdapter):
         streams = config.get("streams", [])
         sync_method = config["replication_method"]["method"]
         slice_range = float(config.get("slice_range", _DEFAULT_SLICE_RANGE))
-        
+
         for stream in streams:
             dataset_id, table_id = stream['parent_stream'].split(".")
             where_clause = stream["where_clause"]
@@ -164,7 +165,9 @@ class SourceBigquery(ConcurrentSourceAdapter):
                         table_obj = None
                     else:
                         raise error 
-            self._add_stream(table_obj)
+            if table_obj:
+                self._add_stream(table_obj)
+                self._discovered_streams.append(table_obj)
 
         if dataset_id:
             self._get_tables(project_id, dataset_id, sync_method, slice_range)
@@ -173,18 +176,21 @@ class SourceBigquery(ConcurrentSourceAdapter):
                 dataset_id = dataset.get("datasetReference")["datasetId"]
                 self._get_tables(project_id, dataset_id, sync_method, slice_range)
 
-        state_manager = ConnectorStateManager(stream_instance_map={stream.name: stream for stream in self._concurrent_streams}, state=self.state)
-        final_concurrents = [
-            self._to_concurrent(
-                stream,
-                stream.fallback_start,
-                slice_range,
-                state_manager  
-            )
-            for stream in self._concurrent_streams
-        ]
+        if not self.catalog:
+            return self._discovered_streams
+        else:
+            state_manager = ConnectorStateManager(stream_instance_map={stream.name: stream for stream in self._concurrent_streams}, state=self.state)
+            final_concurrents = [
+                self._to_concurrent(
+                    stream,
+                    stream.fallback_start,
+                    slice_range,
+                    state_manager  
+                )
+                for stream in self._concurrent_streams
+            ]
 
-        return self._normal_streams + final_concurrents
+            return self._normal_streams + final_concurrents
     
     def _get_tables(self, project_id, dataset_id, sync_method, slice_range):
         # list and process each table under each base to generate the JSON Schema
@@ -200,8 +206,10 @@ class SourceBigquery(ConcurrentSourceAdapter):
                     if error.response.status_code == 400:
                         table_obj = None
                     else:
-                        raise error           
-            self._add_stream(table_obj)
+                        raise error 
+            if table_obj:
+                self._discovered_streams.append(table_obj)          
+                self._add_stream(table_obj)
     
     def _add_stream(self, table_obj):
         if isinstance(table_obj, TableChangeHistory):
