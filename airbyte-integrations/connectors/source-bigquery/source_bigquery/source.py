@@ -167,21 +167,18 @@ class SourceBigquery(ConcurrentSourceAdapter):
                     table_id = table_info.get("tableReference")["tableId"]
                     self._get_tables(project_id, dataset_id, table_id, sync_method, slice_range)
 
-        if not self.catalog:
-            return self._discovered_streams
-        else:
-            state_manager = ConnectorStateManager(stream_instance_map={stream.name: stream for stream in self._concurrent_streams}, state=self.state)
-            final_concurrents = [
-                self._to_concurrent(
-                    stream,
-                    stream.fallback_start,
-                    slice_range,
-                    state_manager  
-                )
-                for stream in self._concurrent_streams
-            ]
+        state_manager = ConnectorStateManager(stream_instance_map={stream.name: stream for stream in self._concurrent_streams}, state=self.state)
+        final_concurrents = [
+            self._to_concurrent(
+                stream,
+                stream.fallback_start,
+                slice_range,
+                state_manager  
+            )
+            for stream in self._concurrent_streams
+        ]
 
-            return self._normal_streams + final_concurrents
+        return self._normal_streams + final_concurrents
     
     def _get_tables(self, project_id, dataset_id, table_id, sync_method, slice_range, stream_name=None, where_clause=""):
         # list and process each table under each base to generate the JSON Schema
