@@ -164,10 +164,7 @@ class SourceBigquery(ConcurrentSourceAdapter):
                         table_obj = None
                     else:
                         raise error 
-            if isinstance(table_obj, TableChangeHistory):
-                self._concurrent_streams.append(table_obj.stream)
-            elif isinstance(table_obj, IncrementalQueryResult):
-                self._normal_streams.append(table_obj.stream)
+            self._add_stream(table_obj)
 
         if dataset_id:
             self._get_tables(project_id, dataset_id, sync_method, slice_range)
@@ -204,10 +201,13 @@ class SourceBigquery(ConcurrentSourceAdapter):
                         table_obj = None
                     else:
                         raise error           
-            if isinstance(table_obj, TableChangeHistory):
-                self._concurrent_streams.append(table_obj.stream)
-            elif isinstance(table_obj, IncrementalQueryResult):
-                self._normal_streams.append(table_obj.stream)
+            self._add_stream(table_obj)
+    
+    def _add_stream(self, table_obj):
+        if isinstance(table_obj, TableChangeHistory):
+            self._concurrent_streams.append(table_obj.stream)
+        elif isinstance(table_obj, IncrementalQueryResult):
+            self._normal_streams.append(table_obj.stream)
 
     def _to_concurrent(
         self, stream: Stream, fallback_start: datetime, slice_range: timedelta, state_manager: ConnectorStateManager
