@@ -53,7 +53,7 @@ def _config() -> ConfigBuilder:
     return ConfigBuilder(jwt_token="123", host=_HOST, schema=_SCHEMA, database=_DATABASE, role=_ROLE, warehouse=_WAREHOUSE)
 
 def table_request()->SnowflakeRequestBuilder :
-    return SnowflakeRequestBuilder.statement_endpoint(jwt_token="123",host=_HOST, schema=_SCHEMA, database=_DATABASE, role=_ROLE, warehouse=_WAREHOUSE)
+    return SnowflakeRequestBuilder.statement_endpoint(host=_HOST, schema=_SCHEMA, database=_DATABASE, role=_ROLE, warehouse=_WAREHOUSE)
 
 def _catalog(sync_mode: SyncMode) -> ConfiguredAirbyteCatalog:
     return CatalogBuilder().with_stream(f"{_SCHEMA}.TEST_TABLE", sync_mode).build()
@@ -95,9 +95,6 @@ def _given_read_schema(http_mocker:HttpMocker)-> None:
         snowflake_response("reponse_get_table","data").with_record(a_snowflake_response("reponse_get_table","data")).build()
 
     )
-
-
-
 
 def _read(
     config_builder: ConfigBuilder,
