@@ -7,10 +7,11 @@ import freezegun
 from airbyte_cdk.sources.source import TState
 from airbyte_cdk.test.catalog_builder import CatalogBuilder
 from airbyte_cdk.test.entrypoint_wrapper import EntrypointOutput, read
-from integration.response_builder import SnowflakeResponseBuilder, create_response_builder
+from integration.response_builder import JsonPath, SnowflakeResponseBuilder, create_response_builder
 from airbyte_cdk.test.mock_http import HttpMocker, HttpRequest, HttpResponse
 from airbyte_cdk.test.mock_http.response_builder import (
     FieldPath,
+    Path,
     NestedPath,
     RecordBuilder,
     create_record_builder,
@@ -26,7 +27,7 @@ from airbyte_protocol.models import (
     StreamDescriptor,
     SyncMode,
 )
-from pydantic import Field
+from pydantic import Field, Json
 import pytest
 from tomlkit import table, value
 
@@ -63,16 +64,18 @@ def _source(catalog: ConfiguredAirbyteCatalog, config: Dict[str, Any], state: Op
     return SourceSnowflake()
 
 
-def snowflake_response(file_name,datafield:str="data") -> SnowflakeResponseBuilder:
+def snowflake_response(file_name,datafield:Path=FieldPath("data")) -> SnowflakeResponseBuilder:
     return create_response_builder(
         find_template(file_name, __file__),
-        FieldPath(datafield),
+        datafield,
         pagination_strategy=SnowflakePaginationStrategy()
     )
-def a_snowflake_response(file_name, datafield:str="data") -> RecordBuilder:
+def a_snowflake_response(file_name, datafield:Path=FieldPath("data"), id_path = None, cursor_path = None) -> RecordBuilder:
     return create_record_builder(
         find_template(file_name, __file__),
-        FieldPath(datafield),
+        datafield,
+        record_id_path=id_path,
+        record_cursor_path=cursor_path
     )
 
 
@@ -85,21 +88,21 @@ def _given_table_catalog(http_mocker: HttpMocker) -> None:
 def _given_table_with_primary_keys(http_mocker: HttpMocker) -> None:
     http_mocker.post(
         table_request().with_table(_TABLE).with_show_primary_keys().with_requestID(_REQUESTID).build(),
-        snowflake_response("primary_keys", ).with_record(a_snowflake_response("primary_keys")).build()
+        snowflake_response("primary_keys" ).with_record(a_snowflake_response("primary_keys")).build()
     )
 
 
 def _given_read_schema(http_mocker:HttpMocker)-> None:
     http_mocker.post(
         table_request().with_table(_TABLE).with_get_schema().with_requestID(_REQUESTID).build(),
-        snowflake_response("reponse_get_table","data").with_record(a_snowflake_response("reponse_get_table","data")).build()
+        snowflake_response("reponse_get_table",JsonPath("$")).with_record(a_snowflake_response("reponse_get_table",JsonPath("$"))).build()
 
     )
 
 def _given_get_timezone(http_mocker:HttpMocker)-> None:
     http_mocker.post(
         table_request().with_requestID(_REQUESTID).with_timezone().build(),
-        snowflake_response("timezone", "").build()
+        snowflake_response("timezone", JsonPath("$.'data'")).build()
     )
 
 def _read(
@@ -124,12 +127,12 @@ class FullRefreshTest(TestCase):
         _given_table_with_primary_keys(http_mocker)
         http_mocker.post(
             table_request().with_table(_TABLE).with_requestID(_REQUESTID).with_async().build(),
-            snowflake_response("async_response","statementStatusUrl").with_handle(_HANDLE).build()
+            snowflake_response("async_response",FieldPath("statementStatusUrl")).with_handle(_HANDLE).build()
         )
         http_mocker.get(
             table_request().with_handle(_HANDLE).build(is_get=True),
-            snowflake_response("reponse_get_table","data").with_record(a_snowflake_response("reponse_get_table","data")).build()
-        )
+            snowflake_response("reponse_get_table",JsonPath("$.'data'")).with_record(a_snowflake_response("reponse_get_table",JsonPath("$.'data'.[*]")).build()
+        ))
         
 
         output = _read(_config(), sync_mode=SyncMode.full_refresh)
@@ -145,19 +148,19 @@ class FullRefreshTest(TestCase):
         _given_table_with_primary_keys(http_mocker)
         http_mocker.post(
             table_request().with_table(_TABLE).with_requestID(_REQUESTID).with_async().build(),
-            snowflake_response("async_response","statementStatusUrl").with_handle(_HANDLE).build()
+            snowflake_response("async_response",FieldPath("statementStatusUrl")).with_handle(_HANDLE).build()
         )
         http_mocker.get(
             table_request().with_handle(_HANDLE).build(is_get=True),
-            snowflake_response("reponse_get_table","data").with_record(a_snowflake_response("reponse_get_table","data")).with_pagination().build()
+            snowflake_response("reponse_get_table",JsonPath("$.'data'")).with_record(a_snowflake_response("reponse_get_table",JsonPath("$.'data'.[*]"))).with_pagination().build()
         )
         http_mocker.get(
             table_request().with_handle(_HANDLE).with_partition(1).build(is_get=True),
-            snowflake_response("reponse_get_table","data").with_record(a_snowflake_response("reponse_get_table","data")).with_pagination().build()
+            snowflake_response("reponse_get_table",JsonPath("$.'data'")).with_record(a_snowflake_response("reponse_get_table",JsonPath("$.'data'.[*]"))).with_pagination().build()
         )
         http_mocker.get(
             table_request().with_handle(_HANDLE).with_partition(2).build(is_get=True),
-            snowflake_response("reponse_get_table","data").with_record(a_snowflake_response("reponse_get_table","data")).with_pagination().build()
+            snowflake_response("reponse_get_table",JsonPath("$.'data'")).with_record(a_snowflake_response("reponse_get_table",JsonPath("$.'data'.[*]"))).with_pagination().build()
         )
         output = _read(_config(), sync_mode=SyncMode.full_refresh)
         assert len(output.records) == 3

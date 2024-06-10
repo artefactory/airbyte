@@ -382,6 +382,7 @@ class IncrementalTest(TestCase):
 
         # request matched http_mocker
 
+
     def _an_application_fee_event(self) -> RecordBuilder:
         return _an_event().with_field(_DATA_FIELD, _an_application_fee().build())
 
