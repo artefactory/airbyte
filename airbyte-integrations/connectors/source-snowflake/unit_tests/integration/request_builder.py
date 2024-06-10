@@ -12,13 +12,11 @@ import requests
 class SnowflakeRequestBuilder:
 
     @classmethod
-    def statement_endpoint(cls, jwt_token: str, host:str, schema:str, database:str, role:str, warehouse:str) -> "SnowflakeRequestBuilder":
-        return cls("statements",jwt_token, host, schema, database, role, warehouse)
+    def statement_endpoint(cls, host:str, schema:str, database:str, role:str, warehouse:str) -> "SnowflakeRequestBuilder":
+        return cls( host, schema, database, role, warehouse)
 
-    def __init__(self, resource: str, jwt_token: str, host: str, schema:str, database:str, role:str, warehouse:str) -> None:
-        self._resource = resource
+    def __init__(self, host: str, schema:str, database:str, role:str, warehouse:str) -> None:
         self._host = host
-        self._jwt_token = jwt_token
         self._table = None
         self._schema = schema
         self._database = database
@@ -66,7 +64,7 @@ class SnowflakeRequestBuilder:
 
     def build(self, is_get:bool=False) -> HttpRequest:
         body = {}
-        query_params = {"requestId":None,"async":self._async}
+        query_params = {"requestId":None,"async":self._async} if not is_get else None
         statement = None
         if self._table:
             statement  = f'SELECT * FROM "{self._database}"."{self._schema}"."{self._table}"'
@@ -86,17 +84,9 @@ class SnowflakeRequestBuilder:
             'database':self._database,
             'timeout': "1000"
         } 
-        
-        if is_get:
-            query_params= None
-
-        
-        
-
-        
 
         return HttpRequest(
-            url=f"https://{self._host}/api/v2/{self._resource}{'/'+self._handle if self._handle else ''}",
+            url=f"https://{self._host}/api/v2/statements{'/'+self._handle if self._handle else ''}",
             headers={'User-Agent': 'Airbyte', 'Accept-Encoding': 'gzip, deflate', 'Accept': 'application/json', 'Connection': 'keep-alive', 'X-Snowflake-Authorization-Token-Type': 'KEYPAIR_JWT', 'Content-Type': 'application/json', 'Content-Length': self.get_content_length(body)},
             body = json.dumps(body),
             query_params=query_params
