@@ -151,13 +151,13 @@ class SourceBigquery(ConcurrentSourceAdapter):
         slice_range = float(config.get("slice_range", _DEFAULT_SLICE_RANGE))
 
         for stream in streams:
-            dataset_id, table_id = stream['parent_stream'].split(".")
+            filter_dataset_id, table_id = stream['parent_stream'].split(".")
             where_clause = stream["where_clause"]
             stream_name = stream["name"]
             if sync_method == "Standard":
-                table_obj = IncrementalQueryResult(project_id, dataset_id, table_id, stream_name, where_clause, fallback_start=FALLBACK_START, slice_range=slice_range, authenticator=self._auth)
+                table_obj = IncrementalQueryResult(project_id, filter_dataset_id, table_id, stream_name, where_clause, fallback_start=FALLBACK_START, slice_range=slice_range, authenticator=self._auth)
             else:
-                table_obj = TableChangeHistory(project_id, dataset_id, table_id, stream_name, where_clause=where_clause, fallback_start=CHANGE_HISTORY_START, slice_range=slice_range, authenticator=self._auth)
+                table_obj = TableChangeHistory(project_id, filter_dataset_id, table_id, stream_name, where_clause=where_clause, fallback_start=CHANGE_HISTORY_START, slice_range=slice_range, authenticator=self._auth)
                 try:
                     next(table_obj.read_records(sync_mode=SyncMode.full_refresh))
                 except exceptions.HTTPError as error:
