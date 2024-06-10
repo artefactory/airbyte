@@ -11,9 +11,6 @@ class HttpRequestMatcher:
 
     def matches(self, request: HttpRequest) -> bool:
         hit = request.matches(self._request_to_match)
-        print("HOOOOOOOOO")
-        print(self._request_to_match)
-        print(request)
         if hit:
             self._actual_number_of_matches += 1
         return hit
