@@ -96,6 +96,12 @@ def _given_read_schema(http_mocker:HttpMocker)-> None:
 
     )
 
+def _given_get_timezone(http_mocker:HttpMocker)-> None:
+    http_mocker.post(
+        table_request().with_requestID(_REQUESTID).with_timezone().build(),
+        snowflake_response("timezone", "").build()
+    )
+
 def _read(
     config_builder: ConfigBuilder,
     sync_mode: SyncMode,
@@ -112,6 +118,7 @@ class FullRefreshTest(TestCase):
     @mock.patch("source_snowflake.source.SnowflakeJwtAuthenticator")
     @HttpMocker()
     def test_given_one_page_when_read_then_return_records(self,uuid_mock, mock_auth,http_mocker: HttpMocker) -> None:
+        _given_get_timezone(http_mocker)
         _given_read_schema(http_mocker)
         _given_table_catalog(http_mocker)
         _given_table_with_primary_keys(http_mocker)
@@ -127,4 +134,36 @@ class FullRefreshTest(TestCase):
 
         output = _read(_config(), sync_mode=SyncMode.full_refresh)
         print(output.records)
+    
+    @mock.patch("source_snowflake.streams.snowflake_parent_stream.uuid.uuid4", return_value=_REQUESTID)
+    @mock.patch("source_snowflake.source.SnowflakeJwtAuthenticator")
+    @HttpMocker()
+    def test_given_three_pages_read_then_return_records(self,uuid_mock, mock_auth,http_mocker: HttpMocker) -> None:
+        _given_get_timezone(http_mocker)
+        _given_read_schema(http_mocker)
+        _given_table_catalog(http_mocker)
+        _given_table_with_primary_keys(http_mocker)
+        http_mocker.post(
+            table_request().with_table(_TABLE).with_requestID(_REQUESTID).with_async().build(),
+            snowflake_response("async_response","statementStatusUrl").with_handle(_HANDLE).build()
+        )
+        http_mocker.get(
+            table_request().with_handle(_HANDLE).build(is_get=True),
+            snowflake_response("reponse_get_table","data").with_record(a_snowflake_response("reponse_get_table","data")).with_pagination().build()
+        )
+        http_mocker.get(
+            table_request().with_handle(_HANDLE).with_partition(1).build(is_get=True),
+            snowflake_response("reponse_get_table","data").with_record(a_snowflake_response("reponse_get_table","data")).with_pagination().build()
+        )
+        http_mocker.get(
+            table_request().with_handle(_HANDLE).with_partition(2).build(is_get=True),
+            snowflake_response("reponse_get_table","data").with_record(a_snowflake_response("reponse_get_table","data")).with_pagination().build()
+        )
+        output = _read(_config(), sync_mode=SyncMode.full_refresh)
+        assert len(output.records) == 3
+
+
+
+
+        
         

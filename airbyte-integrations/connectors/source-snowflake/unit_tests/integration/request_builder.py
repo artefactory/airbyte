@@ -28,6 +28,8 @@ class SnowflakeRequestBuilder:
         self._show_primary_keys = False
         self._handle = None
         self._get_schema=False
+        self._timezone = False
+        self._partition = None
 
     def with_table(self ,table:str):
         self._table=table
@@ -60,22 +62,34 @@ class SnowflakeRequestBuilder:
     def with_get_schema(self):
         self._get_schema = True
         return self
-        
+    
+    def with_timezone(self):
+        self._timezone = True
+        return self
+    
+    def _build_query_params(self,is_get:bool=False):
+        query_params = {"requestId":self._requestID, "async":self._async}
+        if is_get:
+            if self._partition:
+                query_params = {"partition":self._partition}
+            else : 
+                query_params = {}
+        return query_params
 
     def build(self, is_get:bool=False) -> HttpRequest:
         body = {}
-        query_params = {"requestId":None,"async":self._async} if not is_get else None
+        query_params = self._build_query_params(is_get)
         statement = None
         if self._table:
             statement  = f'SELECT * FROM "{self._database}"."{self._schema}"."{self._table}"'
         if self._show_catalog:
             statement = f"SHOW TABLES IN SCHEMA {self._database}.{self._schema}"
-        if self._requestID:
-            query_params["requestId"] = self._requestID
         if self._show_primary_keys and self._table: 
             statement = f'SHOW PRIMARY KEYS IN "{self._database}"."{self._schema}"."{self._table}"'
         if self._get_schema :
             statement = f'SELECT TOP 1 * FROM "{self._database}"."{self._schema}"."{self._table}"'
+        if self._timezone :
+            statement = "SELECT TO_TIMESTAMP_TZ(CURRENT_TIMESTAMP()) as CURRENT_TIME"
         
         body ={
             'statement':statement,
