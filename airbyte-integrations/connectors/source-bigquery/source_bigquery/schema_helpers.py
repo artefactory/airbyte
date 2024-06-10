@@ -22,12 +22,14 @@ class SchemaTypes:
     boolean: Dict = {"type": ["null", "boolean"]}
     array: Dict = {"type": ["null", "array"], "items": {}}
     object: Dict = {"type": ["null", "object"]}
-
+    timestamp_with_timezone: Dict = {"type": ["null", "timestamp_with_timezone"]}
+    timestamp_without_timezone: Dict = {"type": ["null", "timestamp_without_timezone"]}
+    time_without_timezone: Dict = {"type": ["null", "time_without_timezone"]}
 
 # https://docs.airbyte.com/integrations/sources/bigquery
 SIMPLE_BIGQUERY_TYPES: Dict = {
     "BOOL": SchemaTypes.boolean,
-    "INT64": SchemaTypes.number,
+    "INT64": SchemaTypes.integer,
     "FLOAT64": SchemaTypes.number,
     "NUMERIC": SchemaTypes.number,
     "BIGNUMERIC": SchemaTypes.number,
