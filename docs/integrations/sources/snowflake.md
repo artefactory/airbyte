@@ -50,14 +50,14 @@ You have to follow these steps to create your public and private key to authenti
 ##### A. create a private key
 You have 2 choices for private key creation, either with password or without password
 
-No password will be asked since you are using the the nocrypt argument. Use this command:
+No password will be asked since you are using the nocrypt argument. Use this command:
 ```bash
 openssl genrsa 2048 | openssl pkcs8 -topk8 -inform PEM -out rsa_key.p8 -nocrypt
 ```
 
 If you want to set a password, run this command:
 ```bash
-openssl genrsa 2048 | openssl pkcs8 -topk8 -inform PEM -out rsa_key.p8 -nocrypt
+openssl genrsa 2048 | openssl pkcs8 -topk8 -inform PEM -out rsa_key.p8
 ```
 
 Note: You will need this password later if you want to authenticate. So store it securely.
