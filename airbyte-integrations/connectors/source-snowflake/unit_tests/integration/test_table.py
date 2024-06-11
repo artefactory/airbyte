@@ -270,7 +270,14 @@ class FullRefreshTest(TestCase):
     @mock.patch("source_snowflake.streams.snowflake_parent_stream.uuid.uuid4", return_value=_REQUESTID)
     @mock.patch("source_snowflake.source.SnowflakeJwtAuthenticator")
     @HttpMocker()
-    def test_retry_on_get_error(self, error_code, property_mock, uuid_mock, mock_auth, http_mocker: HttpMocker) -> None:
+    def test_retry_on_get_error(
+        self, 
+        error_code, 
+        property_mock, 
+        uuid_mock, 
+        mock_auth, 
+        http_mocker: 
+        HttpMocker) -> None:
         _given_get_timezone(http_mocker)
         _given_read_schema(http_mocker)
         _given_table_catalog(http_mocker)
@@ -314,7 +321,14 @@ class FullRefreshTest(TestCase):
     @mock.patch("source_snowflake.streams.snowflake_parent_stream.uuid.uuid4", return_value=_REQUESTID)
     @mock.patch("source_snowflake.source.SnowflakeJwtAuthenticator")
     @HttpMocker()
-    def test_fail_on_post_error_and_max_retry(self,error_code, mock_retries, mock_time, uuid_mock, mock_auth, http_mocker: HttpMocker) -> None:
+    def test_fail_on_post_error_and_max_retry(
+        self,
+        error_code, 
+        mock_retries, 
+        mock_time, 
+        uuid_mock, 
+        mock_auth, 
+        http_mocker: HttpMocker) -> None:
         _given_get_timezone(http_mocker)
         _given_read_schema(http_mocker)
         _given_table_catalog(http_mocker)
