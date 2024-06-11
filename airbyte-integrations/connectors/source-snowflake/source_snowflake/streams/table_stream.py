@@ -54,8 +54,9 @@ class TableStream(SnowflakeStream, IncrementalMixin):
         self._primary_key = None
         self._is_primary_key_set = False
 
-        self._json_schema = None
+        
         self._json_schema_set = False
+        self._json_schema = self.get_json_schema()
 
         # Pagination
         self.number_of_partitions = None

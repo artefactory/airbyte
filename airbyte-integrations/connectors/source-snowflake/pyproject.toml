@@ -25,4 +25,5 @@ source-snowflake = "source_snowflake.run:run"
 requests-mock = "*"
 pytest-mock = "*"
 pytest = "*"
+jsonpath-ng = "^1.6.1"
 

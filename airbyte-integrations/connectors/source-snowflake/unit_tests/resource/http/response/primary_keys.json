@@ -1,0 +1,151 @@
+{
+    "resultSetMetaData": {
+        "numRows": 1,
+        "format": "jsonv2",
+        "partitionInfo": [
+            {
+                "rowCount": 1,
+                "uncompressedSize": 141
+            }
+        ],
+        "rowType": [
+            {
+                "name": "created_on",
+                "database": "",
+                "schema": "",
+                "table": "",
+                "nullable": true,
+                "type": "timestamp_ltz",
+                "length": null,
+                "scale": 3,
+                "precision": 0,
+                "byteLength": null,
+                "collation": null
+            },
+            {
+                "name": "database_name",
+                "database": "",
+                "schema": "",
+                "table": "",
+                "nullable": true,
+                "type": "text",
+                "length": 16777216,
+                "scale": null,
+                "precision": null,
+                "byteLength": 16777216,
+                "collation": null
+            },
+            {
+                "name": "schema_name",
+                "database": "",
+                "schema": "",
+                "table": "",
+                "nullable": true,
+                "type": "text",
+                "length": 16777216,
+                "scale": null,
+                "precision": null,
+                "byteLength": 16777216,
+                "collation": null
+            },
+            {
+                "name": "table_name",
+                "database": "",
+                "schema": "",
+                "table": "",
+                "nullable": true,
+                "type": "text",
+                "length": 16777216,
+                "scale": null,
+                "precision": null,
+                "byteLength": 16777216,
+                "collation": null
+            },
+            {
+                "name": "column_name",
+                "database": "",
+                "schema": "",
+                "table": "",
+                "nullable": true,
+                "type": "text",
+                "length": 16777216,
+                "scale": null,
+                "precision": null,
+                "byteLength": 16777216,
+                "collation": null
+            },
+            {
+                "name": "key_sequence",
+                "database": "",
+                "schema": "",
+                "table": "",
+                "nullable": true,
+                "type": "fixed",
+                "length": null,
+                "scale": 0,
+                "precision": 9,
+                "byteLength": null,
+                "collation": null
+            },
+            {
+                "name": "constraint_name",
+                "database": "",
+                "schema": "",
+                "table": "",
+                "nullable": true,
+                "type": "text",
+                "length": 16777216,
+                "scale": null,
+                "precision": null,
+                "byteLength": 16777216,
+                "collation": null
+            },
+            {
+                "name": "rely",
+                "database": "",
+                "schema": "",
+                "table": "",
+                "nullable": true,
+                "type": "text",
+                "length": 16777216,
+                "scale": null,
+                "precision": null,
+                "byteLength": 16777216,
+                "collation": null
+            },
+            {
+                "name": "comment",
+                "database": "",
+                "schema": "",
+                "table": "",
+                "nullable": true,
+                "type": "text",
+                "length": 16777216,
+                "scale": null,
+                "precision": null,
+                "byteLength": 16777216,
+                "collation": null
+            }
+        ]
+    },
+    "data": [
+        [
+            "1717601101.396",
+            "TEST_AIRBYTE",
+            "INTEGRATION_TEST",
+            "TEST_TABLE",
+            "ID",
+            "1",
+            "SYS_CONSTRAINT_ee8bb065-7d3d-418d-a6c5-4cd32a9fa2d0",
+            "false",
+            null
+        ]
+    ],
+    "code": "090001",
+    "statementStatusUrl": "/api/v2/statements/01b4d90b-0000-6056-0000-31c100482b1e?requestId=a77a9283-93c5-4015-9259-f8425aed640b",
+    "requestId": "a77a9283-93c5-4015-9259-f8425aed640b",
+    "sqlState": "00000",
+    "statementHandle": "01b4d90b-0000-6056-0000-31c100482b1e",
+    "message": "Statement executed successfully.",
+    "createdOn": 1717755558586
+}

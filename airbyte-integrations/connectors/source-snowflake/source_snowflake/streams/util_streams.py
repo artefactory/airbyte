@@ -222,11 +222,8 @@ class StreamLauncher(SnowflakeStream):
     def request_params(
             self, stream_state: Mapping[str, Any], stream_slice: Mapping[str, any] = None, next_page_token: Mapping[str, Any] = None
     ) -> MutableMapping[str, Any]:
-
-        params = {
-            "requestId": str(uuid.uuid4()),
-            "async": "true"
-        }
+        params = super().request_params(stream_state, stream_slice, next_page_token)
+        params["async"]="true"
         return params
 
     def get_updated_statement(self):
@@ -303,9 +300,6 @@ class StreamLauncher(SnowflakeStream):
             "timeout": self.TIME_OUT_IN_SECONDS,
         }
 
-        schema = self.table_object.get('schema', '')
-        if schema:
-            json_payload['schema'] = schema
 
         return json_payload
 

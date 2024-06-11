@@ -1,0 +1,39 @@
+{
+    "resultSetMetaData": {
+        "numRows": 1,
+        "format": "jsonv2",
+        "partitionInfo": [
+            {
+                "rowCount": 1,
+                "uncompressedSize": 40
+            }
+        ],
+        "rowType": [
+            {
+                "name": "CURRENT_TIME",
+                "database": "",
+                "schema": "",
+                "table": "",
+                "nullable": false,
+                "type": "timestamp_tz",
+                "byteLength": null,
+                "length": null,
+                "scale": 9,
+                "precision": 0,
+                "collation": null
+            }
+        ]
+    },
+    "data": [
+        [
+            "1718008965.753000000 1020"
+        ]
+    ],
+    "code": "090001",
+    "statementStatusUrl": "/api/v2/statements/01b4e98a-0000-620e-0000-31c100494006?requestId=d6c86287-c3c6-4d40-8ca2-f9575d9fbed4",
+    "requestId": "d6c86287-c3c6-4d40-8ca2-f9575d9fbed4",
+    "sqlState": "00000",
+    "statementHandle": "01b4e98a-0000-620e-0000-31c100494006",
+    "message": "Statement executed successfully.",
+    "createdOn": 1718008965753
+}
