@@ -8,6 +8,20 @@ acceptance_tests:
     tests:
       - config_path: "secrets/config.json"
         status: "succeed"
+      - config_path: "secrets/invalid_config.json"
+        status: "failed"
+      - config_path: "secrets/invalid_private_key_config.json"
+        status: "failed"
+      - config_path: "secrets/incorrect_host_format_config.json"
+        status: "failed"
+      - config_path: "secrets/duplicated_push_down_filters_config.json"
+        status: "failed"
+      - config_path: "secrets/inconsistent_parent_name_push_down_filters_config.json"
+        status: "failed"
+      - config_path: "secrets/unknown_update_method_config.json"
+        status: "failed"
+      - config_path: "secrets/unknown_schema_config.json"
+        status: "failed"
   discovery:
     tests:
       - config_path: "secrets/config.json"
