@@ -3,10 +3,10 @@
       "type": "STREAM",
       "stream": {
         "stream_descriptor": {
-          "name": "test_airbyte_dataset.test_airbyte_dataset_MOCK_DATA"
+          "name": "sat_test_dataset.sat_basic_dataset"
         },
         "stream_state": {
-          "id": 20
+          "test_column_17": "9999-12-31T11:22:33"
         }
       }
     }
