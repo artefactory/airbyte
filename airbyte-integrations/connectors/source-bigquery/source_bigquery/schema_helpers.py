@@ -4,6 +4,7 @@
 
 import logging
 import pytz
+import pendulum
 from copy import deepcopy
 from typing import Any, Dict
 from datetime import datetime
@@ -105,8 +106,8 @@ class SchemaHelpers:
     @staticmethod
     def format_field(field, field_type):
         if field_type == "TIMESTAMP" and isinstance(field, str):
-            ts=float(field)
-            dt = datetime.fromtimestamp(ts, pytz.timezone("UTC")) #TODO: Update to use timestamps' actual zone
+            ts = float(field)
+            dt = pendulum.from_timestamp(ts)
             return dt.isoformat(timespec='microseconds')
         if SIMPLE_BIGQUERY_TYPES.get(field_type) == SchemaTypes.number and field:
             return float(field)
