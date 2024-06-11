@@ -31,6 +31,7 @@ class SnowflakeRequestBuilder:
         self._timezone = False
         self._partition = None
         self._where_statement = None
+        self._order_by = None
 
     def with_table(self, table: str):
         self._table = table
@@ -71,9 +72,13 @@ class SnowflakeRequestBuilder:
     def with_where_statement(self, where_statement: str):
         self._where_statement = where_statement
         return self
-
-    def _build_query_params(self, is_get: bool = False):
-        query_params = {"requestId": self._requestID, "async": self._async}
+    
+    def with_order_by(self, columns:list[str]):
+        self._order_by = columns
+        return self
+    
+    def _build_query_params(self,is_get:bool=False):
+        query_params = {"requestId":self._requestID, "async":self._async}
         if is_get:
             if self._partition:
                 query_params = {"partition": self._partition}
@@ -86,9 +91,7 @@ class SnowflakeRequestBuilder:
         query_params = self._build_query_params(is_get)
         statement = None
         if self._table:
-            statement = f'SELECT * FROM "{self._database}"."{self._schema}"."{self._table}"'
-            if self._where_statement:
-                statement = f"{statement} WHERE {self._where_statement}"
+            statement = f'SELECT * FROM "{self._database}"."{self._schema}"."{self._table}"{" WHERE " + self._where_statement if self._where_statement else ""}{" ORDER BY " + ",".join(self._order_by) +" ASC" if self._order_by else ""}'
         if self._show_catalog:
             statement = f"SHOW TABLES IN SCHEMA {self._database}.{self._schema}"
         if self._show_primary_keys and self._table:
