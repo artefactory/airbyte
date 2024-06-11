@@ -150,12 +150,15 @@ def format_field(field_value, field_type, local_time_zone_offset_hours=None):
     if field_type.upper() in ('OBJECT', 'ARRAY'):
         return json.loads(field_value)
 
-    if field_type.upper() in date_and_time_snowflake_type_airbyte_type.keys() and field_value:
+    if field_type.upper() in date_and_time_snowflake_type_airbyte_type.keys() and field_value is not None:
 
         if isinstance(field_value, datetime):  # Already formatted date
             return field_value
 
         try:
+            if not isinstance(field_value, str):
+                raise ValueError
+
             airbyte_format = date_and_time_snowflake_type_airbyte_type[field_type.upper()].get('format', None)
             airbyte_type = date_and_time_snowflake_type_airbyte_type[field_type.upper()].get('airbyte_type', None)
 
