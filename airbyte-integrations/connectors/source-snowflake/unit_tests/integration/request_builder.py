@@ -31,6 +31,8 @@ class SnowflakeRequestBuilder:
         self._timezone = False
         self._partition = None
         self._where_statement = None
+        self._state = None
+        self._cursor_field = None
 
     def with_table(self, table: str):
         self._table = table
@@ -72,6 +74,15 @@ class SnowflakeRequestBuilder:
         self._where_statement = where_statement
         return self
 
+    def with_state(self, state):
+        self._state = state
+        return self
+
+    def with_cursor_field(self, cursor_field):
+        self._cursor_field = cursor_field
+        return self
+
+
     def _build_query_params(self, is_get: bool = False):
         query_params = {"requestId": self._requestID, "async": self._async}
         if is_get:
@@ -89,6 +100,8 @@ class SnowflakeRequestBuilder:
             statement = f'SELECT * FROM "{self._database}"."{self._schema}"."{self._table}"'
             if self._where_statement:
                 statement = f"{statement} WHERE {self._where_statement}"
+            if self._cursor_field:
+                statement = f"{statement} ORDER BY {self._cursor_field} ASC"
         if self._show_catalog:
             statement = f"SHOW TABLES IN SCHEMA {self._database}.{self._schema}"
         if self._show_primary_keys and self._table:
