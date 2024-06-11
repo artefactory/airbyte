@@ -1,34 +1,23 @@
-from operator import is_
-import re
 from typing import Any, Dict, List, Optional
 from unittest import TestCase, mock
-
-import freezegun
-from airbyte_cdk.sources.source import TState
 from airbyte_cdk.test.catalog_builder import CatalogBuilder
 from airbyte_cdk.test.entrypoint_wrapper import EntrypointOutput, read
 from integration.response_builder import JsonPath, SnowflakeResponseBuilder, create_response_builder
-from airbyte_cdk.test.mock_http import HttpMocker, HttpRequest, HttpResponse
+from airbyte_cdk.test.mock_http import HttpMocker
 from airbyte_cdk.test.mock_http.response_builder import (
     FieldPath,
     Path,
-    NestedPath,
     RecordBuilder,
     create_record_builder,
     find_template,
 )
-from airbyte_cdk.test.state_builder import StateBuilder
 from airbyte_protocol.models import (
     AirbyteStateBlob,
     AirbyteStateMessage,
-    AirbyteStreamState,
     ConfiguredAirbyteCatalog,
-    FailureType,
     StreamDescriptor,
     SyncMode,
 )
-from pydantic import Field, Json
-import pytest
 
 from integration.pagination import SnowflakePaginationStrategy
 from integration.request_builder import SnowflakeRequestBuilder
@@ -185,7 +174,7 @@ class FullRefreshPushDownFilterTest(TestCase):
             "parent_stream": f"{_SCHEMA}.{_TABLE}",
             "where_clause": self.where_clause
         }
-        self.get_record_builder_instance = lambda: a_snowflake_response("response_get_table")
+        self._a_record = lambda: a_snowflake_response("response_get_table")
 
         config_builder = _config()
         self.config_builder = config_builder.with_push_down_filter(self.push_down_filter)
@@ -219,7 +208,7 @@ class FullRefreshPushDownFilterTest(TestCase):
             .with_handle(_HANDLE)
             .build(is_get=True),
             snowflake_response("response_get_table")
-            .with_record(self.get_record_builder_instance().with_field(JsonPath(f"$.[{self.test_colum_1_index}]"), value=3))
+            .with_record(self._a_record().with_field(JsonPath(f"$.[{self.test_colum_1_index}]"), value=3))
             .build()
         )
 
@@ -253,9 +242,9 @@ class FullRefreshPushDownFilterTest(TestCase):
             .build(is_get=True),
             snowflake_response("response_get_table")
             .with_pagination()
-            .with_record(self.get_record_builder_instance().with_field(JsonPath(f"$.[{self.test_colum_1_index}]"), value=3))
-            .with_record(self.get_record_builder_instance().with_field(JsonPath(f"$.[{self.test_colum_1_index}]"), value=4))
-            .with_record(self.get_record_builder_instance().with_field(JsonPath(f"$.[{self.test_colum_1_index}]"), value=5))
+            .with_record(self._a_record().with_field(JsonPath(f"$.[{self.test_colum_1_index}]"), value=3))
+            .with_record(self._a_record().with_field(JsonPath(f"$.[{self.test_colum_1_index}]"), value=4))
+            .with_record(self._a_record().with_field(JsonPath(f"$.[{self.test_colum_1_index}]"), value=5))
             .build()
         )
 
@@ -265,8 +254,8 @@ class FullRefreshPushDownFilterTest(TestCase):
             .with_partition(1)
             .build(is_get=True),
             snowflake_response("response_get_table")
-            .with_record(self.get_record_builder_instance().with_field(JsonPath(f"$.[{self.test_colum_1_index}]"), value=6))
-            .with_record(self.get_record_builder_instance().with_field(JsonPath(f"$.[{self.test_colum_1_index}]"), value=7))
+            .with_record(self._a_record().with_field(JsonPath(f"$.[{self.test_colum_1_index}]"), value=6))
+            .with_record(self._a_record().with_field(JsonPath(f"$.[{self.test_colum_1_index}]"), value=7))
             .build()
         )
 
@@ -276,7 +265,7 @@ class FullRefreshPushDownFilterTest(TestCase):
             .with_partition(2)
             .build(is_get=True),
             snowflake_response("response_get_table")
-            .with_record(self.get_record_builder_instance().with_field(JsonPath(f"$.[{self.test_colum_1_index}]"), value=8))
+            .with_record(self._a_record().with_field(JsonPath(f"$.[{self.test_colum_1_index}]"), value=8))
             .build()
         )
 
@@ -299,9 +288,9 @@ class IncrementalTest(TestCase):
     def setUp(self):
         self.sync_mode = SyncMode.incremental
         self.stream_name = f"{_SCHEMA}.{_TABLE}"
-        self.get_record_builder_instance = lambda cursor_path=None: a_snowflake_response(file_name="response_get_table",
-                                                                                          datafield=JsonPath("$.'data'[*]"),
-                                                                                          cursor_path=cursor_path)
+        self._a_record = lambda cursor_path=None: a_snowflake_response(file_name="response_get_table",
+                                                                       datafield=JsonPath("$.'data'[*]"),
+                                                                       cursor_path=cursor_path)
 
     @mock.patch("source_snowflake.streams.snowflake_parent_stream.uuid.uuid4", return_value=_REQUESTID)
     @mock.patch("source_snowflake.source.SnowflakeJwtAuthenticator")
@@ -334,9 +323,9 @@ class IncrementalTest(TestCase):
             .with_handle(_HANDLE)
             .build(is_get=True),
             snowflake_response("response_get_table")
-            .with_record(self.get_record_builder_instance(cursor_path).with_cursor(1))
-            .with_record(self.get_record_builder_instance(cursor_path).with_cursor(2))
-            .with_record(self.get_record_builder_instance(cursor_path).with_cursor(3))
+            .with_record(self._a_record(cursor_path).with_cursor(1))
+            .with_record(self._a_record(cursor_path).with_cursor(2))
+            .with_record(self._a_record(cursor_path).with_cursor(3))
             .build()
         )
 
@@ -383,9 +372,9 @@ class IncrementalTest(TestCase):
             .with_handle(_HANDLE)
             .build(is_get=True),
             snowflake_response("response_get_table")
-            .with_record(self.get_record_builder_instance(cursor_path).with_cursor("1"))
-            .with_record(self.get_record_builder_instance(cursor_path).with_cursor("2"))
-            .with_record(self.get_record_builder_instance(cursor_path).with_cursor("3"))
+            .with_record(self._a_record(cursor_path).with_cursor("1"))
+            .with_record(self._a_record(cursor_path).with_cursor("2"))
+            .with_record(self._a_record(cursor_path).with_cursor("3"))
             .build()
         )
 
@@ -432,9 +421,9 @@ class IncrementalTest(TestCase):
             .with_handle(_HANDLE)
             .build(is_get=True),
             snowflake_response("response_get_table")
-            .with_record(self.get_record_builder_instance(cursor_path).with_cursor("1521702000.123000000 1740"))
-            .with_record(self.get_record_builder_instance(cursor_path).with_cursor("1521702001.123000000 1740"))
-            .with_record(self.get_record_builder_instance(cursor_path).with_cursor("1521702001.123001000 1740"))
+            .with_record(self._a_record(cursor_path).with_cursor("1521702000.123000000 1740"))
+            .with_record(self._a_record(cursor_path).with_cursor("1521702001.123000000 1740"))
+            .with_record(self._a_record(cursor_path).with_cursor("1521702001.123001000 1740"))
             .build()
         )
 
@@ -481,9 +470,9 @@ class IncrementalTest(TestCase):
             .with_handle(_HANDLE)
             .build(is_get=True),
             snowflake_response("response_get_table")
-            .with_record(self.get_record_builder_instance(cursor_path).with_cursor("aaaaaaa"))
-            .with_record(self.get_record_builder_instance(cursor_path).with_cursor("aaaaaa154"))
-            .with_record(self.get_record_builder_instance(cursor_path).with_cursor("b"))
+            .with_record(self._a_record(cursor_path).with_cursor("aaaaaaa"))
+            .with_record(self._a_record(cursor_path).with_cursor("aaaaaa154"))
+            .with_record(self._a_record(cursor_path).with_cursor("b"))
             .build()
         )
 
