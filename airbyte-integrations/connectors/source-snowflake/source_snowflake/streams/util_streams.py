@@ -261,12 +261,12 @@ class StreamLauncher(SnowflakeStream):
         if not self._json_schema_set:
             self.get_json_schema()
 
-        if self.cursor_field.upper() not in self._json_schema['properties']:
+        if self.cursor_field not in self._json_schema['properties']:
             error_message = f'this field {self.cursor_field} should be present in schema. Make sure the column is present in your stream'
             emit_airbyte_error_message(error_message)
             raise CursorFieldNotPresentInSchemaError(error_message)
 
-        schema_type = self._json_schema['properties'][self.cursor_field.upper()]
+        schema_type = self._json_schema['properties'][self.cursor_field]
 
         generic_type = get_generic_type_from_schema_type(schema_type)
 
@@ -319,6 +319,7 @@ class StreamLauncher(SnowflakeStream):
         for column_object in self.table_schema_stream.read_records(sync_mode=SyncMode.full_refresh):
             column_name = column_object['column_name']
             snowflake_column_type = column_object['type'].upper()
+
             if snowflake_column_type not in mapping_snowflake_type_airbyte_type:
                 error_message = (f"The type {snowflake_column_type} is not recognized. "
                                  f"Please, contact Airbyte support to update the connector to handle this new type")

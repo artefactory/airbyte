@@ -24,7 +24,7 @@ def get_generic_type_from_schema_type(schema_type):
     if schema_type == SchemaTypes.timestamp_with_timezone:
         return "timestamp_with_timezone"
 
-    if schema_type in (SchemaTypes.timestamp_without_timezone, SchemaTypes.time_without_timezone):
+    if schema_type in (SchemaTypes.timestamp_without_timezone, SchemaTypes.time_without_timezone, SchemaTypes.date):
         return "date"
 
     if schema_type in (SchemaTypes.number, SchemaTypes.integer, SchemaTypes.boolean):
