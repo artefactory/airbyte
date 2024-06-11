@@ -95,7 +95,8 @@ def _given_table_with_primary_keys(http_mocker: HttpMocker) -> None:
 def _given_read_schema(http_mocker: HttpMocker) -> None:
     http_mocker.post(
         table_request().with_table(_TABLE).with_get_schema().with_requestID(_REQUESTID).build(),
-        snowflake_response("response_get_table", JsonPath("$")).with_record(a_snowflake_response("response_get_table", JsonPath("$"))).build()
+        snowflake_response("response_get_table", JsonPath("$")).with_record(
+            a_snowflake_response("response_get_table", JsonPath("$"))).build()
 
     )
 
@@ -127,30 +128,15 @@ class FullRefreshTest(TestCase):
         _given_read_schema(http_mocker)
         _given_table_catalog(http_mocker)
         _given_table_with_primary_keys(http_mocker)
-
         http_mocker.post(
-            table_request()
-            .with_table(_TABLE)
-            .with_requestID(_REQUESTID)
-            .with_async()
-            .build(),
-            snowflake_response("async_response", FieldPath("statementStatusUrl"))
-            .with_handle(_HANDLE)
-            .build()
+            table_request().with_table(_TABLE).with_requestID(_REQUESTID).with_async().build(),
+            snowflake_response("async_response", FieldPath("statementStatusUrl")).with_handle(_HANDLE).build()
         )
-
-        formatted_expected_record = a_snowflake_response("response_get_table", JsonPath("$.'data'.[*]"))
-
         http_mocker.get(
-            table_request()
-            .with_handle(_HANDLE)
-            .build(is_get=True),
+            table_request().with_handle(_HANDLE).build(is_get=True),
             snowflake_response("response_get_table", JsonPath("$.'data'"))
-            .with_record(formatted_expected_record)
-            .with_record(formatted_expected_record)
-            .with_record(formatted_expected_record)
-            .build()
-        )
+            .with_record( a_snowflake_response("response_get_table", JsonPath("$.'data'.[*]")))
+            .build())
 
         output = _read(_config(), sync_mode=SyncMode.full_refresh)
         print(output.records)
@@ -163,52 +149,49 @@ class FullRefreshTest(TestCase):
         _given_read_schema(http_mocker)
         _given_table_catalog(http_mocker)
         _given_table_with_primary_keys(http_mocker)
-
         http_mocker.post(
-            table_request()
-            .with_table(_TABLE)
-            .with_requestID(_REQUESTID)
-            .with_async()
-            .build(),
-            snowflake_response("async_response", FieldPath("statementStatusUrl"))
-            .with_handle(_HANDLE)
-            .build()
+            table_request().with_table(_TABLE).with_requestID(_REQUESTID).with_async().build(),
+            snowflake_response("async_response", FieldPath("statementStatusUrl")).with_handle(_HANDLE).build()
         )
-
         http_mocker.get(
-            table_request()
-            .with_handle(_HANDLE)
-            .build(is_get=True),
-            snowflake_response("response_get_table", FieldPath("data"))
-            .with_record(a_snowflake_response("response_get_table", JsonPath("$.'data'.[*]")))
-            .with_pagination()
-            .build()
+            table_request().with_handle(_HANDLE).build(is_get=True),
+            snowflake_response("response_get_table", JsonPath("$.'data'")).with_record(
+                a_snowflake_response("response_get_table", JsonPath("$.'data'.[*]"))).with_pagination().build()
         )
-
         http_mocker.get(
-            table_request()
-            .with_handle(_HANDLE)
-            .with_partition(1)
-            .build(is_get=True),
-            snowflake_response("response_get_table", FieldPath("data"))
-            .with_record(a_snowflake_response("response_get_table", JsonPath("$.'data'.[*]")))
-            .build()
+            table_request().with_handle(_HANDLE).with_partition(1).build(is_get=True),
+            snowflake_response("response_get_table", JsonPath("$.'data'")).with_record(
+                a_snowflake_response("response_get_table", JsonPath("$.'data'.[*]"))).with_pagination().build()
         )
-
         http_mocker.get(
-            table_request()
-            .with_handle(_HANDLE)
-            .with_partition(2)
-            .build(is_get=True),
-            snowflake_response("response_get_table", FieldPath("data"))
-            .with_record(a_snowflake_response("response_get_table", JsonPath("$.'data'.[*]")))
-            .build()
+            table_request().with_handle(_HANDLE).with_partition(2).build(is_get=True),
+            snowflake_response("response_get_table", JsonPath("$.'data'")).with_record(
+                a_snowflake_response("response_get_table", JsonPath("$.'data'.[*]"))).with_pagination().build()
         )
         output = _read(_config(), sync_mode=SyncMode.full_refresh)
         assert len(output.records) == 3
 
 
-class PushDownFilterTest(TestCase):
+class FullRefreshPushDownFilterTest(TestCase):
+
+    def setUp(self):
+
+        self.push_down_filter_name = "higher_than_2"
+        self.where_clause = 'TEST_COLUMN_1>2'
+        self.test_colum_1_index = 1
+        self.push_down_filter = {
+            "name": self.push_down_filter_name,
+            "parent_stream": f"{_SCHEMA}.{_TABLE}",
+            "where_clause": self.where_clause
+        }
+        self.record = a_snowflake_response("response_get_table")
+
+        config_builder = _config()
+        self.config = config_builder.with_push_down_filter(self.push_down_filter)
+
+        sync_mode = SyncMode.full_refresh
+        self.catalog = CatalogBuilder().with_stream(self.push_down_filter_name, sync_mode).build()
+
     @mock.patch("source_snowflake.streams.snowflake_parent_stream.uuid.uuid4", return_value=_REQUESTID)
     @mock.patch("source_snowflake.source.SnowflakeJwtAuthenticator")
     @HttpMocker()
@@ -218,38 +201,29 @@ class PushDownFilterTest(TestCase):
         _given_table_catalog(http_mocker)
         _given_table_with_primary_keys(http_mocker)
 
-        where_clause = 'TEST_COLUMN_1>2'
-        test_column_1_index = 1
-
         http_mocker.post(
             table_request()
             .with_table(_TABLE)
             .with_requestID(_REQUESTID)
             .with_async()
-            .with_where_statement(where_clause)
+            .with_where_statement(self.where_clause)
             .build(),
             snowflake_response("async_response", FieldPath("statementStatusUrl"))
             .with_handle(_HANDLE)
             .build()
         )
 
-        formatted_record = a_snowflake_response("response_get_table", FieldPath("data"))
-
         http_mocker.get(
             table_request()
             .with_handle(_HANDLE)
             .build(is_get=True),
-            snowflake_response("response_get_table", FieldPath("data"))
-            .with_record(formatted_record)
+            snowflake_response("response_get_table")
+            .with_record(self.record.with_field(JsonPath(f"$.[{self.test_colum_1_index}]"), value=3))
             .build()
         )
 
-        config = _config()
-        config.with_where_statement(where_clause)
-
-        output = _read(config, sync_mode=SyncMode.full_refresh)
-
-        print(output.records)
+        output = self._read(self.config, self.catalog)
+        assert len(output.records) == 1
 
     @mock.patch("source_snowflake.streams.snowflake_parent_stream.uuid.uuid4", return_value=_REQUESTID)
     @mock.patch("source_snowflake.source.SnowflakeJwtAuthenticator")
@@ -265,6 +239,7 @@ class PushDownFilterTest(TestCase):
             .with_table(_TABLE)
             .with_requestID(_REQUESTID)
             .with_async()
+            .with_where_statement(self.where_clause)
             .build(),
             snowflake_response("async_response", FieldPath("statementStatusUrl"))
             .with_handle(_HANDLE)
@@ -275,9 +250,11 @@ class PushDownFilterTest(TestCase):
             table_request()
             .with_handle(_HANDLE)
             .build(is_get=True),
-            snowflake_response("response_get_table", FieldPath("data"))
-            .with_record(a_snowflake_response("response_get_table", JsonPath("$.'data'.[*]")))
+            snowflake_response("response_get_table")
             .with_pagination()
+            .with_record(self.record.with_field(JsonPath(f"$.[{self.test_colum_1_index}]"), value=3))
+            .with_record(self.record.with_field(JsonPath(f"$.[{self.test_colum_1_index}]"), value=4))
+            .with_record(self.record.with_field(JsonPath(f"$.[{self.test_colum_1_index}]"), value=5))
             .build()
         )
 
@@ -286,8 +263,9 @@ class PushDownFilterTest(TestCase):
             .with_handle(_HANDLE)
             .with_partition(1)
             .build(is_get=True),
-            snowflake_response("response_get_table", FieldPath("data"))
-            .with_record(a_snowflake_response("response_get_table", JsonPath("$.'data'.[*]")))
+            snowflake_response("response_get_table")
+            .with_record(self.record.with_field(JsonPath(f"$.[{self.test_colum_1_index}]"), value=6))
+            .with_record(self.record.with_field(JsonPath(f"$.[{self.test_colum_1_index}]"), value=7))
             .build()
         )
 
@@ -296,10 +274,21 @@ class PushDownFilterTest(TestCase):
             .with_handle(_HANDLE)
             .with_partition(2)
             .build(is_get=True),
-            snowflake_response("response_get_table", FieldPath("data"))
-            .with_record(a_snowflake_response("response_get_table", JsonPath("$.'data'.[*]")))
+            snowflake_response("response_get_table")
+            .with_record(self.record.with_field(JsonPath(f"$.[{self.test_colum_1_index}]"), value=8))
             .build()
         )
 
-        output = _read(_config(), sync_mode=SyncMode.full_refresh)
-        assert len(output.records) == 3
+        output = self._read(self.config, self.catalog)
+
+        assert len(output.records) == 6
+
+    @classmethod
+    def _read(cls,
+              config_builder: ConfigBuilder,
+              catalog: ConfiguredAirbyteCatalog,
+              state: Optional[List[AirbyteStateMessage]] = None,
+              expecting_exception: bool = False
+              ) -> EntrypointOutput:
+        config = config_builder.build()
+        return read(_source(catalog, config, state), config, catalog, state, expecting_exception)

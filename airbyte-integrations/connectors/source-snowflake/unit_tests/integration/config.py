@@ -27,13 +27,6 @@ class ConfigBuilder:
         self._push_down_filters.append(push_down_filter)
         return self
 
-    def with_where_statement(self, where_statement: str):
-        random_key = str(uuid.uuid4())
-        self._push_down_filters.append({"name": random_key,
-                                        "parent_stream": "INTEGRATION_TEST.TEST_TABLE",
-                                        "where_clause": where_statement})
-        return self
-
     def build(self) -> Dict[str, Any]:
         if self._push_down_filters:
             self._config['streams'] = self._push_down_filters
