@@ -156,7 +156,7 @@ def format_field(field_value, field_type, local_time_zone_offset_hours=None):
             return field_value
 
         try:
-            if not isinstance(field_value, str):
+            if not isinstance(field_value, str) and len(field_value) == 0:
                 raise ValueError
 
             airbyte_format = date_and_time_snowflake_type_airbyte_type[field_type.upper()].get('format', None)
