@@ -1,6 +1,7 @@
 # See [Connector Acceptance Tests](https://docs.airbyte.com/connector-development/testing-connectors/connector-acceptance-tests-reference)
 # for more information about how to configure these tests
 connector_image: airbyte/source-bigquery:dev
+test_strictness_level: low
 acceptance_tests:
   spec:
     tests:
@@ -14,24 +15,47 @@ acceptance_tests:
   discovery:
     tests:
       - config_path: "secrets/config.json"
+        timeout_seconds: 100
   basic_read:
     tests:
       - config_path: "secrets/config.json"
         configured_catalog_path: "integration_tests/configured_catalog.json"
-        empty_streams: []
-# TODO uncomment this block to specify that the tests should assert the connector outputs the records provided in the input file a file
-#        expect_records:
-#          path: "integration_tests/expected_records.jsonl"
-#          exact_order: no
+        timeout_seconds: 40
+        validate_stream_statuses: true
+        expect_records:
+          path: "integration_tests/expected_records.jsonl"
+          exact_order: no
+      - config_path: "secrets/cdc_config.json"
+        configured_catalog_path: "integration_tests/cdc_configured_catalog.json"
+        timeout_seconds: 40
+        validate_stream_statuses: true
+        fail_on_extra_columns: false
+        expect_records:
+          path: "integration_tests/expected_records.jsonl"
+          exact_order: no
   incremental: 
-    bypass_reason: "This connector does not implement incremental sync"
-# TODO uncomment this block this block if your connector implements incremental sync: 
-#    tests:
-#      - config_path: "secrets/config.json"
-#        configured_catalog_path: "integration_tests/configured_catalog.json"
-#        future_state:
-#          future_state_path: "integration_tests/abnormal_state.json"
+   tests:
+    - config_path: "secrets/config.json"
+      configured_catalog_path: "integration_tests/inc_configured_catalog.json"
+      timeout_seconds: 40
+      future_state:
+        future_state_path: "integration_tests/inc_abnormal_state.json"
+    - config_path: "secrets/cdc_config.json"
+      configured_catalog_path: "integration_tests/cdc_configured_catalog.json"
+      timeout_seconds: 40
+      future_state:
+        future_state_path: "integration_tests/cdc_abnormal_state.json"
   full_refresh:
     tests:
       - config_path: "secrets/config.json"
         configured_catalog_path: "integration_tests/configured_catalog.json"
+        timeout_seconds: 40
+      - config_path: "secrets/cdc_config.json"
+        configured_catalog_path: "integration_tests/cdc_configured_catalog.json"
+        timeout_seconds: 40
+  connector_attributes:
+    tests:
+      - config_path: "secrets/config.json"
+        timeout_seconds: 40
+      - config_path: "secrets/cdc_config.json"
+        timeout_seconds: 40

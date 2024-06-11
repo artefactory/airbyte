@@ -45,6 +45,7 @@ There are additional required TODOs in the files within the integration_tests fo
 """
 _DEFAULT_CONCURRENCY = 10
 _MAX_CONCURRENCY = 10
+_DEFAULT_SLICE_RANGE = 525600 # 1 year by default
 
 # Source
 class SourceBigquery(ConcurrentSourceAdapter):
@@ -71,6 +72,18 @@ class SourceBigquery(ConcurrentSourceAdapter):
         self.catalog = catalog
         self.state = state
 
+    @staticmethod
+    def validate_config(config: MutableMapping[str, Any]) -> MutableMapping[str, Any]:
+        slice_range = float(config.get("slice_range", _DEFAULT_SLICE_RANGE))
+        if slice_range and slice_range <= 0:
+            message = f"Invalid slice range {slice_range}. Please use only positive integer values."
+            raise AirbyteTracedException(
+                message=message,
+                internal_message=message,
+                failure_type=FailureType.config_error,
+            )
+        return config
+    
     def check_connection(self, logger, config: Mapping[str, Any]) -> Tuple[bool, any]:
         """
         Implement a connection check to validate that the user-provided config can be used to connect to the underlying API
@@ -82,7 +95,9 @@ class SourceBigquery(ConcurrentSourceAdapter):
         :param logger:  logger object
         :return Tuple[bool, any]: (True, None) if the input config can be used to connect to the API successfully, (False, error) otherwise.
         """
+        
         try:
+            self.validate_config(config)
             self._auth = BigqueryAuth(config)
             # try reading first table from each dataset, to check the connectivity,
             for dataset in BigqueryDatasets(project_id=config["project_id"], authenticator=self._auth).read_records(sync_mode=SyncMode.full_refresh):
@@ -110,7 +125,10 @@ class SourceBigquery(ConcurrentSourceAdapter):
                         failure_type=FailureType.transient_error,
                         message=error_msg,
                     )
-            return True, error_msg
+            return False, error_msg
+        except Exception as error:
+            error_msg = f"An error occurred: {error}"
+            return False, error_msg
         return True, None
     
     def streams(self, config: Mapping[str, Any]) -> List[Stream]:
@@ -119,11 +137,12 @@ class SourceBigquery(ConcurrentSourceAdapter):
 
         :param config: A Mapping of the user input configuration as defined in the connector spec.
         """
+        self.validate_config(config)
         project_id = config["project_id"]
         self._auth = BigqueryAuth(config)
         streams = config.get("streams", [])
         sync_method = config["replication_method"]["method"]
-        slice_range = float(config.get("slice_range", 525600)) # 1 year by default
+        slice_range = float(config.get("slice_range", _DEFAULT_SLICE_RANGE))
         fallback_start =  datetime.strptime("0001-01-01T00:00:00.000Z", '%Y-%m-%dT%H:%M:%S.%f%z')
         change_history_start = datetime.now(tz=pytz.timezone("UTC")) - timedelta(days=7) + timedelta(seconds=30)
         normal_streams = []
@@ -140,11 +159,10 @@ class SourceBigquery(ConcurrentSourceAdapter):
                         table_obj = TableChangeHistory(project_id, dataset_id, table_id, stream_name, where_clause=where_clause, fallback_start=change_history_start, slice_range=slice_range, authenticator=self._auth)
                         next(table_obj.read_records(sync_mode=SyncMode.full_refresh))
                     except exceptions.HTTPError as error:
-                        self.logger.warning(f"Table had no inserts in the last seven days so no change history is available causing the error: {str(error.response.text)}")
-                        table_obj = IncrementalQueryResult(project_id, dataset_id, table_id, stream_name, where_clause, fallback_start=fallback_start, slice_range=slice_range, authenticator=self._auth)
+                        table_obj = None
                 if isinstance(table_obj, TableChangeHistory):
                     concurrent_streams.append(table_obj.stream)
-                else:
+                elif isinstance(table_obj, IncrementalQueryResult):
                     normal_streams.append(table_obj.stream)
         for dataset in BigqueryDatasets(project_id=project_id, authenticator=self._auth).read_records(sync_mode=SyncMode.full_refresh):
             dataset_id = dataset.get("datasetReference")["datasetId"]
@@ -158,12 +176,10 @@ class SourceBigquery(ConcurrentSourceAdapter):
                         table_obj = TableChangeHistory(project_id, dataset_id, table_id, fallback_start=change_history_start, slice_range=slice_range, authenticator=self._auth)
                         next(table_obj.read_records(sync_mode=SyncMode.full_refresh))
                     except exceptions.HTTPError as error:
-                        self.logger.warning(f"Table had no inserts in the last seven days so no change history is available causing the error: {str(error.response.text)}")
-                        table_obj = IncrementalQueryResult(project_id, dataset_id, table_id, fallback_start=fallback_start, slice_range=slice_range, authenticator=self._auth)
-                
+                        table_obj = None                
                 if isinstance(table_obj, TableChangeHistory):
                     concurrent_streams.append(table_obj.stream)
-                else:
+                elif isinstance(table_obj, IncrementalQueryResult):
                     normal_streams.append(table_obj.stream)
         state_manager = ConnectorStateManager(stream_instance_map={stream.name: stream for stream in concurrent_streams}, state=self.state)
         final_concurrents = [

@@ -1,7 +1,8 @@
 data:
   allowedHosts:
     hosts:
-      - TODO # Please change to the hostname of the source.
+      - googleapis.com # Please change to the hostname of the source.
+      - google.com
   registries:
     oss:
       enabled: true
@@ -22,13 +23,14 @@ data:
   dockerImageTag: 0.1.0
   dockerRepository: airbyte/source-bigquery
   githubIssueLabel: source-bigquery
-  icon: bigquery.svg
+  icon: icon.svg
   license: MIT
   name: Bigquery
-  releaseDate: TODO
+  releaseDate: 2024-06-17
   supportLevel: community
   releaseStage: alpha
   documentationUrl: https://docs.airbyte.com/integrations/sources/bigquery
   tags:
     - language:python
+    - cdk:python
 metadataSpecVersion: "1.0"

@@ -6,7 +6,7 @@ from http import HTTPStatus
 from unittest.mock import MagicMock
 
 import pytest
-from source_bigquery.source import BigqueryStream
+from source_bigquery.streams import BigqueryStream
 
 
 @pytest.fixture
