@@ -339,6 +339,7 @@ class TableStream(SnowflakeStream, IncrementalMixin):
 
         if self.state is not None and len(self.state) > 0:
             current_state_value = self.state[self.cursor_field]
+            print("get_state",latest_record_state, current_state_value)
             self._state_value = max(latest_record_state,
                                     current_state_value) if current_state_value is not None else latest_record_state
             self.state = {self.cursor_field: self._state_value}
