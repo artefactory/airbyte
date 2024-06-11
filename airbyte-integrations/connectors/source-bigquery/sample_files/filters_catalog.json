@@ -2,7 +2,7 @@
     "streams": [
       {
         "stream": {
-          "name": "airbyte_tests_compr_otzwknbj.airbyte_tests_compr_otzwknbj_1_bigint",
+          "name": "test_airbyte_dataset.test",
           "json_schema": {
             "$schema": "http://json-schema.org/draft-07/schema#",
             "type": "object",
@@ -10,7 +10,7 @@
           },
           "supported_sync_modes": ["full_refresh", "incremental"],
           "source_defined_cursor": false,
-          "default_cursor_field": ["column_name"]
+          "default_cursor_field": ["_bigquery_created_time"]
         },
         "sync_mode": "full_refresh",
         "destination_sync_mode": "overwrite"
