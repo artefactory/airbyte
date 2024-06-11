@@ -26,8 +26,10 @@ def _a_record(template, field_path, id_path, cursor_path) -> RecordBuilder:
     )
 
 
-def _a_response(template, field_path) -> HttpResponseBuilder:
-    return create_response_builder(find_template(template, __file__), field_path, pagination_strategy=BigqueryPaginationStrategy())
+def _a_response(template, field_path, pagination_strategy) -> HttpResponseBuilder:
+    template = find_template(template, __file__)
+    del template[pagination_strategy.key]
+    return create_response_builder(template, field_path, pagination_strategy=pagination_strategy)
 
 
 class BigqueryResponseBuilder:
@@ -38,7 +40,8 @@ class BigqueryResponseBuilder:
     def datasets(cls, dataset_ids: List[str]) -> HttpResponseBuilder:
         http_response_builder = _a_response(
             "datasets",
-            FieldPath("datasets")
+            FieldPath("datasets"),
+            BigqueryPaginationStrategy.NextPageToken
         )
 
         for dataset_id in dataset_ids:
@@ -59,7 +62,8 @@ class BigqueryResponseBuilder:
     def tables(cls, table_ids: List[str]) -> HttpResponseBuilder:
         http_response_builder = _a_response(
             "tables",
-            FieldPath("tables")
+            FieldPath("tables"),
+            BigqueryPaginationStrategy.NextPageToken
         )
 
         for table_id in table_ids:
@@ -85,14 +89,28 @@ class BigqueryResponseBuilder:
         pass
 
     @classmethod
-    def queries(cls) -> HttpResponseBuilder:
+    def queries(cls, pagination=False) -> HttpResponseBuilder:
         http_response_builder = _a_response(
             "queries",
-            FieldPath("rows")
+            FieldPath("rows"),
+            BigqueryPaginationStrategy.PageToken
+        ).with_record(
+            _a_record(
+                "queries",
+                FieldPath("rows"),
+                None,
+                None,
+            )
         )
 
         return http_response_builder
 
     @classmethod
-    def query(cls) -> HttpResponseBuilder:
-        pass
+    def query_information_schema(cls, pagination=False) -> HttpResponseBuilder:
+        http_response_builder = _a_response(
+            "queries_information_schema",
+            FieldPath("rows"),
+            BigqueryPaginationStrategy.PageToken
+        )
+
+        return http_response_builder
