@@ -498,8 +498,9 @@ class BigqueryIncrementalStream(BigqueryResultStream, IncrementalMixin):
 
     @state.setter
     def state(self, value):
-        self.cursor_field = list(value.keys())[0]
-        self._cursor = value[self.cursor_field]
+        if value:
+            self.cursor_field = list(value.keys())[0]
+            self._cursor = value[self.cursor_field]
     
     @property
     def supported_sync_modes(self):
