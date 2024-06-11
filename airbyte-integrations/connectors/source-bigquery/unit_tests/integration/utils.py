@@ -3,8 +3,8 @@ import logging
 import tempfile
 import traceback
 from io import StringIO
-from pathlib import Path
-from typing import Any, List, Mapping, Optional, Union
+from pathlib import Path as FilePath
+from typing import Any, List, Mapping, Optional, Union, Dict, Tuple, TypeAlias
 
 from airbyte_cdk.entrypoint import AirbyteEntrypoint
 from airbyte_cdk.exception_handler import assemble_uncaught_exception
