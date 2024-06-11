@@ -7,8 +7,12 @@ import logging
 from abc import ABC
 from typing import Any, Iterable, List, Mapping, MutableMapping, Optional, Tuple
 
+import pendulum
+import pendulum.parsing
+import pendulum.parsing.exceptions
 import pytz
 import requests
+from dateutil import parser
 from requests import codes, exceptions  # type: ignore[import]
 from datetime import datetime, timedelta
 from airbyte_cdk.sources import AbstractSource
@@ -75,7 +79,6 @@ class SourceBigquery(ConcurrentSourceAdapter):
         self.state = state
         self._normal_streams = []
         self._concurrent_streams = []
-        self._discovered_streams = []
 
     @staticmethod
     def validate_config(config: MutableMapping[str, Any]) -> MutableMapping[str, Any]:
@@ -167,8 +170,9 @@ class SourceBigquery(ConcurrentSourceAdapter):
                     table_id = table_info.get("tableReference")["tableId"]
                     self._get_tables(project_id, dataset_id, table_id, sync_method, slice_range)
 
+        self._set_cursor_field()
         state_manager = ConnectorStateManager(stream_instance_map={stream.name: stream for stream in self._concurrent_streams}, state=self.state)
-        final_concurrents = [
+        return [
             self._to_concurrent(
                 stream,
                 stream.fallback_start,
@@ -177,9 +181,14 @@ class SourceBigquery(ConcurrentSourceAdapter):
             )
             for stream in self._concurrent_streams
         ]
-
-        return self._normal_streams + final_concurrents
     
+    def _set_cursor_field(self):
+        for stream in self._concurrent_streams:
+            if not stream.cursor_field and self.catalog:
+                for configured_stream in self.catalog.streams:
+                    if configured_stream.stream.name == stream.name and configured_stream.cursor_field:
+                        stream.cursor_field = configured_stream.cursor_field[0]
+
     def _get_tables(self, project_id, dataset_id, table_id, sync_method, slice_range, stream_name=None, where_clause=""):
         # list and process each table under each base to generate the JSON Schema
         if sync_method == "Standard":
@@ -194,19 +203,15 @@ class SourceBigquery(ConcurrentSourceAdapter):
                 else:
                     raise error 
         if table_obj:
-            self._discovered_streams.append(table_obj)          
-            self._add_stream(table_obj)
-    
-    def _add_stream(self, table_obj):
-        if isinstance(table_obj, TableChangeHistory):
             self._concurrent_streams.append(table_obj.stream)
-        elif isinstance(table_obj, IncrementalQueryResult):
-            self._normal_streams.append(table_obj.stream)
 
     def _to_concurrent(
         self, stream: Stream, fallback_start: datetime, slice_range: timedelta, state_manager: ConnectorStateManager
     ) -> Stream:
-        if self._stream_state_is_full_refresh(stream.state):
+        if not stream.cursor_field:
+            return stream
+
+        if self._stream_state_is_full_refresh(stream.state) or not stream.cursor_field:
             return StreamFacade.create_from_stream(
                 stream,
                 self,
@@ -214,8 +219,9 @@ class SourceBigquery(ConcurrentSourceAdapter):
                 self._create_empty_state(),
                 FinalStateCursor(stream_name=stream.name, stream_namespace=stream.namespace, message_repository=self.message_repository),
             )
-
         state = state_manager.get_stream_state(stream.name, stream.namespace)
+        state = self._format_state(state)
+
         slice_boundary_fields = self._SLICE_BOUNDARY_FIELDS_BY_IMPLEMENTATION.get(type(stream))
         if slice_boundary_fields:
             cursor_field = CursorField(stream.cursor_field) if isinstance(stream.cursor_field, str) else CursorField(stream.cursor_field[0])
@@ -237,6 +243,21 @@ class SourceBigquery(ConcurrentSourceAdapter):
             return StreamFacade.create_from_stream(stream, self, self.logger, state, cursor)
 
         return stream
+
+    def _format_state(self, state):
+        """
+        This is to prevent parse_timestamp in IsoMillisConcurrentStreamStateConverter from crashing because of unexpected timestamp format
+        """
+        if state:
+            try:
+                pendulum.parse(list(state.values())[0])
+            except pendulum.parsing.exceptions.ParserError as e:
+                state[list(state.keys())[0]] = self._format_timestamp(list(state.values())[0])
+        return state
+
+    def _format_timestamp(self, timestamp: str) -> str:
+        ts = parser.parse(timestamp)
+        return ts.isoformat(timespec='microseconds')
 
     def _create_empty_state(self) -> MutableMapping[str, Any]:
         return {}

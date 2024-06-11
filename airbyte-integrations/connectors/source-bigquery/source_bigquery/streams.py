@@ -10,6 +10,7 @@ from typing import Any, Iterable, List, Mapping, MutableMapping, Optional, Tuple
 
 import requests
 import pytz
+from dateutil import parser
 from datetime import datetime, timedelta
 from airbyte_cdk.sources import AbstractSource
 from airbyte_cdk.sources.streams import Stream, IncrementalMixin
@@ -571,19 +572,25 @@ class BigqueryIncrementalStream(BigqueryResultStream, IncrementalMixin):
             self.start_time = next(first_record.read_records(sync_mode=SyncMode.full_refresh)).get(self.cursor_field, None)
             self.end_time = next(last_record.read_records(sync_mode=SyncMode.full_refresh)).get(self.cursor_field, None)
             if isinstance(self.start_time, str):
-                self.start_time = datetime.strptime(self.start_time, '%Y-%m-%dT%H:%M:%S.%f%z')
+                self.start_time = parser.parse(self.start_time)
             if isinstance(self.end_time, str):
-                self.end_time = datetime.strptime(self.end_time, '%Y-%m-%dT%H:%M:%S.%f%z')
+                self.end_time = parser.parse(self.end_time)
         return self.start_time, self.end_time
 
     def _chunk_dates(self, start_date: datetime, end_date: datetime, table_start: datetime) -> Iterable[Tuple[datetime, datetime]]:
         step = timedelta(minutes=self.slice_range)
+        increment = timedelta(seconds=1)
         new_start_date = start_date
         if start_date == end_date:
             yield start_date, start_date + step
             return
-        while new_start_date < end_date+timedelta(seconds=1):
-            before_date = min(end_date+timedelta(seconds=1), new_start_date + step)
+        while new_start_date < end_date+increment:
+            before_date = end_date + increment
+            try:
+                if new_start_date + step < end_date + increment:
+                    before_date = new_start_date + step                    
+            except OverflowError as e:
+                pass
             if table_start and before_date < table_start:
                 before_date = table_start + step
             yield new_start_date, before_date
@@ -594,12 +601,30 @@ class BigqueryIncrementalStream(BigqueryResultStream, IncrementalMixin):
             self.cursor_field = cursor_field[0]
         elif cursor_field:
             self.cursor_field = cursor_field
+        default_start = self.fallback_start
+        slice = {}
         if stream_state:
-            self._cursor = stream_state.get(self.cursor_field)
-        if self.cursor_field:
-            yield {
-                    self.cursor_field : self._cursor
-                }
+            self._cursor = list(stream_state.values())[0]
+            if self._cursor:
+                default_start = parser.parse(self._cursor) - timedelta(minutes=self.slice_range) #slice range is equal to loopback window
+        if self.cursor_field and sync_mode == SyncMode.incremental:
+            start_time, end_time = self._extract_borders()
+            if not isinstance(start_time, datetime):
+                raise AirbyteTracedException(
+                            internal_message=f"Cursor field should be a timestamp type for stream {self.dataset_id}.{self.table_id}",
+                            failure_type=FailureType.config_error,
+                            message=f"Cursor field should be a timestamp type for stream {self.dataset_id}.{self.table_id}",
+                        )
+            if not end_time.tzinfo and default_start.tzinfo:
+                # to avoid TypeError when comparing timezone aware and unaware datetimes
+                default_start = default_start.replace(tzinfo=None)
+            elif end_time.tzinfo and not default_start.tzinfo:
+                default_start = default_start.replace(tzinfo=pytz.utc)
+            if end_time and default_start <= end_time:
+                    for start, end in self._chunk_dates(default_start, end_time, start_time):
+                        slice["start"] = start.isoformat(timespec='microseconds')
+                        slice["end"] = end.isoformat(timespec='microseconds')
+                        yield slice
         else:
             yield
 
@@ -611,12 +636,15 @@ class BigqueryIncrementalStream(BigqueryResultStream, IncrementalMixin):
     ) -> Optional[Mapping[str, Any]]:
         query_string = f"SELECT * FROM `{self.stream_name}`"
         if stream_slice:
-            self._cursor = stream_slice.get(self.cursor_field, None)
+            start = stream_slice.get("start", None)
+            end = stream_slice.get("end", None)
+            if start and end:
+                query_string = f"SELECT * FROM `{self.stream_name}` WHERE {self.cursor_field}>='{start}' AND {self.cursor_field}<'{end}' ORDER BY {self.cursor_field}"
+        elif stream_state:
+            self._cursor = list(stream_state.values())[0]
+            state_field = list(stream_state.keys())[0]
             if self._cursor:
-                cursor_value = self._cursor
-                if isinstance(self._cursor, str):
-                    cursor_value = f"'{self._cursor}'"
-                query_string = f"select * from `{self.name}` where {self.cursor_field}>={cursor_value} ORDER BY {self.cursor_field}"
+                query_string = f"SELECT * FROM `{self.stream_name}` WHERE {state_field}>='{self._cursor}' ORDER BY {state_field}"
         index = query_string.find("ORDER BY")
         if self.where_clause and index==-1:
             query_string = query_string + f" WHERE {self.where_clause}"
