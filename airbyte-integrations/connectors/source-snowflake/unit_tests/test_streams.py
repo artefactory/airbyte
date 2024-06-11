@@ -6,7 +6,7 @@ from http import HTTPStatus
 from unittest.mock import MagicMock
 
 import pytest
-from source_snowflake.source import SnowflakeStream
+from source_snowflake.streams.snowflake_parent_stream import SnowflakeStream
 
 
 @pytest.fixture

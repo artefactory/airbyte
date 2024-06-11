@@ -29,6 +29,10 @@ class SnowflakeStream(HttpStream, ABC):
         self._delta_time_between_snowflake_and_airbyte_server = None
 
     @property
+    def authenticator(self):
+        return self._authenticator
+
+    @property
     def url_base(self):
         return self._url_base
 
@@ -117,9 +121,7 @@ class SnowflakeStream(HttpStream, ABC):
             "timeout": self.TIME_OUT_IN_SECONDS,
         }
 
-        schema = self.table_object.get('schema', '')
-        if schema:
-            json_payload['schema'] = schema
+        
         return json_payload
 
     @classmethod

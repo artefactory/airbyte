@@ -19,7 +19,7 @@ from airbyte_protocol.models import SyncMode, Type, ConfiguredAirbyteStream, Fai
 from source_snowflake.schema_builder import mapping_snowflake_type_airbyte_type, format_field, date_and_time_snowflake_type_airbyte_type, \
     string_snowflake_type_airbyte_type, convert_utc_to_time_zone, convert_utc_to_time_zone_date
 from .snowflake_parent_stream import SnowflakeStream
-from .util_streams import TableSchemaStream, StreamLauncher, PrimaryKeyStream, StreamLauncherChangeDataCapture, CurrentTimeZoneStream
+from .util_streams import TableSchemaStream, StreamLauncher, PrimaryKeyStream, StreamLauncherChangeDataCapture, TimeZoneStream
 from ..snowflake_exceptions import NotEnabledChangeTrackingOptionError, ChangeDataCaptureNotSupportedTypeGeographyError, \
     ChangeDataCaptureLookBackWindowUpdateFrequencyError, SnowflakeTypeNotRecognizedError, emit_airbyte_error_message, \
     MultipleCursorFieldsError
@@ -30,7 +30,7 @@ class TableStream(SnowflakeStream, IncrementalMixin):
     state_checkpoint_interval = None
     CHECK_POINT_DURATION_IN_MINUTES = 15
 
-    def __init__(self, url_base, config, table_object, authenticator):
+    def __init__(self, url_base, config, table_object, authenticator, time_zone_offset=None):
         super().__init__(authenticator=authenticator)
         self._url_base = url_base
         self._config = config
@@ -46,14 +46,17 @@ class TableStream(SnowflakeStream, IncrementalMixin):
 
         self._geography_type_present = None
 
+        self.time_zone_offset = time_zone_offset
+
         self._cursor_field = []
         self._cursor_field_type = None
 
         self._primary_key = None
         self._is_primary_key_set = False
 
-        self._json_schema = None
+        
         self._json_schema_set = False
+        self._json_schema = self.get_json_schema()
 
         # Pagination
         self.number_of_partitions = None
@@ -233,7 +236,7 @@ class TableStream(SnowflakeStream, IncrementalMixin):
 
         for record in response_json.get("data", []):
             try:
-                yield {column_name: format_field(column_value, self.ordered_mapping_names_types[column_name])
+                yield {column_name: format_field(column_value, self.ordered_mapping_names_types[column_name], self.time_zone_offset)
                        for column_name, column_value in zip(self.ordered_mapping_names_types.keys(), record)}
             except Exception:
                 error_message = 'Unexpected error while reading record'
@@ -249,8 +252,19 @@ class TableStream(SnowflakeStream, IncrementalMixin):
         for record in super().read_records(sync_mode, cursor_field, stream_slice, stream_state):
             if isinstance(self.cursor_field, str):
                 self.state = self._get_updated_state(record)
-            self.emit_checkpoint_if_required()
-            yield record
+
+            if self.state:
+                self.emit_checkpoint_if_required()
+
+            try:
+                yield record
+            except Exception:
+                error_message = 'Unexpected error while reading record'
+                emit_airbyte_error_message(error_message)
+
+        if not self.state:
+            self.state = {"__ab_full_refresh_sync_complete": True}
+
 
     def get_json_schema(self) -> Mapping[str, Any]:
 
@@ -325,7 +339,7 @@ class TableStream(SnowflakeStream, IncrementalMixin):
         if self.cursor_field and not self._cursor_field_type:
             self.get_json_schema()  # Sets the type of cursor field to perform process on the value
 
-        latest_record_state = format_field(latest_record[self.cursor_field], self._cursor_field_type)
+        latest_record_state = format_field(latest_record[self.cursor_field], self._cursor_field_type, self.time_zone_offset)
         if self.state is not None and len(self.state) > 0:
             current_state_value = self.state[self.cursor_field]
             self._state_value = max(latest_record_state,
@@ -428,12 +442,11 @@ class TableChangeDataCaptureStream(TableStream):
         retention_time = self.table_object['retention_time']  # given by snowflakes in days
         creation_date = self.table_object['created_on']
 
-        current_time_snowflake_time_zone = CurrentTimeZoneStream.get_current_time_snowflake_time_zone(self.url_base,
-                                                                                                      self.config,
-                                                                                                      self.authenticator)
+        current_time_date_utc = datetime.now(timezone.utc)
+        current_time_snowflake_time_zone = convert_utc_to_time_zone_date(current_time_date_utc, self.time_zone_offset)
 
         creation_date_utc = datetime.fromtimestamp(float(creation_date), pytz.timezone("UTC"))
-        creation_date_utc_snowflake_time_zone = convert_utc_to_time_zone_date(creation_date_utc, CurrentTimeZoneStream.offset)
+        creation_date_utc_snowflake_time_zone = convert_utc_to_time_zone_date(creation_date_utc, self.time_zone_offset)
 
         delta_in_seconds_from_creation = current_time_snowflake_time_zone - creation_date_utc_snowflake_time_zone
         retention_time_in_seconds = int(retention_time) * 3600 * 24  # converting days to seconds
@@ -461,9 +474,8 @@ class TableChangeDataCaptureStream(TableStream):
             emit_airbyte_error_message(error_message)
             raise ChangeDataCaptureNotSupportedTypeGeographyError(error_message)
 
-        current_time_snowflake_time_zone = CurrentTimeZoneStream.get_current_time_snowflake_time_zone(self.url_base,
-                                                                                                      self.config,
-                                                                                                      self.authenticator)
+        current_time_date_utc = datetime.now(timezone.utc)
+        current_time_snowflake_time_zone = convert_utc_to_time_zone_date(current_time_date_utc, self.time_zone_offset)
 
         earliest_possible_history_timestamp = current_time_snowflake_time_zone - timedelta(seconds=self.cdc_look_back_time_window)
 
@@ -544,7 +556,7 @@ class TableChangeDataCaptureStream(TableStream):
         for record in response_json.get("data", []):
             enriched_record = record + additional_data
             try:
-                yield {column_name: format_field(column_value, ordered_mapping_names_types[column_name])
+                yield {column_name: format_field(column_value, ordered_mapping_names_types[column_name], self.time_zone_offset)
                    for column_name, column_value in zip(ordered_mapping_names_types.keys(), enriched_record)}
 
             except Exception:

@@ -5,7 +5,7 @@
 
 from airbyte_cdk.models import SyncMode
 from pytest import fixture
-from source_snowflake.source import IncrementalSnowflakeStream
+from source_snowflake.streams.snowflake_parent_stream import IncrementalSnowflakeStream
 
 @fixture
 def patch_incremental_base_class(mocker):

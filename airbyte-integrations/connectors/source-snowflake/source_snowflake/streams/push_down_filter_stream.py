@@ -8,11 +8,12 @@ from .util_streams import StreamLauncher, StreamLauncherChangeDataCapture
 
 class PushDownFilterStream(TableStream):
 
-    def __init__(self, name, url_base, config, where_clause, parent_stream, authenticator, namespace=None):
+    def __init__(self, name, url_base, config, where_clause, parent_stream, authenticator, namespace=None, time_zone_offset=None):
         super().__init__(url_base=url_base,
                          config=config,
                          table_object=parent_stream.table_object,
-                         authenticator=authenticator)
+                         authenticator=authenticator,
+                         time_zone_offset=time_zone_offset)
         self._name = name
         self._namespace = namespace
         self.where_clause = where_clause
@@ -28,11 +29,12 @@ class PushDownFilterStream(TableStream):
 
 class PushDownFilterChangeDataCaptureStream(TableChangeDataCaptureStream):
 
-    def __init__(self, name, url_base, config, where_clause, parent_stream, authenticator, namespace=None):
+    def __init__(self, name, url_base, config, where_clause, parent_stream, authenticator, namespace=None, time_zone_offset=None):
         super().__init__(url_base=url_base,
                          config=config,
                          table_object=parent_stream.table_object,
-                         authenticator=authenticator)
+                         authenticator=authenticator,
+                         time_zone_offset=time_zone_offset)
         self._name = name
         self._namespace = namespace
         self.where_clause = where_clause
