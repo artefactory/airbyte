@@ -20,7 +20,6 @@ acceptance_tests:
     tests:
       - config_path: "secrets/config.json"
         configured_catalog_path: "integration_tests/configured_catalog.json"
-        empty_streams: []
         timeout_seconds: 40
         validate_stream_statuses: true
         expect_records:
@@ -28,7 +27,6 @@ acceptance_tests:
           exact_order: no
       - config_path: "secrets/cdc_config.json"
         configured_catalog_path: "integration_tests/cdc_configured_catalog.json"
-        empty_streams: []
         timeout_seconds: 40
         validate_stream_statuses: true
         fail_on_extra_columns: false
