@@ -2,6 +2,7 @@
 <<<<<<< HEAD
   "kind": "bigquery#datasetList",
   "etag": "etag123456789",
+  "nextPageToken": "ABCDEF123456",
   "datasets": [
     {
       "kind": "bigquery#dataset",

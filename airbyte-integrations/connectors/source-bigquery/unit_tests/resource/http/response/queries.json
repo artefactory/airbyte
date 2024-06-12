@@ -21,6 +21,7 @@
     "jobId": "job_123456789",
     "location": "US"
   },
+  "pageToken": "ABCDEF123456",
   "totalRows": "1",
   "rows": [
     {
