@@ -156,7 +156,7 @@ def format_field(field_value, field_type, local_time_zone_offset_hours=None):
             return field_value
 
         try:
-            if not isinstance(field_value, str) and len(field_value) == 0:
+            if not isinstance(field_value, str) or len(field_value) == 0:
                 raise ValueError
 
             airbyte_format = date_and_time_snowflake_type_airbyte_type[field_type.upper()].get('format', None)
@@ -191,7 +191,9 @@ def format_field(field_value, field_type, local_time_zone_offset_hours=None):
 
             if airbyte_format == 'time' and airbyte_type == 'time_without_timezone':
                 ts = float(field_value)
-                dt = datetime.fromtimestamp(ts)
+                unix_epoch = datetime(year=1970, month=1, day=1)
+                delta_seconds_offset = timedelta(seconds=ts)
+                dt = unix_epoch + delta_seconds_offset
                 return dt.strftime("%H:%M:%S")
 
         except ValueError:
