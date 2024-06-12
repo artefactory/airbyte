@@ -120,10 +120,13 @@ def _read(
 
 
 class FullRefreshTest(TestCase):
+        
+
+
     @mock.patch("source_snowflake.streams.snowflake_parent_stream.uuid.uuid4", return_value=_REQUESTID)
     @mock.patch("source_snowflake.source.SnowflakeJwtAuthenticator")
     @HttpMocker()
-    def test_given_one_page_when_read_then_return_records(self, uuid_mock, mock_auth, http_mocker: HttpMocker) -> None:
+    def test_given_one_page_when_read_then_return_records(self, uuid_mock, mock_auth,http_mocker) -> None:
         _given_get_timezone(http_mocker)
         _given_read_schema(http_mocker)
         _given_table_catalog(http_mocker)
@@ -196,7 +199,7 @@ class FullRefreshTest(TestCase):
         http_mocker: HttpMocker,
         ) -> None:
 
-        def snowflake_record():
+        def a_record():
             return a_snowflake_response("response_get_table",JsonPath("$.'data'[*]"), cursor_path=JsonPath(f"$.[{cursor_index}]"))
 
         _given_get_timezone(http_mocker)
@@ -211,10 +214,10 @@ class FullRefreshTest(TestCase):
             table_request().with_handle(_HANDLE).build(is_get=True),
             snowflake_response("response_get_table",JsonPath("$.'data'"))
              .with_record(
-                 snowflake_record()
+                 a_record()
                  .with_cursor(value_first_record))
              .with_record(
-                 snowflake_record()
+                 a_record()
                  .with_cursor(value_second_record))
              .build()
             )
@@ -255,6 +258,7 @@ class FullRefreshTest(TestCase):
             snowflake_response("response_get_table",JsonPath("$.'data'")).with_record(a_snowflake_response("response_get_table",JsonPath("$.'data'[*]"))).build()
         )
         output = _read(_config(), sync_mode=SyncMode.full_refresh)
+        assert len(output.records) == 1
 
     
 
@@ -306,6 +310,7 @@ class FullRefreshTest(TestCase):
             ]
         )
         output = _read(_config(), sync_mode=SyncMode.full_refresh)
+        assert len(output.records) == 1
     
     @parameterized.expand(
             [
