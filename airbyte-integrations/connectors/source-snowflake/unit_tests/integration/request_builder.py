@@ -33,6 +33,7 @@ class SnowflakeRequestBuilder:
         self._where_statement = None
         self._state = None
         self._cursor_field = None
+        self._cursor_generic_type = None
 
     def with_table(self, table: str):
         self._table = table
@@ -82,6 +83,10 @@ class SnowflakeRequestBuilder:
         self._cursor_field = cursor_field
         return self
 
+    def with_cursor_generic_type(self, cursor_generic_type):
+        self._cursor_generic_type = cursor_generic_type
+        return self
+
 
     def _build_query_params(self, is_get: bool = False):
         query_params = {"requestId": self._requestID, "async": self._async}
@@ -92,16 +97,46 @@ class SnowflakeRequestBuilder:
                 query_params = {}
         return query_params
 
+    def get_state_sql_condition(self):
+        if self._state is None:
+            return None
+
+        state_sql_condition = None
+        current_state_value = self._state[self._cursor_field]
+
+        if self._cursor_generic_type == "timestamp_with_timezone":
+            state_sql_condition = f"TO_TIMESTAMP_TZ({self._cursor_field})>=TO_TIMESTAMP_TZ('{current_state_value}')"
+
+        if self._cursor_generic_type == "date":
+            state_sql_condition = f"TO_TIMESTAMP({self._cursor_field})>=TO_TIMESTAMP('{current_state_value}')"
+
+        if self._cursor_generic_type == "number":
+          state_sql_condition = f"{self._cursor_field}>={current_state_value}"
+
+        if self._cursor_generic_type == "string":
+            state_sql_condition = f"{self._cursor_field}>='{current_state_value}'"
+
+        return state_sql_condition
+
     def build(self, is_get: bool = False) -> HttpRequest:
 
         query_params = self._build_query_params(is_get)
         statement = None
         if self._table:
             statement = f'SELECT * FROM "{self._database}"."{self._schema}"."{self._table}"'
+
             if self._where_statement:
                 statement = f"{statement} WHERE {self._where_statement}"
+
+            state_sql_condition = self.get_state_sql_condition()
+
+            if state_sql_condition:
+                reserved_seperator_word = "AND" if " WHERE " in statement else "WHERE"
+                statement = f"{statement} {reserved_seperator_word} {state_sql_condition}"
+
             if self._cursor_field:
                 statement = f"{statement} ORDER BY {self._cursor_field} ASC"
+
         if self._show_catalog:
             statement = f"SHOW TABLES IN SCHEMA {self._database}.{self._schema}"
         if self._show_primary_keys and self._table:
