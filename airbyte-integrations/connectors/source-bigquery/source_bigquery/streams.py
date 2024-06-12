@@ -572,9 +572,9 @@ class BigqueryIncrementalStream(BigqueryResultStream, IncrementalMixin):
             last_record = TableQueryRecord(self.project_id, self.stream_name, "DESC", self.cursor_field, self.where_clause, authenticator=self._auth)
             self.start_time = next(first_record.read_records(sync_mode=SyncMode.full_refresh)).get(self.cursor_field, None)
             self.end_time = next(last_record.read_records(sync_mode=SyncMode.full_refresh)).get(self.cursor_field, None)
-            if isinstance(self.start_time, str):
+            if self.start_time and isinstance(self.start_time, str):
                 self.start_time = parser.parse(self.start_time)
-            if isinstance(self.end_time, str):
+            if self.end_time and isinstance(self.end_time, str):
                 self.end_time = parser.parse(self.end_time)
         return self.start_time, self.end_time
 
@@ -610,22 +610,23 @@ class BigqueryIncrementalStream(BigqueryResultStream, IncrementalMixin):
                 default_start = parser.parse(self._cursor) - timedelta(minutes=self.slice_range) #slice range is equal to loopback window
         if self.cursor_field and sync_mode == SyncMode.incremental:
             start_time, end_time = self._extract_borders()
-            if not isinstance(start_time, datetime):
-                raise AirbyteTracedException(
-                            internal_message=f"Cursor field should be a timestamp type for stream {self.dataset_id}.{self.table_id}",
-                            failure_type=FailureType.config_error,
-                            message=f"Cursor field should be a timestamp type for stream {self.dataset_id}.{self.table_id}",
-                        )
-            if not end_time.tzinfo and default_start.tzinfo:
-                # to avoid TypeError when comparing timezone aware and unaware datetimes
-                default_start = default_start.replace(tzinfo=None)
-            elif end_time.tzinfo and not default_start.tzinfo:
-                default_start = default_start.replace(tzinfo=pytz.utc)
-            if end_time and default_start <= end_time:
-                    for start, end in self._chunk_dates(default_start, end_time, start_time):
-                        slice["start"] = start.isoformat(timespec='microseconds')
-                        slice["end"] = end.isoformat(timespec='microseconds')
-                        yield slice
+            if start_time and end_time:
+                if not isinstance(start_time, datetime):
+                    raise AirbyteTracedException(
+                                internal_message=f"Cursor field should be a timestamp type for stream {self.dataset_id}.{self.table_id}",
+                                failure_type=FailureType.config_error,
+                                message=f"Cursor field should be a timestamp type for stream {self.dataset_id}.{self.table_id}",
+                            )
+                if not end_time.tzinfo and default_start.tzinfo:
+                    # to avoid TypeError when comparing timezone aware and unaware datetimes
+                    default_start = default_start.replace(tzinfo=None)
+                elif end_time.tzinfo and not default_start.tzinfo:
+                    default_start = default_start.replace(tzinfo=pytz.utc)
+                if default_start <= end_time:
+                        for start, end in self._chunk_dates(default_start, end_time, start_time):
+                            slice["start"] = start.isoformat(timespec='microseconds')
+                            slice["end"] = end.isoformat(timespec='microseconds')
+                            yield slice
         else:
             yield
 
@@ -902,9 +903,9 @@ class BigqueryCDCStream(BigqueryResultStream, IncrementalMixin):
             last_record = CHTableQueryRecord(self.project_id, self.stream_name, "DESC", cursor_column, self.where_clause, authenticator=self._auth)
             self.start_time = next(first_record.read_records(sync_mode=SyncMode.full_refresh)).get(self.cursor_field, None)
             self.end_time = next(last_record.read_records(sync_mode=SyncMode.full_refresh)).get(self.cursor_field, None)
-            if isinstance(self.start_time, str):
+            if self.start_time and isinstance(self.start_time, str):
                 self.start_time = datetime.strptime(self.start_time, '%Y-%m-%dT%H:%M:%S.%f%z')
-            if isinstance(self.end_time, str):
+            if self.end_time and isinstance(self.end_time, str):
                 self.end_time = datetime.strptime(self.end_time, '%Y-%m-%dT%H:%M:%S.%f%z')
         return self.start_time, self.end_time
     
