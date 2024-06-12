@@ -39,82 +39,51 @@ class BigqueryRequestBuilder:
         return cls(Paths.QUERIES.format(project_id=project_id))
 
     @classmethod
-    def query_endpoint(cls, project_id: str, job_id: str = None) -> "BigqueryRequestBuilder":
-        return cls(Paths.QUERY.format(project_id=project_id))
+    def query_endpoint(cls, project_id: str, job_id: str) -> "BigqueryRequestBuilder":
+        return cls(Paths.QUERY.format(project_id=project_id, job_id=job_id))
 
     def __init__(self, resource: str) -> None:
         self._resource = resource
-        self._any_query_params = False
-        self._created_gte: Optional[datetime] = None
-        self._created_lte: Optional[datetime] = None
-        self._limit: Optional[int] = None
-        self._object: Optional[str] = None
-        self._starting_after_id: Optional[str] = None
-        self._types: List[str] = []
-        self._expands: List[str] = []
         self._body: Optional[dict] = None
+        self._max_results: Optional[int] = None
+        self._location: Optional[str] = None
+        self._page_token: Optional[str] = None
+        self._next_page_token: Optional[str] = None
 
-    def with_created_gte(self, created_gte: datetime) -> "BigqueryRequestBuilder":
-        self._created_gte = created_gte
-        return self
-
-    def with_created_lte(self, created_lte: datetime) -> "BigqueryRequestBuilder":
-        self._created_lte = created_lte
-        return self
-
-    def with_limit(self, limit: int) -> "BigqueryRequestBuilder":
-        self._limit = limit
-        return self
-
-    def with_object(self, object_name: str) -> "BigqueryRequestBuilder":
-        self._object = object_name
-        return self
-
-    def with_starting_after(self, starting_after_id: str) -> "BigqueryRequestBuilder":
-        self._starting_after_id = starting_after_id
-        return self
-
-    def with_any_query_params(self) -> "BigqueryRequestBuilder":
-        self._any_query_params = True
-        return self
-
-    def with_types(self, types: List[str]) -> "BigqueryRequestBuilder":
-        self._types = types
-        return self
-
-    def with_expands(self, expands: List[str]) -> "BigqueryRequestBuilder":
-        self._expands = expands
-        return self
-    
     def with_body(self, body: dict) -> "BigqueryRequestBuilder":
         self._body = body
         return self
-
+    
+    def with_max_results(self, max_results: int) -> "BigqueryRequestBuilder":
+        self._max_results = max_results
+        return self
+    
+    def with_location(self, location: str) -> "BigqueryRequestBuilder":
+        self._location = location
+        return self
+    
+    def with_page_token(self, page_token: str) -> "BigqueryRequestBuilder":
+        self._page_token = page_token
+        return self
+    
+    def with_next_page_token(self, next_page_token: str) -> "BigqueryRequestBuilder":
+        self._next_page_token = next_page_token
+        return self
+    
     def build(self) -> HttpRequest:
-        query_params = {}
-        if self._created_gte:
-            query_params["created[gte]"] = str(int(self._created_gte.timestamp()))
-        if self._created_lte:
-            query_params["created[lte]"] = str(int(self._created_lte.timestamp()))
-        if self._limit:
-            query_params["limit"] = str(self._limit)
-        if self._starting_after_id:
-            query_params["starting_after"] = self._starting_after_id
-        if self._types:
-            query_params["types[]"] = self._types
-        if self._object:
-            query_params["object"] = self._object
-        if self._expands:
-            query_params["expand[]"] = self._expands
-
-        if self._any_query_params:
-            if query_params:
-                raise ValueError(f"Both `any_query_params` and {list(query_params.keys())} were configured. Provide only one of none but not both.")
-            query_params = ANY_QUERY_PARAMS
-
         return HttpRequest(
             url=f"https://bigquery.googleapis.com/{self._resource}",
-            query_params=query_params,
             # headers={"Authorization": f"Bearer toto"},
             body=self._body,
+            query_params=(
+                {} | (
+                    {"maxResults": self._max_results} if self._max_results else {}
+                ) | (
+                    {"location": self._location} if self._location else {}
+                ) | (
+                    {"pageToken": self._page_token} if self._page_token else {}
+                ) | (
+                    {"nextPageToken": self._next_page_token} if self._next_page_token else {}
+                )
+            ) or ANY_QUERY_PARAMS
         )

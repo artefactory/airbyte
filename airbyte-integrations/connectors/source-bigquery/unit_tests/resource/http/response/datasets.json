@@ -1,7 +1,6 @@
 {
   "kind": "bigquery#datasetList",
   "etag": "etag123456789",
-  "nextPageToken": "tokenABCDEF",
   "datasets": [
     {
       "kind": "bigquery#dataset",

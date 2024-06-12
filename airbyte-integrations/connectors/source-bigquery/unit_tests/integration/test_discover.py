@@ -50,7 +50,7 @@ class DiscoverTest(TestCase):
         tables_ids = ["table_id_1", "table_id_2"]
 
         http_mocker.get(
-            BigqueryRequestBuilder.datasets_endpoint(project_id=config["project_id"]).build(),
+            BigqueryRequestBuilder.datasets_endpoint(project_id=config["project_id"]).with_max_results(10000).build(),
             BigqueryResponseBuilder.datasets(dataset_ids=dataset_ids).build()
         )
 
