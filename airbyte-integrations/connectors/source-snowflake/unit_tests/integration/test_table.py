@@ -1,3 +1,4 @@
+from datetime import datetime
 from typing import Any, Dict, List, Optional
 from unittest import TestCase, mock
 from airbyte_cdk.test.catalog_builder import CatalogBuilder
@@ -284,6 +285,9 @@ class FullRefreshPushDownFilterTest(TestCase):
 
 
 class IncrementalTest(TestCase):
+    """
+    See the documentation about the values of record in the function source_snowflake.schema_builder.format_field
+    """
 
     def setUp(self):
         self.sync_mode = SyncMode.incremental
@@ -352,7 +356,9 @@ class IncrementalTest(TestCase):
 
         cursor_field = "TEST_COLUMN_20"
         id_index = 12
-        expected_cursor_value = "1970-01-04"
+        most_recent_cursor = datetime(1970, 1, 4)
+        expected_cursor_value = most_recent_cursor.strftime("%Y-%m-%d")
+        most_recent_cursor_value_in_record = str((most_recent_cursor - datetime(1970, 1, 1)) .days)
         cursor_path = JsonPath(f"$.[{id_index}]")
 
         http_mocker.post(
@@ -374,7 +380,7 @@ class IncrementalTest(TestCase):
             snowflake_response("response_get_table")
             .with_record(self._a_record(cursor_path).with_cursor("1"))
             .with_record(self._a_record(cursor_path).with_cursor("2"))
-            .with_record(self._a_record(cursor_path).with_cursor("3"))
+            .with_record(self._a_record(cursor_path).with_cursor(most_recent_cursor_value_in_record))
             .build()
         )
 
