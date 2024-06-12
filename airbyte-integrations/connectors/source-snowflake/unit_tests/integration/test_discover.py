@@ -4,6 +4,8 @@ from airbyte_cdk import ConfiguredAirbyteCatalog, SyncMode
 from airbyte_cdk.test.entrypoint_wrapper import EntrypointOutput, discover
 from airbyte_cdk.test.catalog_builder import CatalogBuilder
 from airbyte_cdk.test.mock_http import HttpMocker
+from integration.pagination import SnowflakePaginationStrategy
+from integration.response_builder import JsonPath, SnowflakeResponseBuilder, create_response_builder
 from airbyte_protocol.models import (
     AirbyteStateBlob,
     AirbyteStateMessage,
@@ -13,11 +15,18 @@ from airbyte_protocol.models import (
     StreamDescriptor,
     SyncMode,
 )
+from airbyte_cdk.test.mock_http.response_builder import (
+    FieldPath,
+    Path,
+    RecordBuilder,
+    create_record_builder,
+    find_template,
+)
+from parameterized import parameterized
 
 from integration.config import ConfigBuilder
 from integration.request_builder import SnowflakeRequestBuilder
 from integration.response_builder import JsonPath
-from integration.test_table import a_snowflake_response, snowflake_response
 from source_snowflake.source import SourceSnowflake
 
 
@@ -46,6 +55,23 @@ def _catalog(sync_mode: SyncMode) -> ConfiguredAirbyteCatalog:
 
 def _source(catalog: ConfiguredAirbyteCatalog, config: Dict[str, Any], state: Optional[List[AirbyteStateMessage]]) -> SourceSnowflake:
     return SourceSnowflake()
+
+
+def snowflake_response(file_name, datafield: Path = FieldPath("data")) -> SnowflakeResponseBuilder:
+    return create_response_builder(
+        find_template(file_name, __file__),
+        datafield,
+        pagination_strategy=SnowflakePaginationStrategy()
+    )
+
+
+def a_snowflake_response(file_name, datafield: Path = FieldPath("data"), id_path=None, cursor_path=None) -> RecordBuilder:
+    return create_record_builder(
+        find_template(file_name, __file__),
+        datafield,
+        record_id_path=id_path,
+        record_cursor_path=cursor_path
+    )
 
 
 def _given_table_catalog(http_mocker: HttpMocker) -> None:
@@ -84,31 +110,33 @@ def _discover(
         config = config_builder.build()
         return discover(_source(catalog, config, state), config, expecting_exception)
 
-
+@mock.patch("source_snowflake.streams.snowflake_parent_stream.uuid.uuid4", return_value=_REQUESTID)
+@mock.patch("source_snowflake.source.SnowflakeJwtAuthenticator")
 class DiscoverTest(TestCase):
 
-    @mock.patch("source_snowflake.streams.snowflake_parent_stream.uuid.uuid4", return_value=_REQUESTID)
-    @mock.patch("source_snowflake.source.SnowflakeJwtAuthenticator")
+    @classmethod
+    def _a_table_record(cls):
+        return a_snowflake_response("check_connection", JsonPath("$.'data'.[*]"), id_path=JsonPath("$.[1]"))
+
     @HttpMocker()
     def test_discover_no_pagination(self,  uuid_mock, mock_auth, http_mocker: HttpMocker)->None:
-        def a_table_record():
-            return a_snowflake_response("check_connection", JsonPath("$.'data'.[*]"), id_path=JsonPath("$.[1]"))
+            
         
         _given_get_timezone(http_mocker)
        
         for i in ["TEST_TABLE_2","TEST_TABLE_1"]:
             _given_table_with_primary_keys(http_mocker, i)
-            _given_read_schema(http_mocker,i )
+            _given_read_schema(http_mocker,i)
        
 
         http_mocker.post(
         table_request().with_show_catalog().with_requestID(_REQUESTID).build(),
         snowflake_response("check_connection", JsonPath("$.'data'"))
         .with_record(
-            a_table_record().with_id("TEST_TABLE_1")
+            self._a_table_record().with_id("TEST_TABLE_1")
         )
         .with_record(
-            a_table_record().with_id("TEST_TABLE_2"))
+            self._a_table_record().with_id("TEST_TABLE_2"))
         .build()
         )
         
@@ -116,18 +144,12 @@ class DiscoverTest(TestCase):
         output= _discover(_config(), sync_mode=SyncMode.full_refresh)
         assert len(output.catalog.catalog.streams)
     
-    
-    @expectedFailure
-    @mock.patch("source_snowflake.streams.snowflake_parent_stream.uuid.uuid4", return_value=_REQUESTID)
-    @mock.patch("source_snowflake.source.SnowflakeJwtAuthenticator")
+    @expectedFailure # Not Implemented in the source
     @HttpMocker()
-    def test_discover_no_pagination(self,  uuid_mock, mock_auth, http_mocker: HttpMocker)->None:
-        def a_table_record():
-            return a_snowflake_response("check_connection", JsonPath("$.'data'.[*]"), id_path=JsonPath("$.[1]"))
-        
+    def test_discover_pagination(self,  uuid_mock, mock_auth, http_mocker: HttpMocker)->None:
+
         _given_get_timezone(http_mocker)
-       
-        for i in ["TEST_TABLE_1","TEST_TABLE_2"]:
+        for i in ["TEST_TABLE_1","TEST_TABLE_2","TEST_TABLE_3"]:
             _given_table_with_primary_keys(http_mocker, i)
             _given_read_schema(http_mocker,i )
        
@@ -136,10 +158,10 @@ class DiscoverTest(TestCase):
         table_request().with_show_catalog().with_requestID(_REQUESTID).build(),
         snowflake_response("check_connection", JsonPath("$.'data'"))
         .with_record(
-            a_table_record().with_id("TEST_TABLE_1")
+            self._a_table_record().with_id("TEST_TABLE_1")
         )
         .with_record(
-            a_table_record().with_id("TEST_TABLE_2"))
+            self._a_table_record().with_id("TEST_TABLE_2"))
         .with_pagination()
         .with_handle(_HANDLE)
         .build()
@@ -149,12 +171,56 @@ class DiscoverTest(TestCase):
             table_request().with_partition(1).with_handle(_HANDLE).build(is_get=True),
             snowflake_response("check_connection", JsonPath("$.'data'"))
             .with_record(
-                a_table_record().with_id("TEST_TABLE_3")
+                self._a_table_record().with_id("TEST_TABLE_3")
             )
             .with_pagination()
             .with_handle(_HANDLE)
             .build()
         )
         output= _discover(_config(), sync_mode=SyncMode.full_refresh)
-        assert len(output.catalog.catalog.streams)
+        assert len(output.catalog.catalog.streams)==3
+
+    
+
+    @HttpMocker()
+    def test_discover_primary_keys(self,  uuid_mock, mock_auth, http_mocker: HttpMocker):
+
+        def a_primary_key_record():
+            return a_snowflake_response("primary_keys",JsonPath("$.data.[*]"), id_path=JsonPath("$.[4]"))
+        
+        _given_read_schema(http_mocker,"TEST_TABLE")
+        _given_get_timezone(http_mocker)
+        _given_table_catalog(http_mocker)
+
+        http_mocker.post(
+            table_request().with_table(_TABLE).with_show_primary_keys().with_requestID(_REQUESTID).build(),
+            snowflake_response("primary_keys",JsonPath("$.data")).with_record(a_primary_key_record().with_id("TEST_COLUMN")).build()
+        )
+
+        output= _discover(_config(), sync_mode=SyncMode.full_refresh)
+        assert output.catalog.catalog.streams[0].source_defined_primary_key[0] == ["TEST_COLUMN"]
+
+    
+    @expectedFailure # Not Implemented in the source
+    @HttpMocker()
+    def test_discover_composite_primary_key(self,  uuid_mock, mock_auth, http_mocker: HttpMocker):
+
+        def a_primary_key_record():
+            return a_snowflake_response("primary_keys",JsonPath("$.data.[*]"), id_path=JsonPath("$.[4]"))
+        
+        _given_read_schema(http_mocker,"TEST_TABLE")
+        _given_get_timezone(http_mocker)
+        _given_table_catalog(http_mocker)
+
+        http_mocker.post(
+            table_request().with_table(_TABLE).with_show_primary_keys().with_requestID(_REQUESTID).build(),
+            snowflake_response("primary_keys",JsonPath("$.data")).with_record(a_primary_key_record().with_id("TEST_COLUMN")).with_record(a_primary_key_record().with_id("TEST_COLUMN_2")).build()
+        )
+
+        output= _discover(_config(), sync_mode=SyncMode.full_refresh)
+        assert output.catalog.catalog.streams[0].source_defined_primary_key[0] == ["TEST_COLUMN","TEST_COLUMN2"]
+    
+
+
+
 
