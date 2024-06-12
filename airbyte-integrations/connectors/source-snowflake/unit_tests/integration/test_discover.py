@@ -117,6 +117,10 @@ class DiscoverTest(TestCase):
     @classmethod
     def _a_table_record(cls):
         return a_snowflake_response("check_connection", JsonPath("$.'data'.[*]"), id_path=JsonPath("$.[1]"))
+    
+    @classmethod
+    def _a_primary_key_record():
+            return a_snowflake_response("primary_keys",JsonPath("$.data.[*]"), id_path=JsonPath("$.[4]"))
 
     @HttpMocker()
     def test_discover_no_pagination(self,  uuid_mock, mock_auth, http_mocker: HttpMocker)->None:
@@ -181,12 +185,8 @@ class DiscoverTest(TestCase):
         assert len(output.catalog.catalog.streams)==3
 
     
-
     @HttpMocker()
     def test_discover_primary_keys(self,  uuid_mock, mock_auth, http_mocker: HttpMocker):
-
-        def a_primary_key_record():
-            return a_snowflake_response("primary_keys",JsonPath("$.data.[*]"), id_path=JsonPath("$.[4]"))
         
         _given_read_schema(http_mocker,"TEST_TABLE")
         _given_get_timezone(http_mocker)
@@ -194,7 +194,7 @@ class DiscoverTest(TestCase):
 
         http_mocker.post(
             table_request().with_table(_TABLE).with_show_primary_keys().with_requestID(_REQUESTID).build(),
-            snowflake_response("primary_keys",JsonPath("$.data")).with_record(a_primary_key_record().with_id("TEST_COLUMN")).build()
+            snowflake_response("primary_keys",JsonPath("$.data")).with_record(self._a_primary_key_record().with_id("TEST_COLUMN")).build()
         )
 
         output= _discover(_config(), sync_mode=SyncMode.full_refresh)
@@ -204,9 +204,6 @@ class DiscoverTest(TestCase):
     @expectedFailure # Not Implemented in the source
     @HttpMocker()
     def test_discover_composite_primary_key(self,  uuid_mock, mock_auth, http_mocker: HttpMocker):
-
-        def a_primary_key_record():
-            return a_snowflake_response("primary_keys",JsonPath("$.data.[*]"), id_path=JsonPath("$.[4]"))
         
         _given_read_schema(http_mocker,"TEST_TABLE")
         _given_get_timezone(http_mocker)
@@ -214,7 +211,7 @@ class DiscoverTest(TestCase):
 
         http_mocker.post(
             table_request().with_table(_TABLE).with_show_primary_keys().with_requestID(_REQUESTID).build(),
-            snowflake_response("primary_keys",JsonPath("$.data")).with_record(a_primary_key_record().with_id("TEST_COLUMN")).with_record(a_primary_key_record().with_id("TEST_COLUMN_2")).build()
+            snowflake_response("primary_keys",JsonPath("$.data")).with_record(self._a_primary_key_record().with_id("TEST_COLUMN")).with_record(self._a_primary_key_record().with_id("TEST_COLUMN_2")).build()
         )
 
         output= _discover(_config(), sync_mode=SyncMode.full_refresh)
