@@ -3,16 +3,13 @@ import re
 from typing import Any, Dict, List, Optional
 from unittest import TestCase, mock
 
-import freezegun
-from airbyte_cdk.sources.source import TState
 from airbyte_cdk.test.catalog_builder import CatalogBuilder
 from airbyte_cdk.test.entrypoint_wrapper import EntrypointOutput, read
 from integration.response_builder import JsonPath, SnowflakeResponseBuilder, create_response_builder
-from airbyte_cdk.test.mock_http import HttpMocker, HttpRequest, HttpResponse
+from airbyte_cdk.test.mock_http import HttpMocker
 from airbyte_cdk.test.mock_http.response_builder import (
     FieldPath,
     Path,
-    NestedPath,
     RecordBuilder,
     create_record_builder,
     find_template,
@@ -97,7 +94,6 @@ def _given_read_schema(http_mocker: HttpMocker) -> None:
         table_request().with_table(_TABLE).with_get_schema().with_requestID(_REQUESTID).build(),
         snowflake_response("response_get_table", JsonPath("$")).with_record(
             a_snowflake_response("response_get_table", JsonPath("$"))).build()
-
     )
 
 
