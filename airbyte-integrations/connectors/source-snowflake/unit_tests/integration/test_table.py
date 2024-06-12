@@ -132,7 +132,6 @@ class FullRefreshTest(TestCase):
             .build())
 
         output = _read(_config(), sync_mode=SyncMode.full_refresh)
-        print(output.records)
 
     @mock.patch("source_snowflake.streams.snowflake_parent_stream.uuid.uuid4", return_value=_REQUESTID)
     @mock.patch("source_snowflake.source.SnowflakeJwtAuthenticator")
@@ -665,7 +664,7 @@ class IncrementalTest(TestCase):
     @mock.patch("source_snowflake.source.SnowflakeJwtAuthenticator")
     @HttpMocker()
     def test_incremental_with_initial_state_higher_than_highest_record_state_with_date_cursor(self, uuid_mock, mock_auth,
-                                                                                                http_mocker: HttpMocker) -> None:
+                                                                                              http_mocker: HttpMocker) -> None:
         _given_get_timezone(http_mocker)
         _given_read_schema(http_mocker)
         _given_table_catalog(http_mocker)
@@ -715,12 +714,11 @@ class IncrementalTest(TestCase):
         assert most_recent_state.stream_descriptor == StreamDescriptor(name=self.stream_name)
         assert most_recent_state.stream_state == AirbyteStateBlob(TEST_COLUMN_20=expected_cursor_value)
 
-
     @mock.patch("source_snowflake.streams.snowflake_parent_stream.uuid.uuid4", return_value=_REQUESTID)
     @mock.patch("source_snowflake.source.SnowflakeJwtAuthenticator")
     @HttpMocker()
     def test_incremental_with_initial_state_lower_than_highest_record_state_with_timestamp_time_zone_cursor(self, uuid_mock, mock_auth,
-                                                                                             http_mocker: HttpMocker) -> None:
+                                                                                                            http_mocker: HttpMocker) -> None:
         _given_get_timezone(http_mocker)
         _given_read_schema(http_mocker)
         _given_table_catalog(http_mocker)
@@ -777,7 +775,7 @@ class IncrementalTest(TestCase):
     @mock.patch("source_snowflake.source.SnowflakeJwtAuthenticator")
     @HttpMocker()
     def test_incremental_with_initial_state_higher_than_highest_record_state_with_timestamp_time_zone_cursor(self, uuid_mock, mock_auth,
-                                                                                                http_mocker: HttpMocker) -> None:
+                                                                                                             http_mocker: HttpMocker) -> None:
         _given_get_timezone(http_mocker)
         _given_read_schema(http_mocker)
         _given_table_catalog(http_mocker)
@@ -832,7 +830,7 @@ class IncrementalTest(TestCase):
     @mock.patch("source_snowflake.source.SnowflakeJwtAuthenticator")
     @HttpMocker()
     def test_incremental_with_initial_state_lower_than_highest_record_state_with_string_cursor(self, uuid_mock, mock_auth,
-                                                                                             http_mocker: HttpMocker) -> None:
+                                                                                               http_mocker: HttpMocker) -> None:
         _given_get_timezone(http_mocker)
         _given_read_schema(http_mocker)
         _given_table_catalog(http_mocker)
@@ -888,7 +886,7 @@ class IncrementalTest(TestCase):
     @mock.patch("source_snowflake.source.SnowflakeJwtAuthenticator")
     @HttpMocker()
     def test_incremental_with_initial_state_higher_than_highest_record_state_with_timestamp_time_zone_cursor(self, uuid_mock, mock_auth,
-                                                                                                http_mocker: HttpMocker) -> None:
+                                                                                                             http_mocker: HttpMocker) -> None:
         _given_get_timezone(http_mocker)
         _given_read_schema(http_mocker)
         _given_table_catalog(http_mocker)
@@ -947,3 +945,28 @@ class IncrementalTest(TestCase):
               ) -> EntrypointOutput:
         config = config_builder.build()
         return read(_source(catalog, config, state), config, catalog, state, expecting_exception)
+
+
+class UnrecognizedTypeTest(TestCase):
+    @mock.patch("source_snowflake.streams.snowflake_parent_stream.uuid.uuid4", return_value=_REQUESTID)
+    @mock.patch("source_snowflake.source.SnowflakeJwtAuthenticator")
+    @HttpMocker()
+    def test_unrecognized_type(self, uuid_mock, mock_auth, http_mocker: HttpMocker) -> None:
+        _given_get_timezone(http_mocker)
+        _given_table_catalog(http_mocker)
+
+        # Mocking type of TEST_COLUMN_1 in metadata to mock catalog with wrong data
+        http_mocker.post(
+            table_request()
+            .with_table(_TABLE)
+            .with_get_schema()
+            .with_requestID(_REQUESTID)
+            .build(),
+            snowflake_response("response_get_table_with_unknown_type", JsonPath("$"))
+            .build()
+        )
+        output = _read(_config(), sync_mode=SyncMode.full_refresh)
+        expected_error = ('The type UNKNOWN TYPE is not recognized. '
+                          'Please, contact Airbyte support to update the connector to handle this new type')
+        assert output.errors[0].trace.error.internal_message == expected_error
+        assert "SnowflakeTypeNotRecognizedError" in output.errors[0].trace.error.stack_trace
