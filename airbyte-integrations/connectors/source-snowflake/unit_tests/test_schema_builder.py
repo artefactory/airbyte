@@ -135,8 +135,10 @@ class TestFormatField(unittest.TestCase):
         self.assertEqual(datetime(2020, 1, 1), format_field(datetime(2020, 1, 1), "DATE"))
 
         # not a string or empty string
-        self.assertEqual(32323, format_field(32323, "DATE"))
-        self.assertEqual("", format_field("", "DATE"))
+        with pytest.raises(ValueError):
+            self.assertEqual(32323, format_field(32323, "DATE"))
+
+        self.assertIsNone(format_field("", "DATE"))
 
     def test_timestamp_with_timezone_with_offset_in_field_value_field_type(self):
         """

@@ -155,50 +155,49 @@ def format_field(field_value, field_type, local_time_zone_offset_hours=None):
         if isinstance(field_value, datetime):  # Already formatted date
             return field_value
 
-        try:
-            if not isinstance(field_value, str) or len(field_value) == 0:
-                raise ValueError
+        if not isinstance(field_value, str):
+            raise ValueError
 
-            airbyte_format = date_and_time_snowflake_type_airbyte_type[field_type.upper()].get('format', None)
-            airbyte_type = date_and_time_snowflake_type_airbyte_type[field_type.upper()].get('airbyte_type', None)
+        if len(field_value) == 0:
+            return None
 
-            if airbyte_format == 'date-time' and airbyte_type == 'timestamp_with_timezone':
-                if TIMESTAMP_OFFSET_SEPARATOR in field_value:  # offset present in response
-                    unix_time_stamp = float(field_value.split(TIMESTAMP_OFFSET_SEPARATOR)[0])
-                    time_zone_time_stamp_suffix = field_value.split(TIMESTAMP_OFFSET_SEPARATOR)[1]
-                    offset_hours = convert_time_zone_time_stamp_suffix_to_offset_hours(time_zone_time_stamp_suffix)
+        airbyte_format = date_and_time_snowflake_type_airbyte_type[field_type.upper()].get('format', None)
+        airbyte_type = date_and_time_snowflake_type_airbyte_type[field_type.upper()].get('airbyte_type', None)
 
-                else:
-                    unix_time_stamp = float(field_value)
-                    offset_hours = local_time_zone_offset_hours if local_time_zone_offset_hours is not None else 0
+        if airbyte_format == 'date-time' and airbyte_type == 'timestamp_with_timezone':
+            if TIMESTAMP_OFFSET_SEPARATOR in field_value:  # offset present in response
+                unix_time_stamp = float(field_value.split(TIMESTAMP_OFFSET_SEPARATOR)[0])
+                time_zone_time_stamp_suffix = field_value.split(TIMESTAMP_OFFSET_SEPARATOR)[1]
+                offset_hours = convert_time_zone_time_stamp_suffix_to_offset_hours(time_zone_time_stamp_suffix)
 
-                utc_date = datetime.fromtimestamp(unix_time_stamp, pytz.timezone("UTC"))
-                return convert_utc_to_time_zone(utc_date, offset_hours)
+            else:
+                unix_time_stamp = float(field_value)
+                offset_hours = local_time_zone_offset_hours if local_time_zone_offset_hours is not None else 0
 
-            if airbyte_format == 'date':
-                ts = int(field_value)
-                unix_epoch = datetime(year=1970, month=1, day=1)
-                delta_days_offset = timedelta(days=ts)
-                dt = unix_epoch + delta_days_offset
-                return dt.strftime("%Y-%m-%d")
+            utc_date = datetime.fromtimestamp(unix_time_stamp, pytz.timezone("UTC"))
+            return convert_utc_to_time_zone(utc_date, offset_hours)
 
-            if airbyte_format == 'date-time' and airbyte_type == 'timestamp_without_timezone':
-                ts = float(field_value)
-                unix_epoch = datetime(year=1970, month=1, day=1)
-                delta_seconds_offset = timedelta(seconds=ts)
-                dt = unix_epoch + delta_seconds_offset
-                return dt.strftime('%Y-%m-%dT%H:%M:%S.%f')
+        if airbyte_format == 'date':
+            ts = int(field_value)
+            unix_epoch = datetime(year=1970, month=1, day=1)
+            delta_days_offset = timedelta(days=ts)
+            dt = unix_epoch + delta_days_offset
+            return dt.strftime("%Y-%m-%d")
 
-            if airbyte_format == 'time' and airbyte_type == 'time_without_timezone':
-                ts = float(field_value)
-                unix_epoch = datetime(year=1970, month=1, day=1)
-                delta_seconds_offset = timedelta(seconds=ts)
-                dt = unix_epoch + delta_seconds_offset
-                return dt.strftime("%H:%M:%S")
+        if airbyte_format == 'date-time' and airbyte_type == 'timestamp_without_timezone':
+            ts = float(field_value)
+            unix_epoch = datetime(year=1970, month=1, day=1)
+            delta_seconds_offset = timedelta(seconds=ts)
+            dt = unix_epoch + delta_seconds_offset
+            return dt.strftime('%Y-%m-%dT%H:%M:%S.%f')
 
-        except ValueError:
-            # maybe add warning
-            return field_value
+        if airbyte_format == 'time' and airbyte_type == 'time_without_timezone':
+            ts = float(field_value)
+            unix_epoch = datetime(year=1970, month=1, day=1)
+            delta_seconds_offset = timedelta(seconds=ts)
+            dt = unix_epoch + delta_seconds_offset
+            return dt.strftime("%H:%M:%S")
+
 
     if field_type.upper() in ('INT', 'INTEGER', 'BIGINT', 'SMALLINT', 'TINYINT', 'BYTEINT') and field_value:
         return int(str(field_value))
