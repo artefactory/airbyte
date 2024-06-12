@@ -200,7 +200,7 @@ def format_field(field_value, field_type, local_time_zone_offset_hours=None):
 
 
     if field_type.upper() in ('INT', 'INTEGER', 'BIGINT', 'SMALLINT', 'TINYINT', 'BYTEINT') and field_value:
-        return int(str(field_value))
+        return int(field_value)
 
     if (field_type.upper() in ('NUMBER', 'DECIMAL', 'NUMERIC', 'FLOAT', 'FLOAT4', 'FLOAT8', 'DOUBLE', 'DOUBLE PRECISION', 'REAL', 'FIXED')
             and field_value):
