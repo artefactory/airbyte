@@ -134,9 +134,6 @@ class SourceBigquery(ConcurrentSourceAdapter):
                         message=error_msg,
                     )
             return False, error_msg
-        except Exception as error:
-            error_msg = f"An error occurred: {error}"
-            return False, error_msg
         return True, None
     
     def streams(self, config: Mapping[str, Any]) -> List[Stream]:
