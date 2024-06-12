@@ -711,6 +711,7 @@ class IncrementalQueryResult(BigqueryResultStream):
         self.parent_stream = dataset_id + "." + table_id
         self.given_name = given_name
         self.where_clause = where_clause.replace("\"", "'")
+        self._json_schema = {}
         super().__init__(project_id, self.path(), self.parent_stream, self.get_json_schema, **kwargs)
         self.stream_obj = BigqueryIncrementalStream(project_id, dataset_id, table_id, self.path(), self.get_json_schema, \
                                                     fallback_start=fallback_start, given_name=given_name, where_clause=where_clause,\
@@ -741,9 +742,10 @@ class IncrementalQueryResult(BigqueryResultStream):
         return True
 
     def get_json_schema(self) -> Mapping[str, Any]:
-        for table in self.read_records(sync_mode=SyncMode.full_refresh):
-            return SchemaHelpers.get_json_schema(table)
-        return {}
+        if not self._json_schema:
+            for table in self.read_records(sync_mode=SyncMode.full_refresh):
+                self._json_schema = SchemaHelpers.get_json_schema(table)
+        return self._json_schema
 
     def request_body_json(
         self,
@@ -1007,6 +1009,7 @@ class TableChangeHistory(BigqueryResultStream):
         self.dataset_id = dataset_id
         self.table_id = table_id
         self.where_clause = where_clause.replace("\"", "'")
+        self._json_schema = {}
         super().__init__(project_id, self.path(), self.table_qualifier, self.project_id, self.get_json_schema, retry_policy=self.should_retry, **kwargs)
         self.stream_obj = BigqueryCDCStream(project_id, dataset_id, table_id, self.path(), self.get_json_schema, \
                                             given_name, where_clause, fallback_start=fallback_start, slice_range=slice_range, **kwargs)
@@ -1024,9 +1027,10 @@ class TableChangeHistory(BigqueryResultStream):
         return self.stream_obj
 
     def get_json_schema(self) -> Mapping[str, Any]:
-        for table in self.read_records(sync_mode=SyncMode.full_refresh):
-            return SchemaHelpers.get_json_schema(table)
-        return {}
+        if not self._json_schema:
+            for table in self.read_records(sync_mode=SyncMode.full_refresh):
+                self._json_schema = SchemaHelpers.get_json_schema(table)
+        return self._json_schema
 
     def request_body_json(
         self,
