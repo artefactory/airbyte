@@ -607,7 +607,7 @@ class BigqueryIncrementalStream(BigqueryResultStream, IncrementalMixin):
         if stream_state:
             self._cursor = list(stream_state.values())[0]
             if self._cursor:
-                default_start = parser.parse(self._cursor) - timedelta(minutes=self.slice_range) #slice range is equal to loopback window
+                default_start = parser.parse(self._cursor) - timedelta(seconds=30) # loopback window
         if self.cursor_field and sync_mode == SyncMode.incremental:
             start_time, end_time = self._extract_borders()
             if start_time and end_time:
@@ -927,7 +927,7 @@ class BigqueryCDCStream(BigqueryResultStream, IncrementalMixin):
         default_start = self.fallback_start
         if stream_state:
             self._cursor = stream_state.get(self.cursor_field)
-            default_start =  datetime.strptime(self._cursor, '%Y-%m-%dT%H:%M:%S.%f%z') - timedelta(minutes=self.slice_range)
+            default_start =  datetime.strptime(self._cursor, '%Y-%m-%dT%H:%M:%S.%f%z') - timedelta(seconds=30)
         if end_time and default_start <= end_time:
             for start, end in self._chunk_dates(default_start, end_time, start_time):
                 yield {
