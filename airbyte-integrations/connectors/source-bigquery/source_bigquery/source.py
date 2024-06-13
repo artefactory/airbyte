@@ -215,16 +215,16 @@ class SourceBigquery(ConcurrentSourceAdapter):
     ) -> Stream:
         if not self.catalog:
             return stream
+        state = state_manager.get_stream_state(stream.name, stream.namespace)
+        state = self._format_state(state)
         if stream.configured_sync_mode==SyncMode.full_refresh or not stream.cursor_field:
             return StreamFacade.create_from_stream(
                 stream,
                 self,
                 self.logger,
-                self._create_empty_state(),
+                state,
                 FinalStateCursor(stream_name=stream.name, stream_namespace=stream.namespace, message_repository=self.message_repository),
             )
-        state = state_manager.get_stream_state(stream.name, stream.namespace)
-        state = self._format_state(state)
 
         slice_boundary_fields = self._SLICE_BOUNDARY_FIELDS_BY_IMPLEMENTATION.get(type(stream))
         if slice_boundary_fields:
