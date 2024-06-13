@@ -1,0 +1,58 @@
+{
+  "kind": "bigquery#queryResponse",
+  "schema": {
+    "fields": [
+      {
+        "name": "id",
+        "type": "STRING"
+      },
+      {
+        "name": "name",
+        "type": "STRING"
+      },
+      {
+        "name": "age",
+        "type": "INTEGER"
+      }
+    ]
+  },
+  "jobReference": {
+    "projectId": "my_project",
+    "jobId": "job_123456789"
+  },
+  "totalRows": "1",
+  "rows": [
+    {
+      "f": [
+        {
+          "v": "1"
+        },
+        {
+          "v": "Alice"
+        },
+        {
+          "v": "30"
+        }
+      ]
+    }
+  ],
+  "totalBytesProcessed": "1024",
+  "jobComplete": true,
+  "errors": [
+    {
+      "reason": "invalidQuery",
+      "location": "query",
+      "message": "Syntax error in SQL query"
+    }
+  ],
+  "cacheHit": false,
+  "numDmlAffectedRows": "2",
+  "sessionInfo": {
+    "sessionId": "session_789"
+  },
+  "dmlStats": {
+    "insertedRowCount": "2",
+    "deletedRowCount": "0",
+    "updatedRowCount": "0"
+  }
+}
