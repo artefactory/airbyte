@@ -18,10 +18,10 @@ from datetime import datetime, timedelta
 from airbyte_cdk.sources import AbstractSource
 from airbyte_cdk.sources.streams import Stream
 from airbyte_cdk.sources.streams.http import HttpStream, HttpSubStream
-from airbyte_cdk.sources.streams.http.auth import TokenAuthenticator
+from airbyte_cdk.sources.streams.http.requests_native_auth import TokenAuthenticator
 from airbyte_protocol.models import SyncMode, Type
 from airbyte_cdk.models import AirbyteCatalog, AirbyteMessage, AirbyteStateMessage, ConfiguredAirbyteCatalog, Level, ConfiguredAirbyteStream
-from airbyte_cdk.logger import AirbyteLogger, AirbyteLogFormatter
+from airbyte_cdk.logger import AirbyteLogFormatter
 from airbyte_cdk.utils.traced_exception import AirbyteTracedException, FailureType
 from airbyte_cdk.sources.concurrent_source.concurrent_source_adapter import ConcurrentSourceAdapter
 from airbyte_cdk.sources.concurrent_source.concurrent_source import ConcurrentSource
@@ -168,6 +168,7 @@ class SourceBigquery(ConcurrentSourceAdapter):
                     self._get_tables(project_id, dataset_id, table_id, sync_method, slice_range)
 
         self._set_cursor_field()
+        self._set_sync_mode()
         state_manager = ConnectorStateManager(stream_instance_map={stream.name: stream for stream in self._concurrent_streams}, state=self.state)
         return [
             self._to_concurrent(
@@ -185,6 +186,13 @@ class SourceBigquery(ConcurrentSourceAdapter):
                 for configured_stream in self.catalog.streams:
                     if configured_stream.stream.name == stream.name and configured_stream.cursor_field:
                         stream.cursor_field = configured_stream.cursor_field[0]
+
+    def _set_sync_mode(self):
+        for stream in self._concurrent_streams:
+            if not stream.configured_sync_mode and self.catalog:
+                for configured_stream in self.catalog.streams:
+                    if configured_stream.stream.name == stream.name and configured_stream.sync_mode:
+                        stream.configured_sync_mode = configured_stream.sync_mode
 
     def _get_tables(self, project_id, dataset_id, table_id, sync_method, slice_range, stream_name=None, where_clause=""):
         # list and process each table under each base to generate the JSON Schema
@@ -205,10 +213,9 @@ class SourceBigquery(ConcurrentSourceAdapter):
     def _to_concurrent(
         self, stream: Stream, fallback_start: datetime, slice_range: timedelta, state_manager: ConnectorStateManager
     ) -> Stream:
-        if not stream.cursor_field:
+        if not self.catalog:
             return stream
-
-        if self._stream_state_is_full_refresh(stream.state) or not stream.cursor_field:
+        if stream.configured_sync_mode==SyncMode.full_refresh or not stream.cursor_field:
             return StreamFacade.create_from_stream(
                 stream,
                 self,

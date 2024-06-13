@@ -16,10 +16,8 @@ from airbyte_cdk.sources import AbstractSource
 from airbyte_cdk.sources.streams import Stream, IncrementalMixin
 from airbyte_cdk.sources.streams.core import Stream, StreamData
 from airbyte_cdk.sources.streams.http import HttpStream, HttpSubStream
-from airbyte_cdk.sources.streams.http.auth import TokenAuthenticator
 from airbyte_protocol.models import SyncMode, Type
 from airbyte_cdk.models import AirbyteCatalog, AirbyteMessage, AirbyteStateMessage, ConfiguredAirbyteCatalog, AirbyteStateType, AirbyteStreamState, StreamDescriptor, AirbyteStateBlob
-from airbyte_cdk.logger import AirbyteLogger
 from airbyte_cdk.utils.traced_exception import AirbyteTracedException, FailureType
 from airbyte_cdk.sources.streams.concurrent.cursor import Cursor
 from .schema_helpers import SchemaHelpers
@@ -375,8 +373,9 @@ class CHTableQueryRecord(BigqueryResultStream):
             fields = record.get("schema")["fields"]
             row = record["rows"][0]
             data = row.get("f")
-        except TypeError as e:
+        except (KeyError, TypeError) as e:
             self.logger.warning(f"Table has no rows")
+            yield {}
         else:
             self.data =  {
                 "_bigquery_table_id": record.get("jobReference")["jobId"],
@@ -480,6 +479,7 @@ class BigqueryIncrementalStream(BigqueryResultStream, IncrementalMixin):
         self.start_time = None
         self.end_time = None
         self._is_primary_key_set = False
+        self.configured_sync_mode = None
 
     @property
     def namespace(self):
@@ -684,6 +684,7 @@ class BigqueryIncrementalStream(BigqueryResultStream, IncrementalMixin):
                 }
                 self._updated_state(self.state, formated_data)
                 yield formated_data
+
     
     def should_retry(self, response: requests.Response) -> bool:
         """
@@ -811,6 +812,7 @@ class BigqueryCDCStream(BigqueryResultStream, IncrementalMixin):
         self.slice_range = slice_range
         self.start_time = None
         self.end_time = None
+        self.configured_sync_mode = None
         # self._stream_slicer_cursor = None
 
     @property

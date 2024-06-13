@@ -2,22 +2,22 @@
 
 [[package]]
 name = "airbyte-cdk"
-version = "0.83.1"
+version = "1.3.3"
 description = "A framework for writing Airbyte Connectors."
 optional = false
 python-versions = "<4.0,>=3.9"
 files = [
-    {file = "airbyte_cdk-0.83.1-py3-none-any.whl", hash = "sha256:c1e1b5b24ce145575b5605179ff8e4c9fc8ae34e30f35a466846ffbba54b858a"},
-    {file = "airbyte_cdk-0.83.1.tar.gz", hash = "sha256:73342874ebb99791afa5da1e6b5ff9decd226644a2fd6cbffa5934819c2de0c5"},
+    {file = "airbyte_cdk-1.3.3-py3-none-any.whl", hash = "sha256:c3bf5832928cda6ddafaabe61950cb1a7ed8e8cca23c5d62b21c654586d4efd8"},
+    {file = "airbyte_cdk-1.3.3.tar.gz", hash = "sha256:daba6e3265bc9837c865a2fd3dd3061d1c064af3113a5eebcc194c387dc7074a"},
 ]
 
 [package.dependencies]
-airbyte-protocol-models = "*"
+airbyte-protocol-models = ">=0.9.0,<1.0"
 backoff = "*"
 cachetools = "*"
 cryptography = ">=42.0.5,<43.0.0"
 Deprecated = ">=1.2,<1.3"
-dpath = ">=2.0.1,<2.1.0"
+dpath = ">=2.1.6,<3.0.0"
 genson = "1.2.2"
 isodate = ">=0.6.1,<0.7.0"
 Jinja2 = ">=3.1.2,<3.2.0"
@@ -29,6 +29,7 @@ pydantic = ">=1.10.8,<2.0.0"
 pyjwt = ">=2.8.0,<3.0.0"
 pyrate-limiter = ">=3.1.0,<3.2.0"
 python-dateutil = "*"
+pytz = "2024.1"
 PyYAML = ">=6.0.1,<7.0.0"
 requests = "*"
 requests_cache = "*"
@@ -388,13 +389,13 @@ dev = ["PyTest", "PyTest-Cov", "bump2version (<1)", "sphinx (<2)", "tox"]
 
 [[package]]
 name = "dpath"
-version = "2.0.8"
+version = "2.2.0"
 description = "Filesystem-like pathing and searching for dictionaries"
 optional = false
 python-versions = ">=3.7"
 files = [
-    {file = "dpath-2.0.8-py3-none-any.whl", hash = "sha256:f92f595214dd93a00558d75d4b858beee519f4cffca87f02616ad6cd013f3436"},
-    {file = "dpath-2.0.8.tar.gz", hash = "sha256:a3440157ebe80d0a3ad794f1b61c571bef125214800ffdb9afc9424e8250fe9b"},
+    {file = "dpath-2.2.0-py3-none-any.whl", hash = "sha256:b330a375ded0a0d2ed404440f6c6a715deae5313af40bbb01c8a41d891900576"},
+    {file = "dpath-2.2.0.tar.gz", hash = "sha256:34f7e630dc55ea3f219e555726f5da4b4b25f2200319c8e6902c394258dd6a3e"},
 ]
 
 [[package]]
@@ -1527,4 +1528,4 @@ files = [
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.9,<3.12"
-content-hash = "3de4f3ca7f76be538f7df2dbd1d55cc69f2e626afdbb32e2c48fd44d559e1545"
+content-hash = "ce4f84cd9399b958ad25642199eab04ece7050105c7f661e5430cb781e2ff620"
