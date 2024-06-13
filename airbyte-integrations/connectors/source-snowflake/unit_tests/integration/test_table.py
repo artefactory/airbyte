@@ -955,7 +955,6 @@ class UnrecognizedTypeTest(TestCase):
         _given_get_timezone(http_mocker)
         _given_table_catalog(http_mocker)
 
-        # Mocking type of TEST_COLUMN_1 in metadata to mock catalog with wrong data
         http_mocker.post(
             table_request()
             .with_table(_TABLE)
