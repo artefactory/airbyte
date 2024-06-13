@@ -1,3 +1,4 @@
+from datetime import datetime
 from typing import Optional, List
 from unittest import TestCase, mock
 
@@ -212,6 +213,168 @@ class IncrementalPushDownFilterTest(TestCase):
         assert len(output.records) == 3
         assert most_recent_state.stream_descriptor == StreamDescriptor(name=self.stream_name)
         assert most_recent_state.stream_state == AirbyteStateBlob(ID=expected_cursor_value)
+
+    @mock.patch("source_snowflake.streams.snowflake_parent_stream.uuid.uuid4", return_value=_REQUESTID)
+    @mock.patch("source_snowflake.source.SnowflakeJwtAuthenticator")
+    @HttpMocker()
+    def test_incremental_without_initial_state_with_date_cursor(self, uuid_mock, mock_auth, http_mocker: HttpMocker) -> None:
+        _given_get_timezone(http_mocker)
+        _given_read_schema(http_mocker)
+        _given_table_catalog(http_mocker)
+        _given_table_with_primary_keys(http_mocker)
+
+        cursor_field = "TEST_COLUMN_20"
+        id_index = 12
+        most_recent_cursor = datetime(1970, 1, 4)
+        expected_cursor_value = most_recent_cursor.strftime("%Y-%m-%d")
+        most_recent_cursor_value_in_record = str((most_recent_cursor - datetime(1970, 1, 1)).days)
+        cursor_path = JsonPath(f"$.[{id_index}]")
+
+
+        http_mocker.post(
+            table_request()
+            .with_table(_TABLE)
+            .with_requestID(_REQUESTID)
+            .with_async()
+            .with_cursor_field(cursor_field)
+            .with_where_statement(self.where_clause)
+            .build(),
+            snowflake_response("async_response", FieldPath("statementStatusUrl"))
+            .with_handle(_HANDLE)
+            .build()
+        )
+
+        http_mocker.get(
+            table_request()
+            .with_handle(_HANDLE)
+            .build(is_get=True),
+            snowflake_response("response_get_table")
+            .with_record(self._a_record(cursor_path).with_cursor("1"))
+            .with_record(self._a_record(cursor_path).with_cursor("2"))
+            .with_record(self._a_record(cursor_path).with_cursor(most_recent_cursor_value_in_record))
+            .build()
+        )
+
+        stream_builder = (SnowflakeStreamBuilder()
+                          .with_name(self.stream_name)
+                          .with_cursor_field([cursor_field])
+                          .with_sync_mode(self.sync_mode))
+
+        catalog = CatalogBuilder().with_stream(stream_builder).build()
+
+        output = self._read(self.config_builder, catalog)
+        most_recent_state = output.most_recent_state
+
+        assert len(output.records) == 3
+        assert most_recent_state.stream_descriptor == StreamDescriptor(name=self.stream_name)
+        assert most_recent_state.stream_state == AirbyteStateBlob(TEST_COLUMN_20=expected_cursor_value)
+    @mock.patch("source_snowflake.streams.snowflake_parent_stream.uuid.uuid4", return_value=_REQUESTID)
+    @mock.patch("source_snowflake.source.SnowflakeJwtAuthenticator")
+    @HttpMocker()
+    def test_incremental_without_initial_state_with_timestamp_time_zone_cursor(self, uuid_mock, mock_auth, http_mocker: HttpMocker) -> None:
+        _given_get_timezone(http_mocker)
+        _given_read_schema(http_mocker)
+        _given_table_catalog(http_mocker)
+        _given_table_with_primary_keys(http_mocker)
+
+        cursor_field = "TEST_COLUMN_26"
+        id_index = 18
+        expected_cursor_value = "2018-03-22T12:00:01.123001+05:00"
+        cursor_path = JsonPath(f"$.[{id_index}]")
+
+        http_mocker.post(
+            table_request()
+            .with_table(_TABLE)
+            .with_requestID(_REQUESTID)
+            .with_async()
+            .with_cursor_field(cursor_field)
+            .with_where_statement(self.where_clause)
+            .build(),
+            snowflake_response("async_response", FieldPath("statementStatusUrl"))
+            .with_handle(_HANDLE)
+            .build()
+        )
+
+        http_mocker.get(
+            table_request()
+            .with_handle(_HANDLE)
+            .build(is_get=True),
+            snowflake_response("response_get_table")
+            .with_record(self._a_record(cursor_path).with_cursor("1"))
+            .with_record(self._a_record(cursor_path).with_cursor("2"))
+            .with_record(self._a_record(cursor_path).with_cursor(expected_cursor_value))
+            .build()
+        )
+
+        stream_builder = (SnowflakeStreamBuilder()
+                          .with_name(self.stream_name)
+                          .with_cursor_field([cursor_field])
+                          .with_sync_mode(self.sync_mode))
+
+        catalog = CatalogBuilder().with_stream(stream_builder).build()
+
+        output = self._read(self.config_builder, catalog)
+        most_recent_state = output.most_recent_state
+
+        assert len(output.records) == 3
+        assert most_recent_state.stream_descriptor == StreamDescriptor(name=self.stream_name)
+        assert most_recent_state.stream_state == AirbyteStateBlob(TEST_COLUMN_26=expected_cursor_value)
+
+
+    @mock.patch("source_snowflake.streams.snowflake_parent_stream.uuid.uuid4", return_value=_REQUESTID)
+    @mock.patch("source_snowflake.source.SnowflakeJwtAuthenticator")
+    @HttpMocker()
+    def test_incremental_without_initial_state_with_string_cursor(self, uuid_mock, mock_auth, http_mocker: HttpMocker) -> None:
+        _given_get_timezone(http_mocker)
+        _given_read_schema(http_mocker)
+        _given_table_catalog(http_mocker)
+        _given_table_with_primary_keys(http_mocker)
+
+        cursor_field = "TEST_COLUMN_14"
+        id_index = 5
+        expected_cursor_value = "b"
+        cursor_path = JsonPath(f"$.[{id_index}]")
+
+        http_mocker.post(
+            table_request()
+            .with_table(_TABLE)
+            .with_requestID(_REQUESTID)
+            .with_async()
+            .with_cursor_field(cursor_field)
+            .with_where_statement(self.where_clause)
+            .build(),
+            snowflake_response("async_response", FieldPath("statementStatusUrl"))
+            .with_handle(_HANDLE)
+            .build()
+        )
+
+        http_mocker.get(
+            table_request()
+            .with_handle(_HANDLE)
+            .build(is_get=True),
+            snowflake_response("response_get_table")
+            .with_record(self._a_record(cursor_path).with_cursor("aaaaaaa"))
+            .with_record(self._a_record(cursor_path).with_cursor("aaaaaa154"))
+            .with_record(self._a_record(cursor_path).with_cursor(expected_cursor_value))
+            .build()
+        )
+
+        stream_builder = (SnowflakeStreamBuilder()
+                          .with_name(self.stream_name)
+                          .with_cursor_field([cursor_field])
+                          .with_sync_mode(self.sync_mode))
+
+        catalog = CatalogBuilder().with_stream(stream_builder).build()
+
+        output = self._read(self.config_builder, catalog)
+        most_recent_state = output.most_recent_state
+
+        assert len(output.records) == 3
+        assert most_recent_state.stream_descriptor == StreamDescriptor(name=self.stream_name)
+        assert most_recent_state.stream_state == AirbyteStateBlob(TEST_COLUMN_14=expected_cursor_value)
+
+
+
 
     @classmethod
     def _read(cls,
