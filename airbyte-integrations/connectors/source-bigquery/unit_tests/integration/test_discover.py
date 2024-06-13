@@ -7,7 +7,7 @@ from unittest import TestCase
 import freezegun
 from airbyte_cdk.sources.source import TState
 from airbyte_cdk.test.catalog_builder import CatalogBuilder
-from airbyte_cdk.test.entrypoint_wrapper import EntrypointOutput
+from airbyte_cdk.test.entrypoint_wrapper import EntrypointOutput, discover
 from airbyte_cdk.test.mock_http import HttpMocker, HttpResponse
 from airbyte_cdk.test.mock_http.response_builder import (
     FieldPath,
@@ -19,7 +19,7 @@ from airbyte_cdk.test.mock_http.response_builder import (
 )
 from airbyte_cdk.test.state_builder import StateBuilder
 from airbyte_protocol.models import AirbyteStateBlob, AirbyteStreamState, ConfiguredAirbyteCatalog, FailureType, StreamDescriptor, SyncMode
-from integration.utils import discover
+# from integration.utils import discover
 from integration.config import ConfigBuilder
 from integration.request_builder import BigqueryRequestBuilder
 from integration.response_builder import BigqueryResponseBuilder
@@ -64,7 +64,7 @@ class DiscoverTest(TestCase):
                 http_mocker.post(
                     BigqueryRequestBuilder.queries_endpoint(project_id=config["project_id"]).with_body({
                         "kind": "bigquery#queryRequest",
-                        "query": f"select * from `{dataset_id}.{table_id}`",
+                        "query": f"SELECT * FROM `{dataset_id}.{table_id}`",
                         "useLegacySql": False,
                         "dryRun": True,
                     }).build(),
