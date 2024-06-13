@@ -60,7 +60,7 @@ class BigqueryStream(HttpStream, ABC):
         return self.stream_name
 
     def get_json_schema(self) -> Mapping[str, Any]:
-        return self.stream_schema()
+        return {}
 
     def next_page_token(self, response: requests.Response, **kwargs) -> Optional[Mapping[str, Any]]:
         return None
@@ -139,6 +139,34 @@ class BigqueryDatasets(BigqueryStream):
                             message="Provided credentials do not give access to any datasets or project has no datasets",
                         )
 
+
+class BigqueryDataset(BigqueryStream):
+    """
+    """
+    name = "dataset"
+
+    def __init__(self, project_id: str, dataset_id: str, **kwargs):
+        self.project_id = project_id
+        self.dataset_id = dataset_id
+        super().__init__(self.path(), self.name, self.get_json_schema(), **kwargs)
+
+    def path(self, **kwargs) -> str:
+        """
+        Documentation: https://cloud.google.com/bigquery/docs/reference/rest/v2/datasets/get
+        """
+        return f"/bigquery/v2/projects/{self.project_id}/datasets/{self.dataset_id}"
+
+    def get_json_schema(self) -> Mapping[str, Any]:
+        return {}
+    
+    def parse_response(self, response: requests.Response, **kwargs) -> Iterable[Mapping]:
+        """
+
+        :return an iterable containing each record in the response
+        """
+        record = response.json()
+        yield record
+        
 
 class BigqueryTables(BigqueryDatasets):
     name = "tables"
@@ -1013,6 +1041,7 @@ class TableChangeHistory(BigqueryResultStream):
         self.table_id = table_id
         self.where_clause = where_clause.replace("\"", "'")
         self._json_schema = {}
+        self.fallback_start = fallback_start
         super().__init__(project_id, self.path(), self.table_qualifier, self.project_id, self.get_json_schema, retry_policy=self.should_retry, **kwargs)
         self.stream_obj = BigqueryCDCStream(project_id, dataset_id, table_id, self.path(), self.get_json_schema, \
                                             given_name, where_clause, fallback_start=fallback_start, slice_range=slice_range, **kwargs)
@@ -1041,9 +1070,9 @@ class TableChangeHistory(BigqueryResultStream):
         stream_slice: Optional[Mapping[str, Any]] = None,
         next_page_token: Optional[Mapping[str, Any]] = None,
     ) -> Optional[Mapping[str, Any]]:
-        query_string = f"SELECT * FROM APPENDS(TABLE `{self.table_qualifier}`,NULL,NULL)"
+        query_string = f"SELECT * FROM APPENDS(TABLE `{self.table_qualifier}`,'{self.fallback_start}',NULL)"
         if self.where_clause:
-            query_string = f"SELECT * FROM APPENDS(TABLE `{self.table_qualifier}`,NULL,NULL) WHERE {self.where_clause}"
+            query_string = f"SELECT * FROM APPENDS(TABLE `{self.table_qualifier}`,'{self.fallback_start}',NULL) WHERE {self.where_clause}"
         request_body = {
             "kind": "bigquery#queryRequest",
             "query": query_string,

@@ -33,8 +33,7 @@ from airbyte_cdk.sources.streams.concurrent.cursor import ConcurrentCursor, Curs
 from airbyte_cdk.sources.streams.concurrent.state_converters.datetime_stream_state_converter import EpochValueConcurrentStreamStateConverter, IsoMillisConcurrentStreamStateConverter
 
 from .auth import BigqueryAuth
-from .streams import BigqueryDatasets, BigqueryTables, BigqueryStream, BigqueryTable, BigqueryTableData, BigqueryIncrementalStream, IncrementalQueryResult, TableChangeHistory, BigqueryCDCStream
-from .schema_helpers import SchemaHelpers
+from .streams import BigqueryDatasets, BigqueryTables, BigqueryDataset, BigqueryTable, BigqueryTableData, BigqueryIncrementalStream, IncrementalQueryResult, TableChangeHistory, BigqueryCDCStream
 
 """
 This file provides a stubbed example of how to use the Airbyte CDK to develop both a source connector which supports full refresh or and an
@@ -159,13 +158,13 @@ class SourceBigquery(ConcurrentSourceAdapter):
         if dataset_id:
             for table_info in BigqueryTables(dataset_id=dataset_id, project_id=project_id, authenticator=self._auth).read_records(sync_mode=SyncMode.full_refresh):
                 table_id = table_info.get("tableReference")["tableId"]
-                self._get_tables(project_id, dataset_id, table_id, sync_method, slice_range)
+                self._get_tables(project_id, dataset_id, table_id, sync_method, slice_range, table_info)
         else:
             for dataset in BigqueryDatasets(project_id=project_id, authenticator=self._auth).read_records(sync_mode=SyncMode.full_refresh):
                 dataset_id = dataset.get("datasetReference")["datasetId"]
                 for table_info in BigqueryTables(dataset_id=dataset_id, project_id=project_id, authenticator=self._auth).read_records(sync_mode=SyncMode.full_refresh):
                     table_id = table_info.get("tableReference")["tableId"]
-                    self._get_tables(project_id, dataset_id, table_id, sync_method, slice_range)
+                    self._get_tables(project_id, dataset_id, table_id, sync_method, slice_range, table_info)
 
         self._set_cursor_field()
         self._set_sync_mode()
@@ -194,12 +193,19 @@ class SourceBigquery(ConcurrentSourceAdapter):
                     if configured_stream.stream.name == stream.name and configured_stream.sync_mode:
                         stream.configured_sync_mode = configured_stream.sync_mode
 
-    def _get_tables(self, project_id, dataset_id, table_id, sync_method, slice_range, stream_name=None, where_clause=""):
+    def _get_tables(self, project_id, dataset_id, table_id, sync_method, slice_range, table_info, stream_name=None, where_clause=""):
         # list and process each table under each base to generate the JSON Schema
         if sync_method == "Standard":
             table_obj = IncrementalQueryResult(project_id, dataset_id, table_id, given_name=stream_name, where_clause=where_clause, fallback_start=FALLBACK_START, slice_range=slice_range, authenticator=self._auth)
         else:
-            table_obj = TableChangeHistory(project_id, dataset_id, table_id, given_name=stream_name, where_clause=where_clause, fallback_start=CHANGE_HISTORY_START, slice_range=slice_range, authenticator=self._auth)
+            table_creation_datetime = pendulum.from_timestamp(float(table_info["creationTime"])/1000.0) # timestamps returned are in milliseconds hence the /1000
+            dataset = next(BigqueryDataset(project_id, dataset_id, authenticator=self._auth).read_records(sync_mode=SyncMode.full_refresh))
+            max_time_travel_hours = float(dataset.get("maxTimeTravelHours", 168))
+            max_time_travel_datetime =  datetime.now(tz=pytz.timezone("UTC")) - timedelta(hours=max_time_travel_hours) + timedelta(minutes=1)
+            if max_time_travel_datetime < table_creation_datetime:
+                max_time_travel_datetime = table_creation_datetime
+            table_obj = TableChangeHistory(project_id, dataset_id, table_id, given_name=stream_name, where_clause=where_clause, \
+                                           fallback_start=max_time_travel_datetime, slice_range=slice_range, authenticator=self._auth)
             try:
                 next(table_obj.read_records(sync_mode=SyncMode.full_refresh))
             except exceptions.HTTPError as error:
