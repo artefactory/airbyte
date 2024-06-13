@@ -1,4 +1,5 @@
 
+from ast import Raise
 import random
 from typing import Any, Dict, List, Optional
 from unittest import TestCase, mock
@@ -8,7 +9,7 @@ from airbyte_cdk.test.catalog_builder import CatalogBuilder
 from airbyte_cdk.test.entrypoint_wrapper import EntrypointOutput, read
 from inflection import parameterize
 from integration.response_builder import JsonPath, SnowflakeResponseBuilder, create_response_builder
-from airbyte_cdk.test.mock_http import HttpMocker
+from integration.mocker import HttpMocker
 from airbyte_cdk.test.mock_http.response_builder import (
     FieldPath,
     Path,
@@ -118,56 +119,58 @@ def _read(
     config = config_builder.build()
     return read(_source(catalog, config, state), config, catalog, state, expecting_exception)
 
-
+@mock.patch("source_snowflake.streams.snowflake_parent_stream.uuid.uuid4", return_value=_REQUESTID)
+@mock.patch("source_snowflake.source.SnowflakeJwtAuthenticator")
 class FullRefreshTest(TestCase):
+
+    def setUp(self) -> None:
+        self._http_mocker = HttpMocker()
+        self._http_mocker.__enter__()
+        _given_get_timezone(self._http_mocker)
+        _given_read_schema(self._http_mocker)
+        _given_table_catalog(self._http_mocker)
+        _given_table_with_primary_keys(self._http_mocker)
+    
+    def tearDown(self) -> None:
+        self._http_mocker.__exit__(None,None,None)
+
         
-
-
-    @mock.patch("source_snowflake.streams.snowflake_parent_stream.uuid.uuid4", return_value=_REQUESTID)
-    @mock.patch("source_snowflake.source.SnowflakeJwtAuthenticator")
-    @HttpMocker()
-    def test_given_one_page_when_read_then_return_records(self, uuid_mock, mock_auth,http_mocker) -> None:
-        _given_get_timezone(http_mocker)
-        _given_read_schema(http_mocker)
-        _given_table_catalog(http_mocker)
-        _given_table_with_primary_keys(http_mocker)
-        http_mocker.post(
+    def test_given_one_page_when_read_then_return_records(self, uuid_mock, mock_auth) -> None:
+        self._http_mocker.post(
             table_request().with_table(_TABLE).with_requestID(_REQUESTID).with_async().build(),
             snowflake_response("async_response", FieldPath("statementStatusUrl")).with_handle(_HANDLE).build()
         )
-        http_mocker.get(
+        self._http_mocker.get(
             table_request().with_handle(_HANDLE).build(is_get=True),
             snowflake_response("response_get_table", JsonPath("$.'data'"))
             .with_record( a_snowflake_response("response_get_table", JsonPath("$.'data'.[*]")))
             .build())
 
-        output = _read(_config(), sync_mode=SyncMode.full_refresh)
-        print(output.records)
 
-    @mock.patch("source_snowflake.streams.snowflake_parent_stream.uuid.uuid4", return_value=_REQUESTID)
-    @mock.patch("source_snowflake.source.SnowflakeJwtAuthenticator")
-    @HttpMocker()
-    def test_given_three_pages_read_then_return_records(self, uuid_mock, mock_auth, http_mocker: HttpMocker) -> None:
-        _given_get_timezone(http_mocker)
-        _given_read_schema(http_mocker)
-        _given_table_catalog(http_mocker)
-        _given_table_with_primary_keys(http_mocker)
-        http_mocker.post(
+        output = _read(_config(), sync_mode=SyncMode.full_refresh)
+
+    def test_given_three_pages_read_then_return_records(self, uuid_mock, mock_auth) -> None:
+        self._http_mocker.post(
             table_request().with_table(_TABLE).with_requestID(_REQUESTID).with_async().build(),
             snowflake_response("async_response", FieldPath("statementStatusUrl")).with_handle(_HANDLE).build()
         )
-        http_mocker.get(
+        self._http_mocker.get(
             table_request().with_handle(_HANDLE).build(is_get=True),
             snowflake_response("response_get_table", JsonPath("$.'data'")).with_record(
                 a_snowflake_response("response_get_table", JsonPath("$.'data'.[*]"))).with_pagination().build()
         )
-        http_mocker.get(
+        self._http_mocker.get(
             table_request().with_handle(_HANDLE).with_partition(1).build(is_get=True),
             snowflake_response("response_get_table", JsonPath("$.'data'")).with_record(
                 a_snowflake_response("response_get_table", JsonPath("$.'data'.[*]"))).with_pagination().build()
         )
-        http_mocker.get(
+        self._http_mocker.get(
             table_request().with_handle(_HANDLE).with_partition(2).build(is_get=True),
+            snowflake_response("response_get_table", JsonPath("$.'data'")).with_record(
+                a_snowflake_response("response_get_table", JsonPath("$.'data'.[*]"))).with_pagination().build()
+        )
+        self._http_mocker.get(
+            table_request().with_handle("123").with_partition(18).build(is_get=True),
             snowflake_response("response_get_table", JsonPath("$.'data'")).with_record(
                 a_snowflake_response("response_get_table", JsonPath("$.'data'.[*]"))).with_pagination().build()
         )
@@ -178,39 +181,32 @@ class FullRefreshTest(TestCase):
 
     @parameterized.expand(
             [
-                (["TEST_COLUMN_20"],12, 0,3 , "1970-01-04"),
-                (["TEST_COLUMN_21"], 13,30000, 300001, "1970-01-04T11:20:01.000000"),
-                (["TEST_COLUMN_2"], 11,3, 4, 4),
-                (["TEST_COLUMN_14"], 5,"aa", "ab", "ab")
+                (["TEST_COLUMN_20"],12,0,3,"1970-01-04"),
+                (["TEST_COLUMN_21"],13,30000, 300001, "1970-01-04T11:20:01.000000"),
+                (["TEST_COLUMN_2"],11,3,4,4),
+                (["TEST_COLUMN_14"],5,"aa","ab","ab")
             ],
     )
-    @mock.patch("source_snowflake.streams.snowflake_parent_stream.uuid.uuid4", return_value=_REQUESTID)
-    @mock.patch("source_snowflake.source.SnowflakeJwtAuthenticator")
-    @HttpMocker()
     def test_given_cursor_set_state(
         self,
+        mock_auth,
+        uuid_mock,
         cursor_field,
         cursor_index,
         value_first_record,
         value_second_record,
         expected_state_cursor_value,
-        uuid_mock, 
-        mock_auth,
-        http_mocker: HttpMocker,
+        
         ) -> None:
 
         def a_record():
             return a_snowflake_response("response_get_table",JsonPath("$.'data'[*]"), cursor_path=JsonPath(f"$.[{cursor_index}]"))
 
-        _given_get_timezone(http_mocker)
-        _given_read_schema(http_mocker)
-        _given_table_catalog(http_mocker)
-        _given_table_with_primary_keys(http_mocker)
-        http_mocker.post(
+        self._http_mocker.post(
             table_request().with_table(_TABLE).with_requestID(_REQUESTID).with_async().with_order_by(cursor_field).build(),
             snowflake_response("async_response",FieldPath("statementStatusUrl")).with_handle(_HANDLE).build()
         )
-        http_mocker.get(
+        self._http_mocker.get(
             table_request().with_handle(_HANDLE).build(is_get=True),
             snowflake_response("response_get_table",JsonPath("$.'data'"))
              .with_record(
@@ -233,15 +229,8 @@ class FullRefreshTest(TestCase):
             ],
     )
     @mock.patch("source_snowflake.streams.snowflake_parent_stream.SnowflakeStream.retry_factor", return_value=0, new_callable=mock.PropertyMock)
-    @mock.patch("source_snowflake.streams.snowflake_parent_stream.uuid.uuid4", return_value=_REQUESTID)
-    @mock.patch("source_snowflake.source.SnowflakeJwtAuthenticator")
-    @HttpMocker()
-    def test_retry_on_post_error(self, error_code, property_mock, uuid_mock, mock_auth, http_mocker: HttpMocker) -> None:
-        _given_get_timezone(http_mocker)
-        _given_read_schema(http_mocker)
-        _given_table_catalog(http_mocker)
-        _given_table_with_primary_keys(http_mocker)
-        http_mocker.post(
+    def test_retry_on_post_error(self,error_code,property_mock, mock_auth, uuid_mock ) -> None:
+        self._http_mocker.post(
             table_request().with_table(_TABLE).with_requestID(_REQUESTID).with_async().build(),
             [
             snowflake_response("async_response",FieldPath("statementStatusUrl"))
@@ -253,7 +242,7 @@ class FullRefreshTest(TestCase):
             .build()
             ]
         )
-        http_mocker.get(
+        self._http_mocker.get(
             table_request().with_handle(_HANDLE).build(is_get=True),
             snowflake_response("response_get_table",JsonPath("$.'data'")).with_record(a_snowflake_response("response_get_table",JsonPath("$.'data'[*]"))).build()
         )
@@ -271,23 +260,9 @@ class FullRefreshTest(TestCase):
             ],
     )
     @mock.patch("source_snowflake.streams.snowflake_parent_stream.SnowflakeStream.retry_factor", return_value=0, new_callable=mock.PropertyMock)
-    @mock.patch("source_snowflake.streams.snowflake_parent_stream.uuid.uuid4", return_value=_REQUESTID)
-    @mock.patch("source_snowflake.source.SnowflakeJwtAuthenticator")
-    @HttpMocker()
     def test_retry_on_get_error(
-        self, 
-        error_code, 
-        property_mock, 
-        uuid_mock, 
-        mock_auth, 
-        http_mocker: 
-        HttpMocker) -> None:
-        _given_get_timezone(http_mocker)
-        _given_read_schema(http_mocker)
-        _given_table_catalog(http_mocker)
-        _given_table_with_primary_keys(http_mocker)
-
-        http_mocker.post(
+        self,error_code,property_mock, mock_auth, uuid_mock ) -> None:
+        self._http_mocker.post(
             table_request()
             .with_table(_TABLE)
             .with_requestID(_REQUESTID)
@@ -297,9 +272,21 @@ class FullRefreshTest(TestCase):
             .with_handle(_HANDLE)
             .build()
         )
-        http_mocker.get(
+        self._http_mocker.get(
             table_request()
             .with_handle(_HANDLE)
+            .build(is_get=True),
+            [
+            snowflake_response("response_get_table",JsonPath("$.'data'"))
+            .with_record(a_snowflake_response("response_get_table",JsonPath("$.'data'[*]")))
+            .with_status_code(error_code).build(),
+            snowflake_response("response_get_table",JsonPath("$.'data'"))
+            .with_record(a_snowflake_response("response_get_table",JsonPath("$.'data'[*]"))).build(),
+            ]
+        )
+        self._http_mocker.get(
+            table_request()
+            .with_handle("123")
             .build(is_get=True),
             [
             snowflake_response("response_get_table",JsonPath("$.'data'"))
@@ -323,23 +310,15 @@ class FullRefreshTest(TestCase):
     )
     @mock.patch("source_snowflake.streams.snowflake_parent_stream.SnowflakeStream.retry_factor", return_value=0, new_callable=mock.PropertyMock)
     @mock.patch("source_snowflake.streams.snowflake_parent_stream.SnowflakeStream.max_retries", return_value=0, new_callable=mock.PropertyMock)
-    @mock.patch("source_snowflake.streams.snowflake_parent_stream.uuid.uuid4", return_value=_REQUESTID)
-    @mock.patch("source_snowflake.source.SnowflakeJwtAuthenticator")
-    @HttpMocker()
     def test_fail_on_post_error_and_max_retry(
         self,
         error_code, 
         mock_retries, 
         mock_time, 
         uuid_mock, 
-        mock_auth, 
-        http_mocker: HttpMocker) -> None:
-        _given_get_timezone(http_mocker)
-        _given_read_schema(http_mocker)
-        _given_table_catalog(http_mocker)
-        _given_table_with_primary_keys(http_mocker)
+        mock_auth) -> None:
 
-        http_mocker.post(
+        self._http_mocker.post(
             table_request().with_table(_TABLE).with_requestID(_REQUESTID).with_async().build(),
             snowflake_response("async_response",FieldPath("statementStatusUrl")).with_handle(_HANDLE).with_status_code(error_code).build()
         )
