@@ -8,6 +8,7 @@ from airbyte_cdk.sources.source import TState
 from airbyte_cdk.test.catalog_builder import CatalogBuilder
 from airbyte_cdk.test.entrypoint_wrapper import EntrypointOutput, read
 from inflection import parameterize
+import requests_mock
 from integration.response_builder import JsonPath, SnowflakeResponseBuilder, create_response_builder
 from integration.mocker import CustomHttpMocker, HttpMocker
 from airbyte_cdk.test.mock_http.response_builder import (
@@ -140,22 +141,22 @@ class FullRefreshTest(TestCase):
             table_request().with_table(_TABLE).with_requestID(_REQUESTID).with_async().build(),
             snowflake_response("async_response", FieldPath("statementStatusUrl")).with_handle(_HANDLE).build()
         )
+        
         self._http_mocker.get(
             table_request().with_handle(_HANDLE).build(is_get=True),
             snowflake_response("response_get_table", JsonPath("$.'data'"))
             .with_record( a_snowflake_response("response_get_table", JsonPath("$.'data'.[*]")))
             .build())
         
-        
-
-
         output = _read(_config(), sync_mode=SyncMode.full_refresh)
+        assert len(output.records)==1
 
     def test_given_three_pages_read_then_return_records(self, uuid_mock, mock_auth) -> None:
         self._http_mocker.post(
             table_request().with_table(_TABLE).with_requestID(_REQUESTID).with_async().build(),
             snowflake_response("async_response", FieldPath("statementStatusUrl")).with_handle(_HANDLE).build()
         )
+
         self._http_mocker.get(
             table_request().with_handle(_HANDLE).build(is_get=True),
             snowflake_response("response_get_table", JsonPath("$.'data'")).with_record(
