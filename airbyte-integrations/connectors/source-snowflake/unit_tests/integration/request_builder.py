@@ -87,7 +87,6 @@ class SnowflakeRequestBuilder:
         self._cursor_generic_type = cursor_generic_type
         return self
 
-
     def _build_query_params(self, is_get: bool = False):
         query_params = {"requestId": self._requestID, "async": self._async}
         if is_get:
@@ -97,45 +96,37 @@ class SnowflakeRequestBuilder:
                 query_params = {}
         return query_params
 
-    def get_state_sql_condition(self):
-        if self._state is None:
-            return None
-
-        state_sql_condition = None
-        current_state_value = self._state[self._cursor_field]
-
-        if self._cursor_generic_type == "timestamp_with_timezone":
-            state_sql_condition = f"TO_TIMESTAMP_TZ({self._cursor_field})>=TO_TIMESTAMP_TZ('{current_state_value}')"
-
-        if self._cursor_generic_type == "date":
-            state_sql_condition = f"TO_TIMESTAMP({self._cursor_field})>=TO_TIMESTAMP('{current_state_value}')"
-
-        if self._cursor_generic_type == "number":
-          state_sql_condition = f"{self._cursor_field}>={current_state_value}"
-
-        if self._cursor_generic_type == "string":
-            state_sql_condition = f"{self._cursor_field}>='{current_state_value}'"
-
-        return state_sql_condition
-
     def build(self, is_get: bool = False) -> HttpRequest:
 
         query_params = self._build_query_params(is_get)
         statement = None
         if self._table:
-            statement = f'SELECT * FROM "{self._database}"."{self._schema}"."{self._table}"'
+            prefixed_table = f'"{self._database}"."{self._schema}"."{self._table}"'
+            statement_builder = SnowflakeStatementBuilder(prefixed_table)
+            column_name = self._cursor_field
+            condition_value = None
+            if self._state:
+                condition_value = self._state[self._cursor_field] if self._cursor_field in self._state else None
 
-            if self._where_statement:
-                statement = f"{statement} WHERE {self._where_statement}"
+            where_clause = self._where_statement
+            statement_builder = (statement_builder
+                                 .with_where_clause(where_clause)
+                                 .with_column_name(column_name)
+                                 .with_condition_value(condition_value))
 
-            state_sql_condition = self.get_state_sql_condition()
+            if self._cursor_generic_type == "timestamp_with_timezone":
+                statement_builder = statement_builder.with_column_type_timestamp_timezone()
 
-            if state_sql_condition:
-                reserved_seperator_word = "AND" if " WHERE " in statement else "WHERE"
-                statement = f"{statement} {reserved_seperator_word} {state_sql_condition}"
+            if self._cursor_generic_type == "date":
+                statement_builder = statement_builder.with_column_type_date()
 
-            if self._cursor_field:
-                statement = f"{statement} ORDER BY {self._cursor_field} ASC"
+            if self._cursor_generic_type == "number":
+                statement_builder = statement_builder.with_column_type_number()
+
+            if self._cursor_generic_type == "string":
+                statement_builder = statement_builder.with_column_type_string()
+
+            statement = statement_builder.build()
 
         if self._show_catalog:
             statement = f"SHOW TABLES IN SCHEMA {self._database}.{self._schema}"
@@ -168,3 +159,76 @@ class SnowflakeRequestBuilder:
         prepared = req.prepare()
         content_length = prepared.headers.get('Content-Length', 0)
         return content_length
+
+
+class SnowflakeStatementBuilder:
+
+    def __init__(self, prefixed_table):
+        self._prefixed_table = prefixed_table
+        self._where_clause = None
+        self._condition_value = None
+        self._column_name = None
+        self._column_type_date = False
+        self._column_type_string = False
+        self._column_type_timestamp_timezone = False
+        self._column_type_number = False
+
+    def with_where_clause(self, where_clause):
+        self._where_clause = where_clause
+        return self
+
+    def with_condition_value(self, condition_value):
+        self._condition_value = condition_value
+        return self
+
+    def with_column_name(self, column_name):
+        self._column_name = column_name
+        return self
+
+    def with_column_type_date(self):
+        self._column_type_date = True
+        return self
+
+    def with_column_type_string(self):
+        self._column_type_string = True
+        return self
+
+    def with_column_type_timestamp_timezone(self):
+        self._column_type_timestamp_timezone = True
+        return self
+
+    def with_column_type_number(self):
+        self._column_type_number = True
+        return self
+
+    def build(self):
+        statement = f"SELECT * FROM {self._prefixed_table}"
+        condition = None
+        if self._condition_value:
+            if self._column_type_date:
+                condition = f"TO_TIMESTAMP({self._column_name})>=TO_TIMESTAMP('{self._condition_value}')"
+
+            if self._column_type_timestamp_timezone:
+                condition = f"TO_TIMESTAMP_TZ({self._column_name})>=TO_TIMESTAMP_TZ('{self._condition_value}')"
+
+            if self._column_type_number:
+                condition = f"{self._column_name}>={self._condition_value}"
+
+            if self._column_type_string:
+                condition = f"{self._column_name}>='{self._condition_value}'"
+
+        if self._where_clause:
+            if condition:
+                statement = f"{statement} WHERE {self._where_clause} AND {condition}"
+            else:
+                statement = f"{statement} WHERE {self._where_clause}"
+        else:
+            if condition:
+                statement = f"{statement} WHERE {condition}"
+
+        if self._column_name:
+            statement = f"{statement} ORDER BY {self._column_name} ASC"
+
+        return statement
+
+
