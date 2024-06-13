@@ -359,7 +359,7 @@ class CHTableQueryRecord(BigqueryResultStream):
         stream_slice: Optional[Mapping[str, Any]] = None,
         next_page_token: Optional[Mapping[str, Any]] = None,
     ) -> Optional[Mapping[str, Any]]:
-        query_string = f"select * from APPENDS(TABLE `{self.parent_stream}`,NULL,NULL) ORDER BY {self.column} {self.order} LIMIT 1"
+        query_string = f"SELECT * FROM APPENDS(TABLE `{self.parent_stream}`,NULL,NULL) ORDER BY {self.column} {self.order} LIMIT 1"
         if self.where_clause:
             index = query_string.find("ORDER BY")
             query_string = query_string[:index] + f" WHERE {self.where_clause} " + query_string[index:]
@@ -405,7 +405,7 @@ class TableQueryRecord(CHTableQueryRecord):
         stream_slice: Optional[Mapping[str, Any]] = None,
         next_page_token: Optional[Mapping[str, Any]] = None,
     ) -> Optional[Mapping[str, Any]]:
-        query_string = f"select * from `{self.parent_stream}` ORDER BY {self.column} {self.order} LIMIT 1"
+        query_string = f"SELECT * FROM `{self.parent_stream}` ORDER BY {self.column} {self.order} LIMIT 1"
         if self.where_clause:
             index = query_string.find("ORDER BY")
             query_string = query_string[:index] + f" WHERE {self.where_clause} " + query_string[index:]
@@ -438,7 +438,7 @@ class TableQueryResult(BigqueryResultStream):
         next_page_token: Optional[Mapping[str, Any]] = None,
     ) -> Optional[Mapping[str, Any]]:
         where_clause = self.where_clause.replace("\"", "'")
-        query_string = f"select * from `{self.parent_stream}` where {where_clause}"
+        query_string = f"SELECT * FROM `{self.parent_stream}` WHERE {where_clause}"
         request_body = {
             "kind": "bigquery#queryRequest",
             "query": query_string,
@@ -754,7 +754,7 @@ class IncrementalQueryResult(BigqueryResultStream):
         stream_slice: Optional[Mapping[str, Any]] = None,
         next_page_token: Optional[Mapping[str, Any]] = None,
     ) -> Optional[Mapping[str, Any]]:
-        query_string = f"select * from `{self.parent_stream}`"
+        query_string = f"SELECT * FROM `{self.parent_stream}`"
         if self.where_clause:
             query_string = query_string + f" WHERE {self.where_clause}"
         request_body = {
@@ -940,12 +940,12 @@ class BigqueryCDCStream(BigqueryResultStream, IncrementalMixin):
         stream_slice: Optional[Mapping[str, Any]] = None,
         next_page_token: Optional[Mapping[str, Any]] = None,
     ) -> Optional[Mapping[str, Any]]:
-        query_string = f"select * from APPENDS(TABLE `{self.stream_name}`,NULL,NULL)"
+        query_string = f"SELECT * FROM APPENDS(TABLE `{self.stream_name}`,NULL,NULL)"
         if stream_slice:
             start = stream_slice.get("start", None)
             end = stream_slice.get("end", None)
             if start and end:
-                query_string = f"select * from APPENDS(TABLE `{self.stream_name}`,'{start}','{end}')"
+                query_string = f"SELECT * FROM APPENDS(TABLE `{self.stream_name}`,'{start}','{end}')"
         if self.where_clause:
             query_string = query_string + f" WHERE {self.where_clause}"
         request_body = {
@@ -1039,9 +1039,9 @@ class TableChangeHistory(BigqueryResultStream):
         stream_slice: Optional[Mapping[str, Any]] = None,
         next_page_token: Optional[Mapping[str, Any]] = None,
     ) -> Optional[Mapping[str, Any]]:
-        query_string = f"select * from APPENDS(TABLE `{self.table_qualifier}`,NULL,NULL)"
+        query_string = f"SELECT * FROM APPENDS(TABLE `{self.table_qualifier}`,NULL,NULL)"
         if self.where_clause:
-            query_string = f"select * from APPENDS(TABLE `{self.table_qualifier}`,NULL,NULL) WHERE {self.where_clause}"
+            query_string = f"SELECT * FROM APPENDS(TABLE `{self.table_qualifier}`,NULL,NULL) WHERE {self.where_clause}"
         request_body = {
             "kind": "bigquery#queryRequest",
             "query": query_string,
