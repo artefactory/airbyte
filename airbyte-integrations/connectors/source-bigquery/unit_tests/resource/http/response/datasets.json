@@ -1,5 +1,4 @@
 {
-<<<<<<< HEAD
   "kind": "bigquery#datasetList",
   "etag": "etag123456789",
   "nextPageToken": "ABCDEF123456",
@@ -20,14 +19,4 @@
     }
   ],
   "unreachable": []
-=======
-  "datasets": [
-    {
-      "datasetReference": {
-        "projectId": "bigquery-public-data",
-        "datasetId": "samples"
-      }
-    }
-  ]
->>>>>>> 4108060db6 (Bigquery source: initalizing the integration tests)
 }
