@@ -140,11 +140,11 @@ class FullRefreshTest(TestCase):
             table_request().with_table(_TABLE).with_requestID(_REQUESTID).with_async().build(),
             snowflake_response("async_response", FieldPath("statementStatusUrl")).with_handle(_HANDLE).build()
         )
-        # self._http_mocker.get(
-        #     table_request().with_handle(_HANDLE).build(is_get=True),
-        #     snowflake_response("response_get_table", JsonPath("$.'data'"))
-        #     .with_record( a_snowflake_response("response_get_table", JsonPath("$.'data'.[*]")))
-        #     .build())
+        self._http_mocker.get(
+            table_request().with_handle(_HANDLE).build(is_get=True),
+            snowflake_response("response_get_table", JsonPath("$.'data'"))
+            .with_record( a_snowflake_response("response_get_table", JsonPath("$.'data'.[*]")))
+            .build())
         
         
 
@@ -168,11 +168,6 @@ class FullRefreshTest(TestCase):
         )
         self._http_mocker.get(
             table_request().with_handle(_HANDLE).with_partition(2).build(is_get=True),
-            snowflake_response("response_get_table", JsonPath("$.'data'")).with_record(
-                a_snowflake_response("response_get_table", JsonPath("$.'data'.[*]"))).with_pagination().build()
-        )
-        self._http_mocker.get(
-            table_request().with_handle("123").with_partition(18).build(is_get=True),
             snowflake_response("response_get_table", JsonPath("$.'data'")).with_record(
                 a_snowflake_response("response_get_table", JsonPath("$.'data'.[*]"))).with_pagination().build()
         )
@@ -277,18 +272,6 @@ class FullRefreshTest(TestCase):
         self._http_mocker.get(
             table_request()
             .with_handle(_HANDLE)
-            .build(is_get=True),
-            [
-            snowflake_response("response_get_table",JsonPath("$.'data'"))
-            .with_record(a_snowflake_response("response_get_table",JsonPath("$.'data'[*]")))
-            .with_status_code(error_code).build(),
-            snowflake_response("response_get_table",JsonPath("$.'data'"))
-            .with_record(a_snowflake_response("response_get_table",JsonPath("$.'data'[*]"))).build(),
-            ]
-        )
-        self._http_mocker.get(
-            table_request()
-            .with_handle("123")
             .build(is_get=True),
             [
             snowflake_response("response_get_table",JsonPath("$.'data'"))
