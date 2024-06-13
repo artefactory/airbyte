@@ -66,7 +66,6 @@ class ReadFullRefreshTest(TestCase):
                     table_id=table_id,
                     timeout_ms=30000,
                     max_results=10000,
-                    uppercase=True,
                 )
             ).build(),
             BigqueryResponseBuilder.queries().build()
@@ -92,7 +91,6 @@ class ReadFullRefreshTest(TestCase):
                     where=f"table_name='{table_id}'",
                     query_end_char=";",
                     timeout_ms=30000,
-                    uppercase=True,
                 )
             ).build(),
             BigqueryResponseBuilder.query_information_schema().build()
