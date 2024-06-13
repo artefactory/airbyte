@@ -533,7 +533,7 @@ class IncrementalTest(TestCase):
             .build(is_get=True),
             snowflake_response("response_get_table")
             .with_record(self._a_record(cursor_path).with_cursor(4))
-            .with_record(self._a_record(cursor_path).with_cursor(5))
+            .with_record(self._a_record(cursor_path).with_cursor(expected_cursor_value))
             .build()
         )
 
