@@ -180,6 +180,19 @@ class DiscoverTest(TestCase):
             .with_handle(_HANDLE)
             .build()
         )
+
+        http_mocker.get(
+            table_request().with_partition(2).with_handle(_HANDLE).build(is_get=True),
+            snowflake_response("check_connection", JsonPath("$.'data'"))
+            .with_record(
+                self._a_table_record().with_id("TEST_TABLE_4")
+            )
+            .with_pagination()
+            .with_handle(_HANDLE)
+            .build()
+        )
+
+
         output= _discover(_config(), sync_mode=SyncMode.full_refresh)
         assert len(output.catalog.catalog.streams)==3
 
