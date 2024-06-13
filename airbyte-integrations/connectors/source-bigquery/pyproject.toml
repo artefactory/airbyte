@@ -28,4 +28,5 @@ source-bigquery = "source_bigquery.run:run"
 requests-mock = "*"
 pytest-mock = "*"
 pytest = "*"
+freezegun = "^1.5.1"
 
