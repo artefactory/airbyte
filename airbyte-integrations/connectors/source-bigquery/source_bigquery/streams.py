@@ -684,8 +684,6 @@ class BigqueryIncrementalStream(BigqueryResultStream, IncrementalMixin):
                 }
                 self._updated_state(self.state, formated_data)
                 yield formated_data
-        if not self.state:
-            self.state = {"__ab_full_refresh_sync_complete": True}
 
     
     def should_retry(self, response: requests.Response) -> bool:
