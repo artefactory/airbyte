@@ -208,7 +208,7 @@ class IncrementalTest(TestCase):
             snowflake_response("response_get_table")
             .with_record(self._a_record(cursor_path).with_cursor(1))
             .with_record(self._a_record(cursor_path).with_cursor(2))
-            .with_record(self._a_record(cursor_path).with_cursor(3))
+            .with_record(self._a_record(cursor_path).with_cursor(expected_cursor_value))
             .build()
         )
 
@@ -357,7 +357,7 @@ class IncrementalTest(TestCase):
             snowflake_response("response_get_table")
             .with_record(self._a_record(cursor_path).with_cursor("aaaaaaa"))
             .with_record(self._a_record(cursor_path).with_cursor("aaaaaa154"))
-            .with_record(self._a_record(cursor_path).with_cursor("b"))
+            .with_record(self._a_record(cursor_path).with_cursor(expected_cursor_value))
             .build()
         )
 
