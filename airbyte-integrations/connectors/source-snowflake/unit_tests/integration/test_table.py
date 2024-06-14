@@ -245,13 +245,13 @@ class IncrementalTest(TestCase):
         assert most_recent_state.stream_state == AirbyteStateBlob(**{f"{cursor_field}": expected_cursor_value})
 
     @parameterized.expand([
-        ("ID", 0, 3, (1, 2, 3), 2, "WHERE ID>=2 ORDER BY ID ASC"),
+        ("ID", 0, 3, (1, 2, 3), 2, "ID>=2 ORDER BY ID ASC"),
         ("TEST_COLUMN_20",
          12,
          datetime(1970, 1, 4).strftime("%Y-%m-%d"),
          ("1", "2", "3"),
          datetime(1970, 1, 3).strftime("%Y-%m-%d"),
-         "WHERE TO_TIMESTAMP(TEST_COLUMN_20)>=TO_TIMESTAMP('1970-01-03') ORDER BY TEST_COLUMN_20 ASC"),
+         "TO_TIMESTAMP(TEST_COLUMN_20)>=TO_TIMESTAMP('1970-01-03') ORDER BY TEST_COLUMN_20 ASC"),
         ("TEST_COLUMN_26",
          18,
          "2018-03-22T12:00:01.123001+05:00",
@@ -259,9 +259,9 @@ class IncrementalTest(TestCase):
           "1521702001.123000000 1740",
           "1521702001.123001000 1740"),
          "2018-03-20T12:00:01.123001+05:00",
-         "WHERE TO_TIMESTAMP_TZ(TEST_COLUMN_26)>=TO_TIMESTAMP_TZ('2018-03-20T12:00:01.123001+05:00') ORDER BY TEST_COLUMN_26 ASC"
+         "TO_TIMESTAMP_TZ(TEST_COLUMN_26)>=TO_TIMESTAMP_TZ('2018-03-20T12:00:01.123001+05:00') ORDER BY TEST_COLUMN_26 ASC"
          ),
-        ("TEST_COLUMN_14", 5, "c", ("a", "b", "c"), "a", "WHERE TEST_COLUMN_14>='a' ORDER BY TEST_COLUMN_14 ASC"),
+        ("TEST_COLUMN_14", 5, "c", ("a", "b", "c"), "a", "TEST_COLUMN_14>='a' ORDER BY TEST_COLUMN_14 ASC"),
     ])
     @mock.patch("source_snowflake.streams.snowflake_parent_stream.uuid.uuid4", return_value=_REQUESTID)
     @mock.patch("source_snowflake.source.SnowflakeJwtAuthenticator")
@@ -322,13 +322,13 @@ class IncrementalTest(TestCase):
         assert most_recent_state.stream_state == AirbyteStateBlob(**{f"{cursor_field}": expected_cursor_value})
 
     @parameterized.expand([
-        ("ID", 0, 4, (1, 2, 3), 4, "WHERE ID>=4 ORDER BY ID ASC"),
+        ("ID", 0, 4, (1, 2, 3), 4, "ID>=4 ORDER BY ID ASC"),
         ("TEST_COLUMN_20",
          12,
          datetime(1970, 1, 8).strftime("%Y-%m-%d"),
          ("1", "2", "3"),
          datetime(1970, 1, 8).strftime("%Y-%m-%d"),
-         "WHERE TO_TIMESTAMP(TEST_COLUMN_20)>=TO_TIMESTAMP('1970-01-08') ORDER BY TEST_COLUMN_20 ASC"),
+         "TO_TIMESTAMP(TEST_COLUMN_20)>=TO_TIMESTAMP('1970-01-08') ORDER BY TEST_COLUMN_20 ASC"),
         ("TEST_COLUMN_26",
          18,
          "2018-03-25T12:00:01.123001+05:00",
@@ -336,9 +336,9 @@ class IncrementalTest(TestCase):
           "1521702001.123000000 1740",
           "1521702001.123001000 1740"),
          "2018-03-25T12:00:01.123001+05:00",
-         "WHERE TO_TIMESTAMP_TZ(TEST_COLUMN_26)>=TO_TIMESTAMP_TZ('2018-03-25T12:00:01.123001+05:00') ORDER BY TEST_COLUMN_26 ASC"
+         "TO_TIMESTAMP_TZ(TEST_COLUMN_26)>=TO_TIMESTAMP_TZ('2018-03-25T12:00:01.123001+05:00') ORDER BY TEST_COLUMN_26 ASC"
          ),
-        ("TEST_COLUMN_14", 5, "d", ("a", "b", "c"), "d", "WHERE TEST_COLUMN_14>='d' ORDER BY TEST_COLUMN_14 ASC"),
+        ("TEST_COLUMN_14", 5, "d", ("a", "b", "c"), "d", "TEST_COLUMN_14>='d' ORDER BY TEST_COLUMN_14 ASC"),
     ])
     @mock.patch("source_snowflake.streams.snowflake_parent_stream.uuid.uuid4", return_value=_REQUESTID)
     @mock.patch("source_snowflake.source.SnowflakeJwtAuthenticator")

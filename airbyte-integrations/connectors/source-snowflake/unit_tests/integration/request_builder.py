@@ -31,11 +31,7 @@ class SnowflakeRequestBuilder:
         self._timezone = False
         self._partition = None
         self._where_clause = None
-        self._condition_value = None
-        self._column_name = None
-        self._cursor_field = None
-        self._column_generic_type = None
-        self._statement = ""
+        self._statement = None
 
     def with_table(self, table: str):
         self._table = table
@@ -100,11 +96,13 @@ class SnowflakeRequestBuilder:
         statement = None
         if self._table:
             statement = f'SELECT * FROM "{self._database}"."{self._schema}"."{self._table}"'
-            if len(self._statement):
-                statement = f"{statement} {self._statement}"
-                print('-'*30)
-                print(self._statement)
-                print('-'*30)
+            if self._where_clause:
+                statement = f"{statement} WHERE {self._where_clause}"
+            elif self._statement:
+                if self._statement.startswith('ORDER BY'):
+                    statement = f"{statement} {self._statement}"
+                else:
+                    statement = f"{statement} WHERE {self._statement}"
 
         if self._show_catalog:
             statement = f"SHOW TABLES IN SCHEMA {self._database}.{self._schema}"

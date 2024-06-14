@@ -10,7 +10,8 @@ from integration.snowflake_stream_builder import SnowflakeStreamBuilder
 from airbyte_cdk.test.catalog_builder import CatalogBuilder
 from test.entrypoint_wrapper import EntrypointOutput, read
 from test.mock_http.response_builder import FieldPath
-from integration.test_table import _SCHEMA, _TABLE, a_snowflake_response, _config, _given_get_timezone, _given_read_schema, _given_table_catalog, \
+from integration.test_table import _SCHEMA, _TABLE, a_snowflake_response, _config, _given_get_timezone, _given_read_schema, \
+    _given_table_catalog, \
     _given_table_with_primary_keys, table_request, _REQUESTID, snowflake_response, _HANDLE, _source, _read
 from airbyte_cdk.test.mock_http import HttpMocker
 from airbyte_cdk.test.mock_http.response_builder import FieldPath
@@ -164,12 +165,15 @@ class IncrementalPushDownFilterTest(TestCase):
                                                                        cursor_path=cursor_path)
 
     @parameterized.expand([
-        ("ID", 0, 3, (1, 2, 3)),
-        ("TEST_COLUMN_20", 12, datetime(1970, 1, 4).strftime("%Y-%m-%d"), ("1", "2", "3")),
+        ("ID", 0, 3, (1, 2, 3), 'ORDER BY ID ASC'),
+        ("TEST_COLUMN_20", 12, datetime(1970, 1, 4).strftime("%Y-%m-%d"), ("1", "2", "3"),
+         "ORDER BY TEST_COLUMN_20 ASC"),
         ("TEST_COLUMN_26", 18, "2018-03-22T12:00:01.123001+05:00", ("1521702000.123000000 1740",
                                                                     "1521702001.123000000 1740",
-                                                                    "1521702001.123001000 1740")),
-        ("TEST_COLUMN_14", 5, "b", ("aaaaaaa", "aaaaaaa154", "b")),
+                                                                    "1521702001.123001000 1740"),
+         "ORDER BY TEST_COLUMN_26 ASC"),
+        ("TEST_COLUMN_14", 5, "b", ("aaaaaaa", "aaaaaaa154", "b"),
+         "ORDER BY TEST_COLUMN_14 ASC"),
     ])
     @mock.patch("source_snowflake.streams.snowflake_parent_stream.uuid.uuid4", return_value=_REQUESTID)
     @mock.patch("source_snowflake.source.SnowflakeJwtAuthenticator")
@@ -179,6 +183,7 @@ class IncrementalPushDownFilterTest(TestCase):
                                                cursor_index,
                                                expected_cursor_value,
                                                cursor_values,
+                                               statement,
                                                uuid_mock,
                                                mock_auth,
                                                http_mocker: HttpMocker) -> None:
@@ -195,8 +200,7 @@ class IncrementalPushDownFilterTest(TestCase):
             .with_table(_TABLE)
             .with_requestID(_REQUESTID)
             .with_async()
-            .with_statement(cursor_field, None)
-            .with_where_clause(self.where_clause)
+            .with_statement(f"{self.where_clause} {statement}")
             .build(),
             snowflake_response("async_response", FieldPath("statementStatusUrl"))
             .with_handle(_HANDLE)
@@ -229,13 +233,13 @@ class IncrementalPushDownFilterTest(TestCase):
         assert most_recent_state.stream_state == AirbyteStateBlob(**{f"{cursor_field}": expected_cursor_value})
 
     @parameterized.expand([
-        ("ID", 0, 3, (1, 2, 3), 2, "number"),
+        ("ID", 0, 3, (1, 2, 3), 2, "ID>=2 ORDER BY ID ASC"),
         ("TEST_COLUMN_20",
          12,
          datetime(1970, 1, 4).strftime("%Y-%m-%d"),
          ("1", "2", "3"),
          datetime(1970, 1, 3).strftime("%Y-%m-%d"),
-         "date"),
+         "TO_TIMESTAMP(TEST_COLUMN_20)>=TO_TIMESTAMP('1970-01-03') ORDER BY TEST_COLUMN_20 ASC"),
         ("TEST_COLUMN_26",
          18,
          "2018-03-22T12:00:01.123001+05:00",
@@ -243,9 +247,9 @@ class IncrementalPushDownFilterTest(TestCase):
           "1521702001.123000000 1740",
           "1521702001.123001000 1740"),
          "2018-03-20T12:00:01.123001+05:00",
-         "timestamp_with_timezone"
+         "TO_TIMESTAMP_TZ(TEST_COLUMN_26)>=TO_TIMESTAMP_TZ('2018-03-20T12:00:01.123001+05:00') ORDER BY TEST_COLUMN_26 ASC"
          ),
-        ("TEST_COLUMN_14", 5, "c", ("a", "b", "c"), "a", "string"),
+        ("TEST_COLUMN_14", 5, "c", ("a", "b", "c"), "a", "TEST_COLUMN_14>='a' ORDER BY TEST_COLUMN_14 ASC"),
     ])
     @mock.patch("source_snowflake.streams.snowflake_parent_stream.uuid.uuid4", return_value=_REQUESTID)
     @mock.patch("source_snowflake.source.SnowflakeJwtAuthenticator")
@@ -256,7 +260,7 @@ class IncrementalPushDownFilterTest(TestCase):
                                                                             expected_cursor_value,
                                                                             cursor_values,
                                                                             initial_state_value,
-                                                                            cursor_generic_type,
+                                                                            statement,
                                                                             uuid_mock,
                                                                             mock_auth,
                                                                             http_mocker: HttpMocker) -> None:
@@ -273,9 +277,7 @@ class IncrementalPushDownFilterTest(TestCase):
             table_request()
             .with_table(_TABLE)
             .with_requestID(_REQUESTID)
-            .with_statement(cursor_field, initial_state_value)
-            .with_column_generic_type(cursor_generic_type)
-            .with_where_clause(self.where_clause)
+            .with_statement(f"{self.where_clause} AND {statement}")
             .with_async()
             .build(),
             snowflake_response("async_response", FieldPath("statementStatusUrl"))
@@ -308,13 +310,13 @@ class IncrementalPushDownFilterTest(TestCase):
         assert most_recent_state.stream_state == AirbyteStateBlob(**{f"{cursor_field}": expected_cursor_value})
 
     @parameterized.expand([
-        ("ID", 0, 4, (1, 2, 3), 4, "number"),
+        ("ID", 0, 4, (1, 2, 3), 4, "ID>=4 ORDER BY ID ASC"),
         ("TEST_COLUMN_20",
          12,
          datetime(1970, 1, 8).strftime("%Y-%m-%d"),
          ("1", "2", "3"),
          datetime(1970, 1, 8).strftime("%Y-%m-%d"),
-         "date"),
+         "TO_TIMESTAMP(TEST_COLUMN_20)>=TO_TIMESTAMP('1970-01-08') ORDER BY TEST_COLUMN_20 ASC"),
         ("TEST_COLUMN_26",
          18,
          "2018-03-25T12:00:01.123001+05:00",
@@ -322,23 +324,23 @@ class IncrementalPushDownFilterTest(TestCase):
           "1521702001.123000000 1740",
           "1521702001.123001000 1740"),
          "2018-03-25T12:00:01.123001+05:00",
-         "timestamp_with_timezone"
+         "TO_TIMESTAMP_TZ(TEST_COLUMN_26)>=TO_TIMESTAMP_TZ('2018-03-25T12:00:01.123001+05:00') ORDER BY TEST_COLUMN_26 ASC"
          ),
-        ("TEST_COLUMN_14", 5, "d", ("a", "b", "c"), "d", "string"),
+        ("TEST_COLUMN_14", 5, "d", ("a", "b", "c"), "d", "TEST_COLUMN_14>='d' ORDER BY TEST_COLUMN_14 ASC"),
     ])
     @mock.patch("source_snowflake.streams.snowflake_parent_stream.uuid.uuid4", return_value=_REQUESTID)
     @mock.patch("source_snowflake.source.SnowflakeJwtAuthenticator")
     @HttpMocker()
     def test_incremental_with_initial_state_higher_than_highest_record_state(self,
-                                                                            cursor_field,
-                                                                            cursor_index,
-                                                                            expected_cursor_value,
-                                                                            cursor_values,
-                                                                            initial_state_value,
-                                                                            cursor_generic_type,
-                                                                            uuid_mock,
-                                                                            mock_auth,
-                                                                            http_mocker: HttpMocker) -> None:
+                                                                             cursor_field,
+                                                                             cursor_index,
+                                                                             expected_cursor_value,
+                                                                             cursor_values,
+                                                                             initial_state_value,
+                                                                             statement,
+                                                                             uuid_mock,
+                                                                             mock_auth,
+                                                                             http_mocker: HttpMocker) -> None:
         _given_get_timezone(http_mocker)
         _given_read_schema(http_mocker)
         _given_table_catalog(http_mocker)
@@ -352,9 +354,7 @@ class IncrementalPushDownFilterTest(TestCase):
             table_request()
             .with_table(_TABLE)
             .with_requestID(_REQUESTID)
-            .with_statement(cursor_field, initial_state_value)
-            .with_column_generic_type(cursor_generic_type)
-            .with_where_clause(self.where_clause)
+            .with_statement(f"{self.where_clause} AND {statement}")
             .with_async()
             .build(),
             snowflake_response("async_response", FieldPath("statementStatusUrl"))
@@ -395,4 +395,3 @@ class IncrementalPushDownFilterTest(TestCase):
               ) -> EntrypointOutput:
         config = config_builder.build()
         return read(_source(catalog, config, state), config, catalog, state, expecting_exception)
-
