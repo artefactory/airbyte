@@ -412,7 +412,7 @@ class TableChangeDataCaptureStream(TableStream):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.cdc_look_back_time_window = self._get_cdc_look_back_time_window()  # Unit of this duration is seconds
-        self.sync_mode = SyncMode.full_refresh
+        self.sync_mode = SyncMode.incremental
 
     @property
     def cursor_field(self):
@@ -485,6 +485,7 @@ class TableChangeDataCaptureStream(TableStream):
                 f"To solve this issue, rerun a full refresh and set up a frequency update equal to your retention time in days - 1.")
             emit_airbyte_error_message(error_message)
             raise ChangeDataCaptureLookBackWindowUpdateFrequencyError(error_message)
+
         if not self._state_value:
             self.logger.info(f"This is the first run of history update. "
                              f"Even if you have selected incremental, "
