@@ -210,7 +210,7 @@ class IncrementalTest(TestCase):
             .with_table(_TABLE)
             .with_requestID(_REQUESTID)
             .with_async()
-            .with_cursor_field(cursor_field)
+            .with_statement(cursor_field, None)
             .build(),
             snowflake_response("async_response", FieldPath("statementStatusUrl"))
             .with_handle(_HANDLE)
@@ -285,9 +285,8 @@ class IncrementalTest(TestCase):
             table_request()
             .with_table(_TABLE)
             .with_requestID(_REQUESTID)
-            .with_cursor_field(cursor_field)
-            .with_cursor_generic_type(cursor_generic_type)
-            .with_state(initial_state)
+            .with_statement(cursor_field, initial_state_value)
+            .with_column_generic_type(cursor_generic_type)
             .with_async()
             .build(),
             snowflake_response("async_response", FieldPath("statementStatusUrl"))
@@ -364,9 +363,8 @@ class IncrementalTest(TestCase):
             table_request()
             .with_table(_TABLE)
             .with_requestID(_REQUESTID)
-            .with_cursor_field(cursor_field)
-            .with_cursor_generic_type(cursor_generic_type)
-            .with_state(initial_state)
+            .with_statement(cursor_field, initial_state_value)
+            .with_column_generic_type(cursor_generic_type)
             .with_async()
             .build(),
             snowflake_response("async_response", FieldPath("statementStatusUrl"))

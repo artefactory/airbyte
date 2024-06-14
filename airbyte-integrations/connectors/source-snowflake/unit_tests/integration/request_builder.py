@@ -30,10 +30,11 @@ class SnowflakeRequestBuilder:
         self._get_schema = False
         self._timezone = False
         self._partition = None
-        self._where_statement = None
-        self._state = None
+        self._where_clause = None
+        self._condition_value = None
+        self._column_name = None
         self._cursor_field = None
-        self._cursor_generic_type = None
+        self._column_generic_type = None
 
     def with_table(self, table: str):
         self._table = table
@@ -71,20 +72,17 @@ class SnowflakeRequestBuilder:
         self._timezone = True
         return self
 
-    def with_where_statement(self, where_statement: str):
-        self._where_statement = where_statement
+    def with_where_clause(self, where_statement: str):
+        self._where_clause = where_statement
         return self
 
-    def with_state(self, state):
-        self._state = state
+    def with_statement(self, column_name, condition_value):
+        self._column_name = column_name
+        self._condition_value = condition_value
         return self
 
-    def with_cursor_field(self, cursor_field):
-        self._cursor_field = cursor_field
-        return self
-
-    def with_cursor_generic_type(self, cursor_generic_type):
-        self._cursor_generic_type = cursor_generic_type
+    def with_column_generic_type(self, cursor_generic_type):
+        self._column_generic_type = cursor_generic_type
         return self
 
     def _build_query_params(self, is_get: bool = False):
@@ -102,28 +100,21 @@ class SnowflakeRequestBuilder:
         statement = None
         if self._table:
             prefixed_table = f'"{self._database}"."{self._schema}"."{self._table}"'
-            statement_builder = SnowflakeStatementBuilder(prefixed_table)
-            column_name = self._cursor_field
-            condition_value = None
-            if self._state:
-                condition_value = self._state[self._cursor_field] if self._cursor_field in self._state else None
+            statement_builder = (SnowflakeStatementBuilder(prefixed_table)
+                                 .with_where_clause(self._where_clause)
+                                 .with_column_name(self._column_name)
+                                 .with_condition_value(self._condition_value))
 
-            where_clause = self._where_statement
-            statement_builder = (statement_builder
-                                 .with_where_clause(where_clause)
-                                 .with_column_name(column_name)
-                                 .with_condition_value(condition_value))
-
-            if self._cursor_generic_type == "timestamp_with_timezone":
+            if self._column_generic_type == "timestamp_with_timezone":
                 statement_builder = statement_builder.with_column_type_timestamp_timezone()
 
-            if self._cursor_generic_type == "date":
+            if self._column_generic_type == "date":
                 statement_builder = statement_builder.with_column_type_date()
 
-            if self._cursor_generic_type == "number":
+            if self._column_generic_type == "number":
                 statement_builder = statement_builder.with_column_type_number()
 
-            if self._cursor_generic_type == "string":
+            if self._column_generic_type == "string":
                 statement_builder = statement_builder.with_column_type_string()
 
             statement = statement_builder.build()
