@@ -177,7 +177,7 @@ class SourceBigquery(ConcurrentSourceAdapter):
         self._set_cursor_field()
         self._set_sync_mode()
         state_manager = ConnectorStateManager(stream_instance_map={stream.name: stream for stream in self._concurrent_streams}, state=self.state)
-        ret = [
+        return [
             self._to_concurrent(
                 stream,
                 stream.fallback_start,
@@ -186,7 +186,6 @@ class SourceBigquery(ConcurrentSourceAdapter):
             )
             for stream in self._concurrent_streams
         ]
-        return ret
     
     def _set_cursor_field(self):
         for stream in self._concurrent_streams:
@@ -226,14 +225,13 @@ class SourceBigquery(ConcurrentSourceAdapter):
         state = state_manager.get_stream_state(stream.name, stream.namespace)
         state = self._format_state(state)
         if stream.configured_sync_mode==SyncMode.full_refresh or not stream.cursor_field:
-            ss =  StreamFacade.create_from_stream(
+            return StreamFacade.create_from_stream(
                 stream,
                 self,
                 self.logger,
                 state,
                 FinalStateCursor(stream_name=stream.name, stream_namespace=stream.namespace, message_repository=self.message_repository),
             )
-            return ss
 
         slice_boundary_fields = self._SLICE_BOUNDARY_FIELDS_BY_IMPLEMENTATION.get(type(stream))
         if slice_boundary_fields:
