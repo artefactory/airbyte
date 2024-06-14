@@ -20,6 +20,7 @@ from airbyte_cdk.test.mock_http.response_builder import (
 from airbyte_cdk.test.state_builder import StateBuilder
 from airbyte_protocol.models import AirbyteStateBlob, AirbyteStreamState, ConfiguredAirbyteCatalog, FailureType, StreamDescriptor, SyncMode
 # from integration.utils import discover
+from integration.mocked import mock_discover_calls
 from integration.config import ConfigBuilder
 from integration.request_builder import BigqueryRequestBuilder
 from integration.response_builder import BigqueryResponseBuilder
@@ -41,36 +42,15 @@ class DiscoverTest(TestCase):
         dataset_ids = ["dataset_id_1", "dataset_id_2"]
         tables_ids = ["table_id_1", "table_id_2"]
 
-        http_mocker.get(
-            BigqueryRequestBuilder.datasets_endpoint(project_id=config["project_id"]).with_max_results(10000).build(),
-            BigqueryResponseBuilder.datasets(dataset_ids=dataset_ids).build()
+        mock_discover_calls(
+            http_mocker,
+            {
+                config["project_id"]: {
+                    dataset_id: set(tables_ids)
+                    for dataset_id in dataset_ids
+                }
+            }
         )
-
-        for dataset_id in dataset_ids:
-            http_mocker.get(
-                BigqueryRequestBuilder.tables_endpoint(project_id=config["project_id"], dataset_id=dataset_id).build(),
-                BigqueryResponseBuilder.tables(table_ids=tables_ids).build()
-            )
-
-            for table_id in tables_ids:
-                http_mocker.post(
-                    BigqueryRequestBuilder.queries_endpoint(project_id=config["project_id"]).with_body({
-                        "kind": "bigquery#queryRequest",
-                        "query": f"SELECT * FROM `{dataset_id}.{table_id}`",
-                        "useLegacySql": False,
-                        "dryRun": True,
-                    }).build(),
-                    BigqueryResponseBuilder.queries().build()
-                )
-                http_mocker.post(
-                    BigqueryRequestBuilder.queries_endpoint(project_id=config["project_id"]).with_body({
-                        "kind": "bigquery#queryRequest",
-                        "query": f"SELECT * FROM `{config['project_id']}.{dataset_id}.INFORMATION_SCHEMA.KEY_COLUMN_USAGE` WHERE table_name='{table_id}';",
-                        "useLegacySql": False,
-                        "timeoutMs": 30000,
-                    }).build(),
-                    BigqueryResponseBuilder.query_information_schema().build()
-                )
 
         source = SourceBigquery(_NO_CATALOG, config, _NO_STATE)
         
