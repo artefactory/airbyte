@@ -225,8 +225,7 @@ class BigqueryTable(BigqueryTables):
 
     def path(self, **kwargs) -> str:
         """
-        Documentation: https://cloud.google.com/bigquery/docs/reference/rest#rest-resource:-v2.tables
-                       https://cloud.google.com/bigquery/docs/reference/rest/v2/tables/get
+        Documentation: https://cloud.google.com/bigquery/docs/reference/rest/v2/tables/get
         """
         return f"{super().path()}/{self.table_id}"
 
@@ -553,6 +552,9 @@ class BigqueryIncrementalStream(BigqueryResultStream, IncrementalMixin):
         if not self._is_primary_key_set:
             self.set_primary_key()
         return self._primary_key
+    
+    def get_json_schema(self) -> Mapping[str, Any]:
+        return self.stream_schema()
     
     def set_primary_key(self):
         self._primary_key = self._get_primary_key()
@@ -886,6 +888,9 @@ class BigqueryCDCStream(BigqueryResultStream, IncrementalMixin):
         if not self._is_primary_key_set:
             self.set_primary_key()
         return self._primary_key
+    
+    def get_json_schema(self) -> Mapping[str, Any]:
+        return self.stream_schema()
     
     def set_primary_key(self):
         self._primary_key = self._get_primary_key()
