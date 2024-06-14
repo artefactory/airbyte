@@ -149,22 +149,20 @@ class SourceBigquery(ConcurrentSourceAdapter):
         sync_method = config["replication_method"]["method"]
         slice_range = float(config.get("slice_range", _DEFAULT_SLICE_RANGE))
 
-        for stream in streams:
-            filter_dataset_id, table_id = stream['parent_stream'].split(".")
-            where_clause = stream["where_clause"]
-            stream_name = stream["name"]
-            self._get_tables(project_id, filter_dataset_id, table_id, sync_method, slice_range, stream_name, where_clause)
-
-        if dataset_id:
-            for table_info in BigqueryTables(dataset_id=dataset_id, project_id=project_id, authenticator=self._auth).read_records(sync_mode=SyncMode.full_refresh):
-                table_id = table_info.get("tableReference")["tableId"]
-                self._get_tables(project_id, dataset_id, table_id, sync_method, slice_range, table_info)
+        self._add_filtered_streams(streams, project_id, sync_method, slice_range)
+        if self.catalog:
+            self._use_catalog_streams(project_id, sync_method, slice_range)
         else:
-            for dataset in BigqueryDatasets(project_id=project_id, authenticator=self._auth).read_records(sync_mode=SyncMode.full_refresh):
-                dataset_id = dataset.get("datasetReference")["datasetId"]
+            if dataset_id:
                 for table_info in BigqueryTables(dataset_id=dataset_id, project_id=project_id, authenticator=self._auth).read_records(sync_mode=SyncMode.full_refresh):
                     table_id = table_info.get("tableReference")["tableId"]
                     self._get_tables(project_id, dataset_id, table_id, sync_method, slice_range, table_info)
+            else:
+                for dataset in BigqueryDatasets(project_id=project_id, authenticator=self._auth).read_records(sync_mode=SyncMode.full_refresh):
+                    dataset_id = dataset.get("datasetReference")["datasetId"]
+                    for table_info in BigqueryTables(dataset_id=dataset_id, project_id=project_id, authenticator=self._auth).read_records(sync_mode=SyncMode.full_refresh):
+                        table_id = table_info.get("tableReference")["tableId"]
+                        self._get_tables(project_id, dataset_id, table_id, sync_method, slice_range, table_info)
 
         self._set_cursor_field()
         self._set_sync_mode()
@@ -179,6 +177,30 @@ class SourceBigquery(ConcurrentSourceAdapter):
             for stream in self._concurrent_streams
         ]
     
+    def _add_filtered_streams(self, streams, project_id, sync_method, slice_range):
+        for stream in streams:
+            filter_dataset_id, table_id = stream['parent_stream'].split(".")
+            where_clause = stream["where_clause"]
+            stream_name = stream["name"]
+            table_info = next(BigqueryTable(dataset_id=filter_dataset_id, project_id=project_id, table_id=table_id, authenticator=self._auth).read_records(sync_mode=SyncMode.full_refresh))
+            self._get_tables(project_id, filter_dataset_id, table_id, sync_method, slice_range, table_info, stream_name, where_clause)
+
+    def _use_catalog_streams(self, project_id, sync_method, slice_range):
+        for configured_stream in self.catalog.streams:
+            try:
+                dataset_id, table_id = configured_stream.stream.name.split(".")
+                table_info = next(BigqueryTable(dataset_id=dataset_id, project_id=project_id, table_id=table_id, authenticator=self._auth).read_records(sync_mode=SyncMode.full_refresh))
+                self._get_tables(project_id, dataset_id, table_id, sync_method, slice_range, table_info)
+            except ValueError:
+                # This could happen for pushdown filter streams
+                pass
+            except exceptions.HTTPError as error:
+                if error.response.status_code == 404:
+                    # This could happen for pushdown filter streams
+                    pass
+                else:
+                    raise error 
+
     def _set_cursor_field(self):
         for stream in self._concurrent_streams:
             if not stream.cursor_field and self.catalog:
