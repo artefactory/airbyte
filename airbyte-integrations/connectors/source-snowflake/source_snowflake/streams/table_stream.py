@@ -486,7 +486,9 @@ class TableChangeDataCaptureStream(TableStream):
             emit_airbyte_error_message(error_message)
             raise ChangeDataCaptureLookBackWindowUpdateFrequencyError(error_message)
         if not self._state_value:
-            # TODO: add log to alert user that full refresh is launched because first time cdc
+            self.logger.info(f"This is the first run of history update. "
+                             f"Even if you have selected incremental, "
+                             f"a full refresh will be run as it is necessary to avoid any data loss.")
             self.sync_mode = SyncMode.full_refresh
 
         start_history_timestamp = self._state_value
