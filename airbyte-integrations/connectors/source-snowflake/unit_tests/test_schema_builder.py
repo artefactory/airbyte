@@ -87,14 +87,24 @@ class TestFormatField(unittest.TestCase):
 
     @parameterized.expand([
         (datetime(2020, 1, 1), "DATE", datetime(2020, 1, 1)),
-        ("", "DATE", None)
+        (datetime(2020, 1, 1), "TIMESTAMP_LTZ", datetime(2020, 1, 1)),
+        (datetime(2020, 1, 1), "TIMESTAMP_TZ", datetime(2020, 1, 1)),
+        (datetime(2020, 1, 1), "DATETIME", datetime(2020, 1, 1)),
+        (datetime(2020, 1, 1), "TIMESTAMP_NTZ", datetime(2020, 1, 1)),
+        (datetime(2020, 1, 1), "TIMESTAMP", datetime(2020, 1, 1)),
+        (datetime(2020, 1, 1), "TIME", datetime(2020, 1, 1)),
     ])
     def test_date_object_input(self, input_value, field_type, expected):
         assert format_field(input_value, field_type) == expected
 
-    def test_raises_value_error_when_having_int_input(self):
-        with self.assertRaises(ValueError):
-            format_field(32323, "DATE")
+    @parameterized.expand([
+        (32323, "any type"),
+        (98.9, "any type"),
+        (datetime(2020, 1, 1), "not a date type"),
+    ])
+    def test_raises_value_error_when_having_int_input(self, input_value, field_type):
+        with self.assertRaises(TypeError):
+            format_field(input_value, field_type)
 
     @parameterized.expand(
         [
@@ -255,7 +265,12 @@ class TestFormatField(unittest.TestCase):
     @parameterized.expand(
         [
             ("some string", "VARCHAR", "some string"),
-            ("some unknown type", "UNKNOWN", "some unknown type")
+            ("some string", "CHAR", "some string"),
+            ("some string", "CHARACTER", "some string"),
+            ("some string", "STRING", "some string"),
+            ("some string", "TEXT", "some string"),
+            ("some string", "BINARY", "some string"),
+            ("some unknown type", "VARBINARY", "some unknown type")
         ]
     )
     def test_fallback(self, input_value, field_type, expected):

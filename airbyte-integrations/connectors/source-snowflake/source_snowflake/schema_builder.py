@@ -144,22 +144,20 @@ def convert_utc_to_time_zone_date(utc_date, offset_hours):
 def format_field(field_value, field_type, local_time_zone_offset_hours=None):
 
     if field_type is None or field_value is None:
-        # maybe add warning
         return field_value
+
+    # Already formatted date
+    if isinstance(field_value, datetime) and field_type.upper() in date_and_time_snowflake_type_airbyte_type.keys():
+        return field_value
+
+    if not isinstance(field_value, str):
+        raise TypeError(f'Format field function only process string type. Type {type(field_value)} not supported. This is very likely to '
+                        f'come from changes on types on Snowflake API response')
 
     if field_type.upper() in ('OBJECT', 'ARRAY'):
         return json.loads(field_value)
 
-    if field_type.upper() in date_and_time_snowflake_type_airbyte_type.keys() and field_value is not None:
-
-        if isinstance(field_value, datetime):  # Already formatted date
-            return field_value
-
-        if not isinstance(field_value, str):
-            raise ValueError
-
-        if len(field_value) == 0:
-            return None
+    if field_type.upper() in date_and_time_snowflake_type_airbyte_type.keys():
 
         airbyte_format = date_and_time_snowflake_type_airbyte_type[field_type.upper()].get('format', None)
         airbyte_type = date_and_time_snowflake_type_airbyte_type[field_type.upper()].get('airbyte_type', None)
@@ -198,7 +196,6 @@ def format_field(field_value, field_type, local_time_zone_offset_hours=None):
             dt = unix_epoch + delta_seconds_offset
             return dt.strftime("%H:%M:%S")
 
-
     if field_type.upper() in ('INT', 'INTEGER', 'BIGINT', 'SMALLINT', 'TINYINT', 'BYTEINT') and field_value:
         return int(field_value)
 
@@ -215,4 +212,5 @@ def format_field(field_value, field_type, local_time_zone_offset_hours=None):
     if field_type.upper() in ('GEOGRAPHY', 'GEOMETRY', 'VECTOR'):
         return str(json.loads(field_value))
 
+    # default returns the string field_value without any process
     return field_value
