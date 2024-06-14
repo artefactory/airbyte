@@ -25,18 +25,10 @@ from integration.request_builder import BigqueryRequestBuilder
 from integration.response_builder import BigqueryResponseBuilder
 from source_bigquery import SourceBigquery
 
-# _STREAM_NAME = "events"
+
 _NOW = datetime.now(timezone.utc)
-# _A_START_DATE = _NOW - timedelta(days=60)
-# _ACCOUNT_ID = "account_id"
-# _CLIENT_SECRET = "client_secret"
 _NO_STATE = StateBuilder().build()
 _NO_CATALOG = CatalogBuilder().build()
-# _AVOIDING_INCLUSIVE_BOUNDARIES = timedelta(seconds=1)
-# _SECOND_REQUEST = timedelta(seconds=1)
-# _THIRD_REQUEST = timedelta(seconds=2)
-
-
 
 
 @freezegun.freeze_time(_NOW.isoformat())
