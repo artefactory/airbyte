@@ -2,7 +2,7 @@
 
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, Optional
-from unittest import TestCase
+from unittest import TestCase, mock
 
 import freezegun
 from airbyte_cdk.sources.source import TState
@@ -101,6 +101,101 @@ class ReadFullRefreshTest(TestCase):
 
         source = SourceBigquery(catalog, config, _NO_STATE)
         
+        output = read(source, config, catalog, expecting_exception=False)
+
+        assert len(output.records) == 1
+
+        assert not output.errors
+
+        assert len(output.state_messages) == 1
+
+    @HttpMocker()
+    def test_pushdown_filter(self, http_mocker: HttpMocker) -> None:
+        stream_name = "filtered_stream"
+        dataset_id = "dataset_id_1"
+        table_id = "table_id_1"
+
+        config = ConfigBuilder().default().with_filtered_stream(
+            stream_name=stream_name,
+            parent_stream_name=f"{dataset_id}.{table_id}",
+            where_clause="TRUE"
+        ).build()
+
+        http_mocker.get(
+            BigqueryRequestBuilder.datasets_endpoint(project_id=config["project_id"]).build(),
+            BigqueryResponseBuilder.datasets(dataset_ids=[dataset_id]).build()
+        )
+
+        http_mocker.get(
+            BigqueryRequestBuilder.tables_endpoint(project_id=config["project_id"], dataset_id=dataset_id).build(),
+            BigqueryResponseBuilder.tables(table_ids=[table_id]).build()
+        )
+
+        # stream run
+        http_mocker.post(
+            BigqueryRequestBuilder.queries_endpoint(project_id=config["project_id"]).with_body(
+                build_query(
+                    dataset_id=dataset_id,
+                    table_id=table_id,
+                    timeout_ms=30000,
+                    max_results=10000,
+                    where="TRUE",
+                )
+            ).build(),
+            BigqueryResponseBuilder.queries().build()
+        )
+
+        # parent stream dry run
+        http_mocker.post(
+            BigqueryRequestBuilder.queries_endpoint(project_id=config["project_id"]).with_body(
+                build_query(
+                    dataset_id=dataset_id,
+                    table_id=table_id,
+                    dry_run=True,
+                )
+            ).build(),
+            BigqueryResponseBuilder.queries().build()
+        )
+
+        # stream dry run
+        http_mocker.post(
+            BigqueryRequestBuilder.queries_endpoint(project_id=config["project_id"]).with_body(
+                build_query(
+                    dataset_id=dataset_id,
+                    table_id=table_id,
+                    dry_run=True,
+                    where="TRUE",
+                )
+            ).build(),
+            BigqueryResponseBuilder.queries().build()
+        )
+
+        http_mocker.post(
+            BigqueryRequestBuilder.queries_endpoint(project_id=config["project_id"]).with_body(
+                build_query(
+                    project_id=config["project_id"],
+                    dataset_id=dataset_id,
+                    table_id="INFORMATION_SCHEMA.KEY_COLUMN_USAGE",
+                    where=f"table_name='{table_id}'",
+                    query_end_char=";",
+                    timeout_ms=30000,
+                )
+            ).build(),
+            BigqueryResponseBuilder.query_information_schema().build()
+        )
+
+        catalog = CatalogBuilder().with_stream(
+            ConfiguredAirbyteStreamBuilder().with_name(
+                stream_name
+            ).with_primary_key(
+                None
+            ).with_sync_mode(
+                SyncMode.full_refresh
+            )
+        ).build()
+
+        source = SourceBigquery(catalog, config, _NO_STATE)
+
         output = read(source, config, catalog, expecting_exception=False)
 
         assert len(output.records) == 1

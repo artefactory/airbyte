@@ -39,6 +39,14 @@ class ConfigBuilder:
     def with_replication_method(self, replication_method: str) -> "ConfigBuilder":
         self._config["replication_method"] = {"method": replication_method}
         return self
+    
+    def with_filtered_stream(self, stream_name: str, parent_stream_name: str, where_clause: str) -> "ConfigBuilder":
+        self._config.setdefault("streams", []).append({
+            "name": stream_name,
+            "parent_stream": parent_stream_name,
+            "where_clause": where_clause
+        })
+        return self
 
     def build(self) -> Dict[str, Any]:
         return self._config
