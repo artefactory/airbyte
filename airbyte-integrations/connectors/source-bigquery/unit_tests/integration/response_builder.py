@@ -106,7 +106,7 @@ class BigqueryResponseBuilder:
         return http_response_builder
 
     @classmethod
-    def query_information_schema(cls, pagination=False) -> HttpResponseBuilder:
+    def query_information_schema(cls) -> HttpResponseBuilder:
         http_response_builder = _a_response(
             "queries_information_schema",
             FieldPath("rows"),
