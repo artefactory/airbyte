@@ -197,6 +197,7 @@ class IncrementalCDC(TestCase):
 
         output = self._read(self.config_builder, self.catalog)
         assert len(output.records) == 3
+        assert output.state_messages[0].state.stream.stream_state.last_update_date == '2024-06-14T00:01:38.626628-07:00'
         for airbyte_message in output.records:
             assert all([cdc_meta_data_column in airbyte_message.record.data for cdc_meta_data_column in self.cdc_meta_data_columns])
             assert airbyte_message.record.data['updated_at'] == '2024-06-14T00:01:38.626628-07:00'
