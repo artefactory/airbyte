@@ -85,28 +85,28 @@ connectionSpecification:
         region, cloud environment, and end with snowflakecomputing.com).
       examples:
       - accountname.us-east-2.aws.snowflakecomputing.com
-      order: 2
+      order: 11
       title: Account Name
       type: string
     role:
       description: The role you created for Airbyte to access Snowflake.
       examples:
       - AIRBYTE_ROLE
-      order: 3
+      order: 12
       title: Role
       type: string
     warehouse:
       description: The warehouse you created for Airbyte to access data.
       examples:
         - AIRBYTE_WAREHOUSE
-      order: 4
+      order: 13
       title: Warehouse
       type: string
     database:
       description: The database you created for Airbyte to access data.
       examples:
         - AIRBYTE_DATABASE
-      order: 5
+      order: 14
       title: Database
       type: string
     schema:
@@ -114,13 +114,13 @@ connectionSpecification:
         from multiple schemas.
       examples:
       - AIRBYTE_SCHEMA
-      order: 6
+      order: 15
       title: Schema
       type: string
     streams:
       title: Push Down Filter
       description: Used to filter out data on the source and creates a dedicated stream
-      order: 7
+      order: 16
       type: array
       items:
         title: FileBasedStreamConfig
@@ -154,7 +154,7 @@ connectionSpecification:
       type: object
       title: Update Method
       description: Configures how data is extracted from the database.
-      order: 8
+      order: 17
       group: advanced
       default: standard
       display_type: radio
@@ -168,7 +168,7 @@ connectionSpecification:
             method:
               type: string
               const: standard
-              order: 8
+              order: 18
         - title: Read Changes using Change History
           description: Incrementally reads new inserts using Snowflake's change history
           required:
@@ -177,4 +177,4 @@ connectionSpecification:
             method:
               type: string
               const: history
-              order: 8
+              order: 19
