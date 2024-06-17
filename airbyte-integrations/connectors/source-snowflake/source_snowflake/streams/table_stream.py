@@ -1,5 +1,4 @@
 import logging
-import uuid
 from collections import OrderedDict
 from datetime import datetime, timedelta, timezone
 from typing import Any, Iterable, List, Mapping, MutableMapping, Optional, Tuple, Union
@@ -14,12 +13,11 @@ from airbyte_cdk.models import (AirbyteMessage, AirbyteStateMessage, AirbyteStat
 from airbyte_cdk.sources.streams.http import HttpStream
 from airbyte_cdk.sources.utils.schema_helpers import InternalConfig
 from airbyte_cdk.sources.utils.slice_logger import SliceLogger
-from airbyte_protocol.models import SyncMode, Type, ConfiguredAirbyteStream, FailureType
+from airbyte_protocol.models import SyncMode, Type, ConfiguredAirbyteStream
 
-from source_snowflake.schema_builder import mapping_snowflake_type_airbyte_type, format_field, date_and_time_snowflake_type_airbyte_type, \
-    string_snowflake_type_airbyte_type, convert_utc_to_time_zone, convert_utc_to_time_zone_date
+from source_snowflake.schema_builder import mapping_snowflake_type_airbyte_type, format_field, convert_utc_to_time_zone_date
 from .snowflake_parent_stream import SnowflakeStream
-from .util_streams import TableSchemaStream, StreamLauncher, PrimaryKeyStream, StreamLauncherChangeDataCapture, TimeZoneStream
+from .util_streams import TableSchemaStream, StreamLauncher, PrimaryKeyStream, StreamLauncherChangeDataCapture
 from ..snowflake_exceptions import NotEnabledChangeTrackingOptionError, ChangeDataCaptureNotSupportedTypeGeographyError, \
     ChangeDataCaptureLookBackWindowUpdateFrequencyError, SnowflakeTypeNotRecognizedError, emit_airbyte_error_message, \
     MultipleCursorFieldsError
@@ -54,7 +52,6 @@ class TableStream(SnowflakeStream, IncrementalMixin):
         self._primary_key = None
         self._is_primary_key_set = False
 
-        
         self._json_schema_set = False
         self._json_schema = self.get_json_schema()
 
@@ -157,6 +154,7 @@ class TableStream(SnowflakeStream, IncrementalMixin):
             # Improvement manage nested primary keys
             return primary_key_result
 
+
     ######################################
     ###### HTTP configuration
     ######################################
@@ -176,6 +174,7 @@ class TableStream(SnowflakeStream, IncrementalMixin):
     ######################################
     ###### Pagination
     ######################################
+
     def should_retry(self, response: requests.Response) -> bool:
         """
         Override to set different conditions for backoff based on the response from the server.
@@ -264,7 +263,6 @@ class TableStream(SnowflakeStream, IncrementalMixin):
 
         if not self.state:
             self.state = {"__ab_full_refresh_sync_complete": True}
-
 
     def get_json_schema(self) -> Mapping[str, Any]:
 
@@ -412,7 +410,7 @@ class TableChangeDataCaptureStream(TableStream):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.cdc_look_back_time_window = self._get_cdc_look_back_time_window()  # Unit of this duration is seconds
-        self.sync_mode = SyncMode.full_refresh
+        self.sync_mode = SyncMode.incremental
 
     @property
     def cursor_field(self):
@@ -449,7 +447,7 @@ class TableChangeDataCaptureStream(TableStream):
         retention_time_in_seconds = int(retention_time) * 3600 * 24  # converting days to seconds
 
         # Minus one second to avoid equality in case between now and creation date
-        return min(delta_in_seconds_from_creation.seconds, retention_time_in_seconds) - 1
+        return min(delta_in_seconds_from_creation.total_seconds(), retention_time_in_seconds) - 1
 
     def set_statement_handle(self):
         if self.statement_handle:
@@ -485,8 +483,11 @@ class TableChangeDataCaptureStream(TableStream):
                 f"To solve this issue, rerun a full refresh and set up a frequency update equal to your retention time in days - 1.")
             emit_airbyte_error_message(error_message)
             raise ChangeDataCaptureLookBackWindowUpdateFrequencyError(error_message)
+
         if not self._state_value:
-            # TODO: add log to alert user that full refresh is launched because first time cdc
+            self.logger.info(f"This is the first run of history update. "
+                             f"Even if you have selected incremental, "
+                             f"a full refresh will be run as it is necessary to avoid any data loss.")
             self.sync_mode = SyncMode.full_refresh
 
         start_history_timestamp = self._state_value
@@ -554,8 +555,7 @@ class TableChangeDataCaptureStream(TableStream):
             enriched_record = record + additional_data
             try:
                 yield {column_name: format_field(column_value, ordered_mapping_names_types[column_name], self.time_zone_offset)
-                   for column_name, column_value in zip(ordered_mapping_names_types.keys(), enriched_record)}
-
+                       for column_name, column_value in zip(ordered_mapping_names_types.keys(), enriched_record)}
             except Exception:
                 error_message = 'Unexpected error while reading record'
                 emit_airbyte_error_message(error_message)

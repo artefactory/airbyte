@@ -1,8 +1,6 @@
 #
 # Copyright (c) 2024 Airbyte, Inc., all rights reserved.
 #
-import traceback
-from datetime import datetime
 from typing import Any, List, Mapping, Tuple
 
 from source_snowflake.streams.util_streams import TableCatalogStream, TimeZoneStream
@@ -11,12 +9,10 @@ from source_snowflake.streams.check_connection import CheckConnectionStream
 import requests
 from airbyte_cdk.sources import AbstractSource
 from airbyte_cdk.sources.streams import Stream
-from airbyte_protocol.models import SyncMode, AirbyteMessage, AirbyteTraceMessage, TraceType, AirbyteErrorTraceMessage, FailureType
-from airbyte_cdk.models import Type as AirbyteType
+from airbyte_protocol.models import SyncMode, FailureType
 from .authenticator import SnowflakeJwtAuthenticator
-from .snowflake_exceptions import InconsistentPushDownFilterParentStreamNameError, NotEnabledChangeTrackingOptionError, \
-    DuplicatedPushDownFilterStreamNameError, IncorrectHostFormat, emit_airbyte_error_message, UnknownUpdateMethodError, \
-    BadPrivateKeyFormatError
+from .snowflake_exceptions import (InconsistentPushDownFilterParentStreamNameError, DuplicatedPushDownFilterStreamNameError,
+                                   IncorrectHostFormat, emit_airbyte_error_message, UnknownUpdateMethodError, BadPrivateKeyFormatError)
 from .streams.push_down_filter_stream import PushDownFilterStream, PushDownFilterChangeDataCaptureStream
 from .utils import handle_no_permissions_error
 
@@ -29,7 +25,6 @@ class SourceSnowflake(AbstractSource):
 
     def check_connection(self, logger, config) -> Tuple[bool, any]:
         """
-        TODO: Implement connection using oAyth2.0
         Done: Connection use JWT token
 
         :param config:  the user-input config object conforming to the connector's spec.yaml

@@ -17,6 +17,8 @@ packages = [ { include = "source_snowflake" }, {include = "main.py" } ]
 [tool.poetry.dependencies]
 python = "^3.9,<3.12"
 airbyte-cdk = "1.3.3"
+freezegun = "^1.5.1"
+parameterized = "^0.9.0"
 
 [tool.poetry.scripts]
 source-snowflake = "source_snowflake.run:run"

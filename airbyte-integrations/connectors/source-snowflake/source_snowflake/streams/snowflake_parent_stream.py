@@ -1,7 +1,5 @@
-import logging
 import uuid
 from abc import ABC
-from datetime import datetime, timedelta
 from typing import Any, Iterable, List, Mapping, MutableMapping, Optional, Union
 
 import requests
@@ -14,7 +12,6 @@ from source_snowflake.utils import handle_no_permissions_error
 
 
 class SnowflakeStream(HttpStream, ABC):
-
 
     url_suffix = "api/v2/statements"
     TIME_OUT_IN_SECONDS = "1000"
@@ -54,10 +51,6 @@ class SnowflakeStream(HttpStream, ABC):
     def request_params(
             self, stream_state: Mapping[str, Any], stream_slice: Mapping[str, any] = None, next_page_token: Mapping[str, Any] = None
     ) -> MutableMapping[str, Any]:
-        """
-        TODO: Override this method to define any query parameters to be set. Remove this method if you don't need to define request params.
-        Usually contains common params e.g. pagination size etc.
-        """
         params = {
             "requestId": str(uuid.uuid4()),
             "async": "false"
@@ -76,7 +69,7 @@ class SnowflakeStream(HttpStream, ABC):
     ) -> Mapping[str, Any]:
         headers = {
             'User-Agent': 'Airbyte',
-            'X-Snowflake-Authorization-Token-Type': 'KEYPAIR_JWT',  # to be changed when authentication method is set
+            'X-Snowflake-Authorization-Token-Type': 'KEYPAIR_JWT',
             'Content-Type': 'application/json',
             'Accept': 'application/json',
         }
@@ -104,7 +97,6 @@ class SnowflakeStream(HttpStream, ABC):
         """
             path of request
         """
-
         return f"{self.url_base}/{self.url_suffix}"
 
     def request_body_json(
@@ -121,7 +113,6 @@ class SnowflakeStream(HttpStream, ABC):
             "timeout": self.TIME_OUT_IN_SECONDS,
         }
 
-        
         return json_payload
 
     @classmethod

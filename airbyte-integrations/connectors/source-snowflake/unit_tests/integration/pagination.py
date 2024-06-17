@@ -8,16 +8,14 @@ class SnowflakePaginationStrategy(PaginationStrategy):
     def update(response: Dict[str, Any]) -> None:
         response["resultSetMetaData"]["partitionInfo"] = [
             {
-            "rowCount": 12344,
-            "uncompressedSize": 14384873,
-            },{
-            "rowCount": 47387,
-            "uncompressedSize": 76483423,
-            "compressedSize": 4342748
-            },{
-            "rowCount": 43746,
-            "uncompressedSize": 43748274,
-            "compressedSize": 746323
+                "rowCount": 12344,
+                "uncompressedSize": 14384873,
+            }, {
+                "rowCount": 47387,
+                "uncompressedSize": 76483423,
+                "compressedSize": 4342748
+            }, {
+                "rowCount": 43746,
+                "uncompressedSize": 43748274,
+                "compressedSize": 746323
             }]
-
-
