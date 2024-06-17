@@ -222,6 +222,7 @@ class FullRefreshTest(TestCase):
             )
 
         output = _read(_config(), sync_mode=SyncMode.full_refresh, cursor_field=cursor_field, state={})
+        #print(output.__dict__)
         assert output.most_recent_state.stream_state == AirbyteStateBlob(**{f"{cursor_field[0]}":expected_state_cursor_value})
 
     @parameterized.expand(

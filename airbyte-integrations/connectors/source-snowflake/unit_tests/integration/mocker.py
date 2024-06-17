@@ -22,7 +22,8 @@ class CustomHttpMocker(HttpMocker):
     def __exit__(self, exc_type: Optional[BaseException], exc_val: Optional[BaseException], exc_tb: Optional[TracebackType]) -> None:
         self._mocker.__exit__(exc_type, exc_val, exc_tb)
         
-        
+        if exc_type == AssertionError:
+            return False
 
         if exc_type == requests_mock.NoMockAddress :
             matchers_as_string = "\n\t".join(map(lambda matcher: str(matcher.request), self._matchers))
