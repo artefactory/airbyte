@@ -23,6 +23,7 @@ class CustomHttpMocker(HttpMocker):
         self._mocker.__exit__(exc_type, exc_val, exc_tb)
         
         
+
         if exc_type == requests_mock.NoMockAddress :
             matchers_as_string = "\n\t".join(map(lambda matcher: str(matcher.request), self._matchers))
             error_to_raise =  ValueError(
@@ -39,9 +40,10 @@ class CustomHttpMocker(HttpMocker):
             # like we do here provides additional context for the exception.
             raise ValueError(http_mocker_exception) from None
 
-        
         if exc_type == AssertionError:
             return False
+        
+        
 
     # trying to type that using callables provides the error `incompatible with return type "_F" in supertype "ContextDecorator"`
     def __call__(self, f):  # type: ignore

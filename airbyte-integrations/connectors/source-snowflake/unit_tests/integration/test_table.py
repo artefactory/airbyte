@@ -4,7 +4,6 @@ import random
 from typing import Any, Dict, List, Optional
 from unittest import TestCase, mock
 
-from airbyte_cdk.sources.source import TState
 from airbyte_cdk.test.catalog_builder import CatalogBuilder
 from airbyte_cdk.test.entrypoint_wrapper import EntrypointOutput, read
 from inflection import parameterize
@@ -22,10 +21,8 @@ from airbyte_cdk.test.state_builder import StateBuilder
 from airbyte_protocol.models import (
     AirbyteStateBlob,
     AirbyteStateMessage,
-    AirbyteStreamState,
     ConfiguredAirbyteCatalog,
     FailureType,
-    StreamDescriptor,
     SyncMode,
 )
 
