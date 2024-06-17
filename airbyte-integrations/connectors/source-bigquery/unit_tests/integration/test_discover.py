@@ -56,8 +56,9 @@ class DiscoverTest(TestCase):
         
         output = discover(source, config, expecting_exception=False)
 
-        assert [
+        # using set to ignore order because of concurrency that may not return the same order
+        assert set([
             stream.name for stream in output._messages[0].catalog.streams
-        ] == [
+        ]) == set([
             f"{dataset_id}.{table_id}" for dataset_id in dataset_ids for table_id in tables_ids
-        ]
+        ])
