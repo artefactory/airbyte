@@ -20,7 +20,6 @@ class JsonPath(Path):
         self._path.update(template, value)
     
     def extract(self, template: Dict[str, Any]) -> Any:
-
         a = [match.value for match in self._path.find(template)]
         return a
 

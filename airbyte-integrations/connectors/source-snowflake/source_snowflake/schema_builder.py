@@ -24,7 +24,7 @@ def get_generic_type_from_schema_type(schema_type):
     if schema_type == SchemaTypes.timestamp_with_timezone:
         return "timestamp_with_timezone"
 
-    if schema_type in (SchemaTypes.timestamp_without_timezone, SchemaTypes.time_without_timezone):
+    if schema_type in (SchemaTypes.timestamp_without_timezone, SchemaTypes.time_without_timezone, SchemaTypes.date):
         return "date"
 
     if schema_type in (SchemaTypes.number, SchemaTypes.integer, SchemaTypes.boolean):
@@ -150,7 +150,7 @@ def format_field(field_value, field_type, local_time_zone_offset_hours=None):
     if field_type.upper() in ('OBJECT', 'ARRAY'):
         return json.loads(field_value)
 
-    if field_type.upper() in date_and_time_snowflake_type_airbyte_type.keys() and field_value:
+    if field_type.upper() in date_and_time_snowflake_type_airbyte_type.keys():
 
         if isinstance(field_value, datetime):  # Already formatted date
             return field_value
