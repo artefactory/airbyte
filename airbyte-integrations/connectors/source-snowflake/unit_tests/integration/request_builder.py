@@ -24,6 +24,8 @@ class SnowflakeRequestBuilder:
         self._get_schema = False
         self._timezone = False
         self._partition = None
+        self._where_statement = None
+        self._order_by = None
         self._where_clause = None
         self._statement = None
 
@@ -70,9 +72,13 @@ class SnowflakeRequestBuilder:
     def with_statement(self, statement):
         self._statement = statement
         return self
-
-    def _build_query_params(self, is_get: bool = False):
-        query_params = {"requestId": self._requestID, "async": self._async}
+    
+    def with_order_by(self, columns:list[str]):
+        self._order_by = columns
+        return self
+    
+    def _build_query_params(self,is_get:bool=False):
+        query_params = {"requestId":self._requestID, "async":self._async}
         if is_get:
             if self._partition:
                 query_params = {"partition": self._partition}
@@ -85,7 +91,7 @@ class SnowflakeRequestBuilder:
         query_params = self._build_query_params(is_get)
         statement = None
         if self._table:
-            statement = f'SELECT * FROM "{self._database}"."{self._schema}"."{self._table}"'
+            statement = f'SELECT * FROM "{self._database}"."{self._schema}"."{self._table}"{" ORDER BY " + ",".join(self._order_by)+" ASC" if self._order_by else ""}'
             if self._where_clause:
                 statement = f"{statement} WHERE {self._where_clause}"
             elif self._statement:

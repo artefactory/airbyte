@@ -6,8 +6,8 @@ from airbyte_protocol.models import SyncMode, ConfiguredAirbyteCatalog, AirbyteS
 
 from integration.config import ConfigBuilder
 from airbyte_cdk.test.catalog_builder import CatalogBuilder
-from test.entrypoint_wrapper import EntrypointOutput, read
-from test.mock_http.response_builder import FieldPath
+from airbyte_cdk.test.entrypoint_wrapper import EntrypointOutput, read
+from airbyte_cdk.test.mock_http.response_builder import FieldPath
 from integration.test_table import (_SCHEMA, _TABLE, a_snowflake_response, _config, _given_get_timezone, _given_read_schema,
                                     _given_table_catalog, _given_table_with_primary_keys, table_request, _REQUESTID, snowflake_response,
                                     _HANDLE, _source)
