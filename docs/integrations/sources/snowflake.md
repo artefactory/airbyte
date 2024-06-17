@@ -4,7 +4,7 @@
 
 The Snowflake source allows you to sync data from Snowflake. It supports both Full Refresh and Incremental syncs. You can choose if this connector will copy only the new or updated data, or all rows in the tables and columns you set up for replication, every time a sync is run.
 
-This Snowflake source connector is built on top of the source-jdbc code base and is configured to rely on JDBC 3.14.1 [Snowflake driver](https://github.com/snowflakedb/snowflake-jdbc) as described in Snowflake [documentation](https://docs.snowflake.com/en/user-guide/jdbc.html).
+This Snowflake source connector is built on top of the REST API V2 of Snowflake as described in Snowflake [documentation](https://docs.snowflake.com/en/developer-guide/sql-api/index)
 
 #### Resulting schema
 
@@ -23,73 +23,119 @@ The Snowflake source does not alter the schema present in your warehouse. Depend
 ### Requirements
 
 1. You'll need the following information to configure the Snowflake source:
-2. **Host**
+2. **Host (account name)**
 3. **Role**
 4. **Warehouse**
 5. **Database**
 6. **Schema**
 7. **Username**
-8. **Password**
-9. **JDBC URL Params** (Optional)
-10. Create a dedicated read-only Airbyte user and role with access to all schemas needed for replication.
-
+8. **Private key**
+9. **Password** 
+10. Create a dedicated read-only Airbyte user and role with access to all schemas needed for replication and add key-pair authentication 
 ### Setup guide
 
-#### 1. Additional information about Snowflake connection parameters could be found [here](https://docs.snowflake.com/en/user-guide/jdbc-configure.html#connection-parameters).
-
-#### 2. Create a dedicated read-only user with access to the relevant schemas \(Recommended but optional\)
+#### 1. Create a dedicated read-only user with access to the relevant schemas \(Recommended but optional\)
 
 This step is optional but highly recommended to allow for better permission control and auditing. Alternatively, you can use Airbyte with an existing user in your database.
 
-To create a dedicated database user, run the following commands against your database:
-
-```sql
--- set variables (these need to be uppercase)
-SET AIRBYTE_ROLE = 'AIRBYTE_ROLE';
-SET AIRBYTE_USERNAME = 'AIRBYTE_USER';
-
--- set user password
-SET AIRBYTE_PASSWORD = '-password-';
-
-BEGIN;
-
--- create Airbyte role
-CREATE ROLE IF NOT EXISTS $AIRBYTE_ROLE;
-
--- create Airbyte user
-CREATE USER IF NOT EXISTS $AIRBYTE_USERNAME
-PASSWORD = $AIRBYTE_PASSWORD
-DEFAULT_ROLE = $AIRBYTE_ROLE
-DEFAULT_WAREHOUSE= $AIRBYTE_WAREHOUSE;
-
--- grant Airbyte schema access
-GRANT OWNERSHIP ON SCHEMA $AIRBYTE_SCHEMA TO ROLE $AIRBYTE_ROLE;
-
-COMMIT;
-```
+Create a dedicated database user.
 
 You can limit this grant down to specific schemas instead of the whole database. Note that to replicate data from multiple Snowflake databases, you can re-run the command above to grant access to all the relevant schemas, but you'll need to set up multiple sources connecting to the same db on multiple schemas.
 
 Your database user should now be ready for use with Airbyte.
 
+#### 2.Create key pair for authentication 
+You have to follow these steps to create your public and private key to authenticate to the application:
+
+##### A. create a private key
+You have 2 choices for private key creation, either with password or without password
+
+No password will be asked since you are using the the nocrypt argument. Use this command:
+```bash
+openssl genrsa 2048 | openssl pkcs8 -topk8 -inform PEM -out rsa_key.p8 -nocrypt
+```
+
+If you want to set a password, run this command:
+```bash
+openssl genrsa 2048 | openssl pkcs8 -topk8 -inform PEM -out rsa_key.p8 -nocrypt
+```
+
+Note: You will need this password later if you want to authenticate. So store it securely.
+
+The commands generate a private key in PEM format. A file named rsa_key.p8 will be generated in your current working directory.
+
+-----BEGIN ENCRYPTED PRIVATE KEY-----   
+MIIE6T...   
+-----END ENCRYPTED PRIVATE KEY----   
+
+##### B. create a public key
+
+Run this command in the same directory as your private key:
+
+```bash
+openssl rsa -in rsa_key.p8 -pubout -out rsa_key.pub
+```
+
+Ii will generate a file rsa_key.pub containing your public key.
+The command generates the public key in PEM format.
+
+-----BEGIN PUBLIC KEY-----  
+MIIBIj...  
+-----END PUBLIC KEY-----  
+
+##### C. Assign the public key to a user
+Store the content of your public key with this SQL statement.
+
+```sql
+ALTER USER jsmith SET RSA_PUBLIC_KEY='MIIBIjANBgkqh...';
+```
+Note:  
+Only owners of a user, or users with the SECURITYADMIN role or higher can alter a user.  
+Exclude the public key delimiters in the SQL statement.  
+
+
+##### D. Verify the upload of the key 
+To achieve that, we will compare the public key fingerprint. 
+
+Generate the public key fingerprint in snowflake with this command
+
+```sql
+ALTER USER jsmith SET RSA_PUBLIC_KEY='MIIBIjANBgkqh...';
+```
+Output:  
+Azk1Pq...
+
+Generate the public key fingerprint in your terminal with this command
+
+```bash
+openssl rsa -pubin -in rsa_key.pub -outform DER | openssl dgst -sha256 -binary | openssl enc -base64
+```
+Output:  
+Azk1Pq...
+
+Make sure they are the same, if not repeat step C.
+
+That was the last step if you want more details, look at the following link [here](https://docs.snowflake.com/en/user-guide/key-pair-auth).
+
+
 ###Authentication
 
 #### There are 2 way ways of oauth supported: login\pass and oauth2.
 
-### Login and Password
+### JWT Token
 
 | Field                                                                                                 | Description                                                                                                                                                                                       |
-| ----------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+|-------------------------------------------------------------------------------------------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | [Host](https://docs.snowflake.com/en/user-guide/admin-account-identifier.html)                        | The host domain of the snowflake instance (must include the account, region, cloud environment, and end with snowflakecomputing.com). Example: `accountname.us-east-2.aws.snowflakecomputing.com` |
 | [Role](https://docs.snowflake.com/en/user-guide/security-access-control-overview.html#roles)          | The role you created in Step 1 for Airbyte to access Snowflake. Example: `AIRBYTE_ROLE`                                                                                                           |
 | [Warehouse](https://docs.snowflake.com/en/user-guide/warehouses-overview.html#overview-of-warehouses) | The warehouse you created in Step 1 for Airbyte to sync data into. Example: `AIRBYTE_WAREHOUSE`                                                                                                   |
 | [Database](https://docs.snowflake.com/en/sql-reference/ddl-database.html#database-schema-share-ddl)   | The database you created in Step 1 for Airbyte to sync data into. Example: `AIRBYTE_DATABASE`                                                                                                     |
 | [Schema](https://docs.snowflake.com/en/sql-reference/ddl-database.html#database-schema-share-ddl)     | The schema whose tables this replication is targeting. If no schema is specified, all tables with permission will be presented regardless of their schema.                                        |
 | Username                                                                                              | The username you created in Step 2 to allow Airbyte to access the database. Example: `AIRBYTE_USER`                                                                                               |
-| Password                                                                                              | The password associated with the username.                                                                                                                                                        |
-| [JDBC URL Params](https://docs.snowflake.com/en/user-guide/jdbc-parameters.html) (Optional)           | Additional properties to pass to the JDBC URL string when connecting to the database formatted as `key=value` pairs separated by the symbol `&`. Example: `key1=value1&key2=value2&key3=value3`   |
+| Private key                                                                                           | The secret key used when creating the key pair authentication                                                                                                                                     |
+| Password                                                                                              | The password of you secret key (optional)                                                                                                                                                         |
 
-### OAuth 2.0
+### OAuth 2.0 TO BE UPDATED
 
 | Field                                                                                                 | Description                                                                                                                                                                                       |
 | ----------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -99,8 +145,6 @@ Your database user should now be ready for use with Airbyte.
 | [Database](https://docs.snowflake.com/en/sql-reference/ddl-database.html#database-schema-share-ddl)   | The database you created in Step 1 for Airbyte to sync data into. Example: `AIRBYTE_DATABASE`                                                                                                     |
 | [Schema](https://docs.snowflake.com/en/sql-reference/ddl-database.html#database-schema-share-ddl)     | The schema whose tables this replication is targeting. If no schema is specified, all tables with permission will be presented regardless of their schema.                                        |
 | OAuth2                                                                                                | The Login name and password to obtain auth token.                                                                                                                                                 |
-| [JDBC URL Params](https://docs.snowflake.com/en/user-guide/jdbc-parameters.html) (Optional)           | Additional properties to pass to the JDBC URL string when connecting to the database formatted as `key=value` pairs separated by the symbol `&`. Example: `key1=value1&key2=value2&key3=value3`   |
-
 ### Network policies
 
 By default, Snowflake allows users to connect to the service from any computer or device IP address. A security administrator (i.e. users with the SECURITYADMIN role) or higher can create a network policy to allow or deny access to a single IP address or a list of addresses.
@@ -121,13 +165,18 @@ SHOW PARAMETERS LIKE 'network_policy' IN ACCOUNT;
 SHOW PARAMETERS LIKE 'network_policy' IN USER <username>;
 ```
 
-To read more please check official [Snowflake documentation](https://docs.snowflake.com/en/user-guide/network-policies.html#)
+To read more please check official [Snowflake documentation](https://docs.snowflake.com/en/user-guide/network-policies.html#)  
+
+## Note
+You can find details about allowed retention days here: https://docs.snowflake.com/en/user-guide/data-time-travel  
+
 
 ## Changelog
 
 | Version | Date       | Pull Request                                             | Subject                                                                                                                                   |
 |:--------|:-----------|:---------------------------------------------------------|:------------------------------------------------------------------------------------------------------------------------------------------|
-| 0.3.1 | 2024-02-13 | [35220](https://github.com/airbytehq/airbyte/pull/35220) | Adopt CDK 0.20.4 |
+| 0.3.2   | 2024-05-30 | Fill with right pull request                             | Implement connector in python                                                                                                             |
+| 0.3.1   | 2024-02-13 | [35220](https://github.com/airbytehq/airbyte/pull/35220) | Adopt CDK 0.20.4                                                                                                                          |
 | 0.3.1   | 2024-01-24 | [34453](https://github.com/airbytehq/airbyte/pull/34453) | bump CDK version                                                                                                                          |
 | 0.3.0   | 2023-12-18 | [33484](https://github.com/airbytehq/airbyte/pull/33484) | Remove LEGACY state                                                                                                                       |
 | 0.2.2   | 2023-10-20 | [31613](https://github.com/airbytehq/airbyte/pull/31613) | Fixed handling of TIMESTAMP_TZ columns. upgrade                                                                                           |

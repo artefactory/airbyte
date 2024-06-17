@@ -1,7 +1,7 @@
 data:
   allowedHosts:
     hosts:
-      - TODO # Please change to the hostname of the source.
+      - ${*.snowflakecomputing.com}
   registries:
     oss:
       enabled: true
@@ -12,9 +12,6 @@ data:
       enabled: true
       packageName: airbyte-source-snowflake
   connectorBuildOptions:
-    # Please update to the latest version of the connector base image.
-    # https://hub.docker.com/r/airbyte/python-connector-base
-    # Please use the full address with sha256 hash to guarantee build reproducibility.
     baseImage: docker.io/airbyte/python-connector-base:1.2.0@sha256:c22a9d97464b69d6ef01898edf3f8612dc11614f05a84984451dde195f337db9
   connectorSubtype: api
   connectorType: source
