@@ -447,7 +447,7 @@ class TableChangeDataCaptureStream(TableStream):
         retention_time_in_seconds = int(retention_time) * 3600 * 24  # converting days to seconds
 
         # Minus one second to avoid equality in case between now and creation date
-        return min(delta_in_seconds_from_creation.seconds, retention_time_in_seconds) - 1
+        return min(delta_in_seconds_from_creation.total_seconds(), retention_time_in_seconds) - 1
 
     def set_statement_handle(self):
         if self.statement_handle:
