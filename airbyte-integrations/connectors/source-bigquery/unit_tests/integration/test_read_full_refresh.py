@@ -29,7 +29,7 @@ from source_bigquery import SourceBigquery
 _NOW = datetime.now(timezone.utc)
 _NO_STATE = StateBuilder().build()
 _NO_CATALOG = CatalogBuilder().build()
-
+_PUSHDOWN_FILTER_CONDITION = "TRUE"
 
 
 
@@ -95,7 +95,7 @@ class ReadFullRefreshTest(TestCase):
         config = ConfigBuilder().default().with_filtered_stream(
             stream_name=stream_name,
             parent_stream_name=f"{dataset_id}.{table_id}",
-            where_clause="TRUE"
+            where_clause=_PUSHDOWN_FILTER_CONDITION
         ).build()
 
         mock_discover_calls(
@@ -116,7 +116,7 @@ class ReadFullRefreshTest(TestCase):
                     table_id=table_id,
                     timeout_ms=30000,
                     max_results=10000,
-                    where="TRUE",
+                    where=_PUSHDOWN_FILTER_CONDITION,
                 )
             ).build(),
             BigqueryResponseBuilder.queries().build()
@@ -128,7 +128,7 @@ class ReadFullRefreshTest(TestCase):
                     dataset_id=dataset_id,
                     table_id=table_id,
                     dry_run=True,
-                    where="TRUE",
+                    where=_PUSHDOWN_FILTER_CONDITION,
                 )
             ).build(),
             BigqueryResponseBuilder.queries().build()
