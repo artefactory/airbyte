@@ -1,0 +1,14 @@
+{
+    "credentials": {
+        "auth_type": "JWT Token",
+        "user_name": "USER NAME",
+        "private_key": "-----BEGIN PRIVATE KEY----- your key content -----END PRIVATE KEY-----"
+    },
+    "streams": [],
+    "host": "https://XXXXXXXXXXX.not_right_domain.com",
+    "role": "ROLE",
+    "warehouse": "WAREHOUSE",
+    "database": "DATABASE",
+    "schema": "SCHEMA",
+    "replication_method":{"method":"standard"}
+}
