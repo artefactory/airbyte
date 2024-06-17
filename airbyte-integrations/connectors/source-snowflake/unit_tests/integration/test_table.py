@@ -179,12 +179,15 @@ class IncrementalTest(TestCase):
                                                                        cursor_path=cursor_path)
 
     @parameterized.expand([
-        ("ID", 0, 3, (1, 2, 3)),
-        ("TEST_COLUMN_20", 12, datetime(1970, 1, 4).strftime("%Y-%m-%d"), ("1", "2", "3")),
+        ("ID", 0, 3, (1, 2, 3), 'ORDER BY ID ASC'),
+        ("TEST_COLUMN_20", 12, datetime(1970, 1, 4).strftime("%Y-%m-%d"), ("1", "2", "3"),
+         "ORDER BY TEST_COLUMN_20 ASC"),
         ("TEST_COLUMN_26", 18, "2018-03-22T12:00:01.123001+05:00", ("1521702000.123000000 1740",
                                                                     "1521702001.123000000 1740",
-                                                                    "1521702001.123001000 1740")),
-        ("TEST_COLUMN_14", 5, "b", ("aaaaaaa", "aaaaaaa154", "b")),
+                                                                    "1521702001.123001000 1740"),
+         "ORDER BY TEST_COLUMN_26 ASC"),
+        ("TEST_COLUMN_14", 5, "b", ("aaaaaaa", "aaaaaaa154", "b"),
+         "ORDER BY TEST_COLUMN_14 ASC"),
     ])
     @mock.patch("source_snowflake.streams.snowflake_parent_stream.uuid.uuid4", return_value=_REQUESTID)
     @mock.patch("source_snowflake.source.SnowflakeJwtAuthenticator")
@@ -194,6 +197,7 @@ class IncrementalTest(TestCase):
                                                cursor_index,
                                                expected_cursor_value,
                                                cursor_values,
+                                               statement,
                                                uuid_mock,
                                                mock_auth,
                                                http_mocker: HttpMocker) -> None:
@@ -210,7 +214,7 @@ class IncrementalTest(TestCase):
             .with_table(_TABLE)
             .with_requestID(_REQUESTID)
             .with_async()
-            .with_statement(cursor_field, None)
+            .with_statement(statement)
             .build(),
             snowflake_response("async_response", FieldPath("statementStatusUrl"))
             .with_handle(_HANDLE)
@@ -241,13 +245,13 @@ class IncrementalTest(TestCase):
         assert most_recent_state.stream_state == AirbyteStateBlob(**{f"{cursor_field}": expected_cursor_value})
 
     @parameterized.expand([
-        ("ID", 0, 3, (1, 2, 3), 2, "number"),
+        ("ID", 0, 3, (1, 2, 3), 2, "ID>=2 ORDER BY ID ASC"),
         ("TEST_COLUMN_20",
          12,
          datetime(1970, 1, 4).strftime("%Y-%m-%d"),
          ("1", "2", "3"),
          datetime(1970, 1, 3).strftime("%Y-%m-%d"),
-         "date"),
+         "TO_TIMESTAMP(TEST_COLUMN_20)>=TO_TIMESTAMP('1970-01-03') ORDER BY TEST_COLUMN_20 ASC"),
         ("TEST_COLUMN_26",
          18,
          "2018-03-22T12:00:01.123001+05:00",
@@ -255,9 +259,9 @@ class IncrementalTest(TestCase):
           "1521702001.123000000 1740",
           "1521702001.123001000 1740"),
          "2018-03-20T12:00:01.123001+05:00",
-         "timestamp_with_timezone"
+         "TO_TIMESTAMP_TZ(TEST_COLUMN_26)>=TO_TIMESTAMP_TZ('2018-03-20T12:00:01.123001+05:00') ORDER BY TEST_COLUMN_26 ASC"
          ),
-        ("TEST_COLUMN_14", 5, "c", ("a", "b", "c"), "a", "string"),
+        ("TEST_COLUMN_14", 5, "c", ("a", "b", "c"), "a", "TEST_COLUMN_14>='a' ORDER BY TEST_COLUMN_14 ASC"),
     ])
     @mock.patch("source_snowflake.streams.snowflake_parent_stream.uuid.uuid4", return_value=_REQUESTID)
     @mock.patch("source_snowflake.source.SnowflakeJwtAuthenticator")
@@ -268,7 +272,7 @@ class IncrementalTest(TestCase):
                                                                             expected_cursor_value,
                                                                             cursor_values,
                                                                             initial_state_value,
-                                                                            cursor_generic_type,
+                                                                            statement,
                                                                             uuid_mock,
                                                                             mock_auth,
                                                                             http_mocker: HttpMocker) -> None:
@@ -285,8 +289,7 @@ class IncrementalTest(TestCase):
             table_request()
             .with_table(_TABLE)
             .with_requestID(_REQUESTID)
-            .with_statement(cursor_field, initial_state_value)
-            .with_column_generic_type(cursor_generic_type)
+            .with_statement(statement)
             .with_async()
             .build(),
             snowflake_response("async_response", FieldPath("statementStatusUrl"))
@@ -319,13 +322,13 @@ class IncrementalTest(TestCase):
         assert most_recent_state.stream_state == AirbyteStateBlob(**{f"{cursor_field}": expected_cursor_value})
 
     @parameterized.expand([
-        ("ID", 0, 4, (1, 2, 3), 4, "number"),
+        ("ID", 0, 4, (1, 2, 3), 4, "ID>=4 ORDER BY ID ASC"),
         ("TEST_COLUMN_20",
          12,
          datetime(1970, 1, 8).strftime("%Y-%m-%d"),
          ("1", "2", "3"),
          datetime(1970, 1, 8).strftime("%Y-%m-%d"),
-         "date"),
+         "TO_TIMESTAMP(TEST_COLUMN_20)>=TO_TIMESTAMP('1970-01-08') ORDER BY TEST_COLUMN_20 ASC"),
         ("TEST_COLUMN_26",
          18,
          "2018-03-25T12:00:01.123001+05:00",
@@ -333,9 +336,9 @@ class IncrementalTest(TestCase):
           "1521702001.123000000 1740",
           "1521702001.123001000 1740"),
          "2018-03-25T12:00:01.123001+05:00",
-         "timestamp_with_timezone"
+         "TO_TIMESTAMP_TZ(TEST_COLUMN_26)>=TO_TIMESTAMP_TZ('2018-03-25T12:00:01.123001+05:00') ORDER BY TEST_COLUMN_26 ASC"
          ),
-        ("TEST_COLUMN_14", 5, "d", ("a", "b", "c"), "d", "string"),
+        ("TEST_COLUMN_14", 5, "d", ("a", "b", "c"), "d", "TEST_COLUMN_14>='d' ORDER BY TEST_COLUMN_14 ASC"),
     ])
     @mock.patch("source_snowflake.streams.snowflake_parent_stream.uuid.uuid4", return_value=_REQUESTID)
     @mock.patch("source_snowflake.source.SnowflakeJwtAuthenticator")
@@ -346,7 +349,7 @@ class IncrementalTest(TestCase):
                                                                        expected_cursor_value,
                                                                        cursor_values,
                                                                        initial_state_value,
-                                                                       cursor_generic_type,
+                                                                       statement,
                                                                        uuid_mock,
                                                                        mock_auth,
                                                                        http_mocker: HttpMocker) -> None:
@@ -363,8 +366,7 @@ class IncrementalTest(TestCase):
             table_request()
             .with_table(_TABLE)
             .with_requestID(_REQUESTID)
-            .with_statement(cursor_field, initial_state_value)
-            .with_column_generic_type(cursor_generic_type)
+            .with_statement(statement)
             .with_async()
             .build(),
             snowflake_response("async_response", FieldPath("statementStatusUrl"))
