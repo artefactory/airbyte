@@ -1,10 +1,10 @@
 import json
 from datetime import datetime, timedelta
 from typing import Dict
-
 import pytz
 
 TIMESTAMP_OFFSET_SEPARATOR = " "
+
 
 class SchemaTypes:
     string: Dict = {"type": ["null", "string"]}

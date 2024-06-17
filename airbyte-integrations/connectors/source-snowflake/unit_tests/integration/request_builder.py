@@ -1,11 +1,5 @@
-from ctypes import sizeof
-from datetime import datetime
 import json
-from sys import getsizeof
-from typing import Any, List, Optional, Mapping
-
 from airbyte_cdk.test.mock_http import HttpRequest
-from airbyte_cdk.test.mock_http.request import ANY_QUERY_PARAMS
 import requests
 
 
@@ -75,10 +69,6 @@ class SnowflakeRequestBuilder:
 
     def with_statement(self, statement):
         self._statement = statement
-        return self
-
-    def with_column_generic_type(self, cursor_generic_type):
-        self._column_generic_type = cursor_generic_type
         return self
 
     def _build_query_params(self, is_get: bool = False):

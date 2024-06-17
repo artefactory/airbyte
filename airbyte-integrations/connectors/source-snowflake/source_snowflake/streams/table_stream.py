@@ -1,5 +1,4 @@
 import logging
-import uuid
 from collections import OrderedDict
 from datetime import datetime, timedelta, timezone
 from typing import Any, Iterable, List, Mapping, MutableMapping, Optional, Tuple, Union
@@ -14,12 +13,11 @@ from airbyte_cdk.models import (AirbyteMessage, AirbyteStateMessage, AirbyteStat
 from airbyte_cdk.sources.streams.http import HttpStream
 from airbyte_cdk.sources.utils.schema_helpers import InternalConfig
 from airbyte_cdk.sources.utils.slice_logger import SliceLogger
-from airbyte_protocol.models import SyncMode, Type, ConfiguredAirbyteStream, FailureType
+from airbyte_protocol.models import SyncMode, Type, ConfiguredAirbyteStream
 
-from source_snowflake.schema_builder import mapping_snowflake_type_airbyte_type, format_field, date_and_time_snowflake_type_airbyte_type, \
-    string_snowflake_type_airbyte_type, convert_utc_to_time_zone, convert_utc_to_time_zone_date
+from source_snowflake.schema_builder import mapping_snowflake_type_airbyte_type, format_field, convert_utc_to_time_zone_date
 from .snowflake_parent_stream import SnowflakeStream
-from .util_streams import TableSchemaStream, StreamLauncher, PrimaryKeyStream, StreamLauncherChangeDataCapture, TimeZoneStream
+from .util_streams import TableSchemaStream, StreamLauncher, PrimaryKeyStream, StreamLauncherChangeDataCapture
 from ..snowflake_exceptions import NotEnabledChangeTrackingOptionError, ChangeDataCaptureNotSupportedTypeGeographyError, \
     ChangeDataCaptureLookBackWindowUpdateFrequencyError, SnowflakeTypeNotRecognizedError, emit_airbyte_error_message, \
     MultipleCursorFieldsError
@@ -54,7 +52,6 @@ class TableStream(SnowflakeStream, IncrementalMixin):
         self._primary_key = None
         self._is_primary_key_set = False
 
-        
         self._json_schema_set = False
         self._json_schema = self.get_json_schema()
 
@@ -157,6 +154,7 @@ class TableStream(SnowflakeStream, IncrementalMixin):
             # Improvement manage nested primary keys
             return primary_key_result
 
+
     ######################################
     ###### HTTP configuration
     ######################################
@@ -176,6 +174,7 @@ class TableStream(SnowflakeStream, IncrementalMixin):
     ######################################
     ###### Pagination
     ######################################
+
     def should_retry(self, response: requests.Response) -> bool:
         """
         Override to set different conditions for backoff based on the response from the server.
@@ -264,7 +263,6 @@ class TableStream(SnowflakeStream, IncrementalMixin):
 
         if not self.state:
             self.state = {"__ab_full_refresh_sync_complete": True}
-
 
     def get_json_schema(self) -> Mapping[str, Any]:
 
@@ -557,8 +555,7 @@ class TableChangeDataCaptureStream(TableStream):
             enriched_record = record + additional_data
             try:
                 yield {column_name: format_field(column_value, ordered_mapping_names_types[column_name], self.time_zone_offset)
-                   for column_name, column_value in zip(ordered_mapping_names_types.keys(), enriched_record)}
-
+                       for column_name, column_value in zip(ordered_mapping_names_types.keys(), enriched_record)}
             except Exception:
                 error_message = 'Unexpected error while reading record'
                 emit_airbyte_error_message(error_message)

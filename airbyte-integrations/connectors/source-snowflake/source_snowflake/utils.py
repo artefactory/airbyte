@@ -1,8 +1,6 @@
 from functools import wraps
-
 from airbyte_protocol.models import FailureType
 from jsonref import requests
-
 from source_snowflake.snowflake_exceptions import emit_airbyte_error_message
 
 

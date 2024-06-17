@@ -1,6 +1,6 @@
 import base64
 import hashlib
-from datetime import timedelta, datetime, timezone
+from datetime import datetime
 from typing import Text, Mapping, Any
 
 from airbyte_cdk.sources.declarative.auth import JwtAuthenticator

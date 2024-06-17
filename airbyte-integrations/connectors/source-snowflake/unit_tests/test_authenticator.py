@@ -1,7 +1,4 @@
 from source_snowflake import SnowflakeJwtAuthenticator
-from unittest.mock import MagicMock
-import pytest
-
 
 def test_get_formatted_password_from_config():
     config = {}

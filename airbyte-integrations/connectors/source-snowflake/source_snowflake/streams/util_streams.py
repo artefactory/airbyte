@@ -1,19 +1,10 @@
-import threading
-import uuid
-from abc import ABC
-from collections import OrderedDict
-from datetime import datetime, timedelta, timezone
-from typing import Any, Iterable, List, Mapping, MutableMapping, Optional, Union
-
+from typing import Any, Iterable, Mapping, MutableMapping, Optional
 import requests
 from airbyte_protocol.models import SyncMode
-
-from source_snowflake.schema_builder import date_and_time_snowflake_type_airbyte_type, string_snowflake_type_airbyte_type, \
-    mapping_snowflake_type_airbyte_type, get_generic_type_from_schema_type, convert_time_zone_time_stamp_suffix_to_offset_hours, \
-    convert_utc_to_time_zone, convert_utc_to_time_zone_date, TIMESTAMP_OFFSET_SEPARATOR
-from source_snowflake.snowflake_exceptions import CursorFieldNotPresentInSchemaError, emit_airbyte_error_message, \
-    SnowflakeTypeNotRecognizedError, StartHistoryTimeNotSetError
-
+from source_snowflake.schema_builder import (mapping_snowflake_type_airbyte_type, get_generic_type_from_schema_type,
+                                             convert_time_zone_time_stamp_suffix_to_offset_hours, TIMESTAMP_OFFSET_SEPARATOR)
+from source_snowflake.snowflake_exceptions import (CursorFieldNotPresentInSchemaError, emit_airbyte_error_message,
+                                                   SnowflakeTypeNotRecognizedError, StartHistoryTimeNotSetError)
 from source_snowflake.streams.snowflake_parent_stream import SnowflakeStream
 
 
@@ -136,6 +127,7 @@ class PrimaryKeyStream(SnowflakeStream):
 
     def __str__(self):
         return f"Current stream has this table object as constructor {self.table_object}"
+
 
 class TimeZoneStream(SnowflakeStream):
     CURRENT_TIME_COLUMN_NAME = 'CURRENT_TIME'
@@ -413,7 +405,7 @@ class StreamLauncherChangeDataCapture(StreamLauncher):
     ) -> Optional[Mapping[str, Any]]:
 
         json_payload = {
-            "statement": self.statement,  # The statement is provided directly because state should not have any effect on the behavior
+            "statement": self.statement,  # The statement is provided directly because state should not have any effect on the statement
             "role": self.config['role'],
             "warehouse": self.config['warehouse'],
             "database": self.config['database'],

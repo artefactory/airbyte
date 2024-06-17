@@ -1,7 +1,5 @@
-from typing import Any, Iterable, List, Mapping, MutableMapping, Optional, Union
-
+from typing import Iterable, Mapping
 import requests
-
 from source_snowflake.snowflake_exceptions import emit_airbyte_error_message
 from source_snowflake.streams.snowflake_parent_stream import SnowflakeStream
 
@@ -9,7 +7,6 @@ from source_snowflake.streams.snowflake_parent_stream import SnowflakeStream
 class CheckConnectionStream(SnowflakeStream):
     DATABASE_NAME_COLUMN = "name"
     SCHEMA_NAME_COLUMN = "schema_name"
-
 
     def __init__(self, url_base, config, authenticator):
         super().__init__(authenticator=authenticator)
@@ -46,7 +43,7 @@ class CheckConnectionStream(SnowflakeStream):
 
         for record in response_json.get("data", []):
             try:
-                yield {'schema': record[schema_name_index],'table': record[database_name_index],}
+                yield {'schema': record[schema_name_index], 'table': record[database_name_index], }
             except Exception:
                 error_message = 'Unexpected error while reading record'
                 emit_airbyte_error_message(error_message)
