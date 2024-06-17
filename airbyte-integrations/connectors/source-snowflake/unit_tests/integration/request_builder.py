@@ -91,7 +91,7 @@ class SnowflakeRequestBuilder:
         query_params = self._build_query_params(is_get)
         statement = None
         if self._table:
-            statement = f'SELECT * FROM "{self._database}"."{self._schema}"."{self._table}"'
+            statement = f'SELECT * FROM "{self._database}"."{self._schema}"."{self._table}"{" ORDER BY " + ",".join(self._order_by)+" ASC" if self._order_by else ""}'
             if self._where_clause:
                 statement = f"{statement} WHERE {self._where_clause}"
             elif self._statement:
