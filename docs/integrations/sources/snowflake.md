@@ -44,6 +44,9 @@ You can limit this grant down to specific schemas instead of the whole database.
 
 Your database user should now be ready for use with Airbyte.
 
+### Authentication
+
+#### Login and Password
 #### 2.Create key pair for authentication 
 You have to follow these steps to create your public and private key to authenticate to the application:
 
@@ -173,9 +176,14 @@ You can find details about allowed retention days here: https://docs.snowflake.c
 
 ## Changelog
 
+<details>
+  <summary>Expand to review</summary>
+
 | Version | Date       | Pull Request                                             | Subject                                                                                                                                   |
 |:--------|:-----------|:---------------------------------------------------------|:------------------------------------------------------------------------------------------------------------------------------------------|
-| 0.3.2   | 2024-05-30 | Fill with right pull request                             | Implement connector in python                                                                                                             |
+| 0.3.3   | 2024-05-30 | Fill with right pull request                             | Implement connector in python  
+| :------ | :--------- | :------------------------------------------------------- | :---------------------------------------------------------------------------------------------------------------------------------------- |
+| 0.3.2   | 2024-02-13 | [38317](https://github.com/airbytehq/airbyte/pull/38317) | Hide oAuth option from connector                                                                                                          |
 | 0.3.1   | 2024-02-13 | [35220](https://github.com/airbytehq/airbyte/pull/35220) | Adopt CDK 0.20.4                                                                                                                          |
 | 0.3.1   | 2024-01-24 | [34453](https://github.com/airbytehq/airbyte/pull/34453) | bump CDK version                                                                                                                          |
 | 0.3.0   | 2023-12-18 | [33484](https://github.com/airbytehq/airbyte/pull/33484) | Remove LEGACY state                                                                                                                       |
@@ -217,3 +225,5 @@ You can find details about allowed retention days here: https://docs.snowflake.c
 | 0.1.3   | 2021-01-11 | [9304](https://github.com/airbytehq/airbyte/pull/9304)   | Upgrade version of JDBC driver                                                                                                            |
 | 0.1.2   | 2021-10-21 | [7257](https://github.com/airbytehq/airbyte/pull/7257)   | Fixed parsing of extreme values for FLOAT and NUMBER data types                                                                           |
 | 0.1.1   | 2021-08-13 | [4699](https://github.com/airbytehq/airbyte/pull/4699)   | Added json config validator                                                                                                               |
+
+</details>

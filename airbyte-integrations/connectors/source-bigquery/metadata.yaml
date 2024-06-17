@@ -31,4 +31,18 @@ data:
   documentationUrl: https://docs.airbyte.com/integrations/sources/bigquery
   tags:
     - language:python
+  connectorTestSuitesOptions:
+    - suite: unitTests
+    - suite: integrationTests
+      testSecrets:
+        - name: SECRET_SOURCE-BIGQUERY_CREDENTIALS__CREDS
+          fileName: credentials.json
+          secretStore:
+            type: GSM
+            alias: airbyte-connector-testing-secret-store
+        - name: SECRET_SOURCE-BIGQUERY_SAT__CREDS
+          fileName: sat-config.json
+          secretStore:
+            type: GSM
+            alias: airbyte-connector-testing-secret-store
 metadataSpecVersion: "1.0"
