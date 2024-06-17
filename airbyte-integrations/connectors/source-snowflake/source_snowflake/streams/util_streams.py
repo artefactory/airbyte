@@ -300,7 +300,6 @@ class StreamLauncher(SnowflakeStream):
             "timeout": self.TIME_OUT_IN_SECONDS,
         }
 
-
         return json_payload
 
     def get_json_schema(self) -> Mapping[str, Any]:
@@ -420,9 +419,5 @@ class StreamLauncherChangeDataCapture(StreamLauncher):
             "database": self.config['database'],
             "timeout": self.TIME_OUT_IN_SECONDS,
         }
-
-        schema = self.table_object.get('schema', '')
-        if schema:
-            json_payload['schema'] = schema
 
         return json_payload

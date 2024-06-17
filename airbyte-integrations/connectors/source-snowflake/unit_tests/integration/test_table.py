@@ -87,11 +87,11 @@ def _given_table_with_primary_keys(http_mocker: HttpMocker) -> None:
     )
 
 
-def _given_read_schema(http_mocker: HttpMocker) -> None:
+def _given_read_schema(http_mocker: HttpMocker, file_name="response_get_table") -> None:
     http_mocker.post(
         table_request().with_table(_TABLE).with_get_schema().with_requestID(_REQUESTID).build(),
-        snowflake_response("response_get_table", JsonPath("$")).with_record(
-            a_snowflake_response("response_get_table", JsonPath("$"))).build()
+        snowflake_response(file_name, JsonPath("$")).with_record(
+            a_snowflake_response(file_name, JsonPath("$"))).build()
 
     )
 
@@ -99,7 +99,7 @@ def _given_read_schema(http_mocker: HttpMocker) -> None:
 def _given_get_timezone(http_mocker: HttpMocker) -> None:
     http_mocker.post(
         table_request().with_requestID(_REQUESTID).with_timezone().build(),
-        snowflake_response("timezone", JsonPath("$.'data'")).build()
+        snowflake_response("timezone", JsonPath("$")).build()
     )
 
 
