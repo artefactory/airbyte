@@ -273,13 +273,13 @@ class StreamLauncher(SnowflakeStream):
         if generic_type == "timestamp_with_timezone":
             state_sql_condition = f"TO_TIMESTAMP_TZ({self.cursor_field})>=TO_TIMESTAMP_TZ('{current_state_value}')"
 
-        if generic_type == "date":
+        elif generic_type == "date":
             state_sql_condition = f"TO_TIMESTAMP({self.cursor_field})>=TO_TIMESTAMP('{current_state_value}')"
 
-        if generic_type == "number":
+        elif generic_type == "number":
             state_sql_condition = f"{self.cursor_field}>={current_state_value}"
 
-        if generic_type == "string":
+        elif generic_type == "string":
             state_sql_condition = f"{self.cursor_field}>='{current_state_value}'"
 
         return state_sql_condition
