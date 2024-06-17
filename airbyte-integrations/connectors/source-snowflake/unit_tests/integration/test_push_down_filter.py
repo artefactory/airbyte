@@ -65,7 +65,7 @@ class FullRefreshPushDownFilterTest(TestCase):
             .with_handle(_HANDLE)
             .build(is_get=True),
             snowflake_response("response_get_table")
-            .with_record(self._a_record().with_field(JsonPath(f"$.[{self.test_colum_1_index}]"), value=3))
+            .with_record(self._a_record().with_field(JsonPath(f"$.[{self.test_colum_1_index}]"), value="3"))
             .build()
         )
 
@@ -99,9 +99,9 @@ class FullRefreshPushDownFilterTest(TestCase):
             .build(is_get=True),
             snowflake_response("response_get_table")
             .with_pagination()
-            .with_record(self._a_record().with_field(JsonPath(f"$.[{self.test_colum_1_index}]"), value=3))
-            .with_record(self._a_record().with_field(JsonPath(f"$.[{self.test_colum_1_index}]"), value=4))
-            .with_record(self._a_record().with_field(JsonPath(f"$.[{self.test_colum_1_index}]"), value=5))
+            .with_record(self._a_record().with_field(JsonPath(f"$.[{self.test_colum_1_index}]"), value="3"))
+            .with_record(self._a_record().with_field(JsonPath(f"$.[{self.test_colum_1_index}]"), value="4"))
+            .with_record(self._a_record().with_field(JsonPath(f"$.[{self.test_colum_1_index}]"), value="5"))
             .build()
         )
 
@@ -111,8 +111,8 @@ class FullRefreshPushDownFilterTest(TestCase):
             .with_partition(1)
             .build(is_get=True),
             snowflake_response("response_get_table")
-            .with_record(self._a_record().with_field(JsonPath(f"$.[{self.test_colum_1_index}]"), value=6))
-            .with_record(self._a_record().with_field(JsonPath(f"$.[{self.test_colum_1_index}]"), value=7))
+            .with_record(self._a_record().with_field(JsonPath(f"$.[{self.test_colum_1_index}]"), value="6"))
+            .with_record(self._a_record().with_field(JsonPath(f"$.[{self.test_colum_1_index}]"), value="7"))
             .build()
         )
 
@@ -122,7 +122,7 @@ class FullRefreshPushDownFilterTest(TestCase):
             .with_partition(2)
             .build(is_get=True),
             snowflake_response("response_get_table")
-            .with_record(self._a_record().with_field(JsonPath(f"$.[{self.test_colum_1_index}]"), value=8))
+            .with_record(self._a_record().with_field(JsonPath(f"$.[{self.test_colum_1_index}]"), value="8"))
             .build()
         )
 
@@ -165,7 +165,7 @@ class IncrementalPushDownFilterTest(TestCase):
                                                                        cursor_path=cursor_path)
 
     @parameterized.expand([
-        ("ID", 0, 3, (1, 2, 3), 'ORDER BY ID ASC'),
+        ("ID", 0, 3, ("1", "2", "3"), 'ORDER BY ID ASC'),
         ("TEST_COLUMN_20", 12, datetime(1970, 1, 4).strftime("%Y-%m-%d"), ("1", "2", "3"),
          "ORDER BY TEST_COLUMN_20 ASC"),
         ("TEST_COLUMN_26", 18, "2018-03-22T12:00:01.123001+05:00", ("1521702000.123000000 1740",
@@ -233,7 +233,7 @@ class IncrementalPushDownFilterTest(TestCase):
         assert most_recent_state.stream_state == AirbyteStateBlob(**{f"{cursor_field}": expected_cursor_value})
 
     @parameterized.expand([
-        ("ID", 0, 3, (1, 2, 3), 2, "ID>=2 ORDER BY ID ASC"),
+        ("ID", 0, 3, ("1", "2", "3"), 2, "ID>=2 ORDER BY ID ASC"),
         ("TEST_COLUMN_20",
          12,
          datetime(1970, 1, 4).strftime("%Y-%m-%d"),
@@ -310,7 +310,7 @@ class IncrementalPushDownFilterTest(TestCase):
         assert most_recent_state.stream_state == AirbyteStateBlob(**{f"{cursor_field}": expected_cursor_value})
 
     @parameterized.expand([
-        ("ID", 0, 4, (1, 2, 3), 4, "ID>=4 ORDER BY ID ASC"),
+        ("ID", 0, 4, ("1", "2", "3"), 4, "ID>=4 ORDER BY ID ASC"),
         ("TEST_COLUMN_20",
          12,
          datetime(1970, 1, 8).strftime("%Y-%m-%d"),

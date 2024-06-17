@@ -179,7 +179,7 @@ class IncrementalTest(TestCase):
                                                                        cursor_path=cursor_path)
 
     @parameterized.expand([
-        ("ID", 0, 3, (1, 2, 3), 'ORDER BY ID ASC'),
+        ("ID", 0, 3, ("1", "2", "3"), 'ORDER BY ID ASC'),
         ("TEST_COLUMN_20", 12, datetime(1970, 1, 4).strftime("%Y-%m-%d"), ("1", "2", "3"),
          "ORDER BY TEST_COLUMN_20 ASC"),
         ("TEST_COLUMN_26", 18, "2018-03-22T12:00:01.123001+05:00", ("1521702000.123000000 1740",
@@ -245,7 +245,7 @@ class IncrementalTest(TestCase):
         assert most_recent_state.stream_state == AirbyteStateBlob(**{f"{cursor_field}": expected_cursor_value})
 
     @parameterized.expand([
-        ("ID", 0, 3, (1, 2, 3), 2, "ID>=2 ORDER BY ID ASC"),
+        ("ID", 0, 3, ("1", "2", "3"), 2, "ID>=2 ORDER BY ID ASC"),
         ("TEST_COLUMN_20",
          12,
          datetime(1970, 1, 4).strftime("%Y-%m-%d"),
@@ -282,6 +282,9 @@ class IncrementalTest(TestCase):
         _given_table_with_primary_keys(http_mocker)
 
         initial_state = {cursor_field: initial_state_value}
+        print('-'*30)
+        print('initial_state', initial_state)
+        print('-'*30)
         cursor_path = JsonPath(f"$.[{cursor_index}]")
         cursor_value_1, cursor_value_2, cursor_value_3 = cursor_values
 
@@ -322,7 +325,7 @@ class IncrementalTest(TestCase):
         assert most_recent_state.stream_state == AirbyteStateBlob(**{f"{cursor_field}": expected_cursor_value})
 
     @parameterized.expand([
-        ("ID", 0, 4, (1, 2, 3), 4, "ID>=4 ORDER BY ID ASC"),
+        ("ID", 0, 4, ("1", "2", "3"), 4, "ID>=4 ORDER BY ID ASC"),
         ("TEST_COLUMN_20",
          12,
          datetime(1970, 1, 8).strftime("%Y-%m-%d"),
