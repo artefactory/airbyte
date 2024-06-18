@@ -366,13 +366,14 @@ class CHTableQueryRecord(BigqueryResultStream):
     """
     name = "ch_query_record"
 
-    def __init__(self, project_id: list, parent_stream: str, order: str, column: str, where_clause, **kwargs):
+    def __init__(self, project_id: list, parent_stream: str, order: str, column: str, where_clause: str, fallback_start: datetime, **kwargs):
         self.project_id = project_id
         self.parent_stream = parent_stream
         self.order = order
         self.column = column
         self.where_clause = where_clause.replace("\"", "'")
         self.data = None
+        self.fallback_start = fallback_start.isoformat(timespec='microseconds')
         super().__init__(project_id, self.path(), self.name, self.get_json_schema(), **kwargs)
 
     def get_json_schema(self) -> Mapping[str, Any]:
@@ -384,7 +385,7 @@ class CHTableQueryRecord(BigqueryResultStream):
         stream_slice: Optional[Mapping[str, Any]] = None,
         next_page_token: Optional[Mapping[str, Any]] = None,
     ) -> Optional[Mapping[str, Any]]:
-        query_string = f"SELECT * FROM APPENDS(TABLE `{self.parent_stream}`,NULL,NULL) ORDER BY {self.column} {self.order} LIMIT 1"
+        query_string = f"SELECT * FROM APPENDS(TABLE `{self.parent_stream}`,'{self.fallback_start}',NULL) ORDER BY {self.column} {self.order} LIMIT 1"
         if self.where_clause:
             index = query_string.find("ORDER BY")
             query_string = query_string[:index] + f" WHERE {self.where_clause} " + query_string[index:]
@@ -931,20 +932,16 @@ class BigqueryCDCStream(BigqueryResultStream, IncrementalMixin):
             self._checkpoint_time = datetime.now()
         return self.state
 
-    def _extract_borders(self):
-        if not self.start_time and not self.end_time:
+    def _extract_borders(self) -> datetime:
+        if not self.end_time:
             cursor_column = next(key for key, value in CHANGE_FIELDS.items() if value == self.cursor_field)
-            first_record = CHTableQueryRecord(self.project_id, self.stream_name, "ASC", cursor_column, self.where_clause, authenticator=self._auth)
-            last_record = CHTableQueryRecord(self.project_id, self.stream_name, "DESC", cursor_column, self.where_clause, authenticator=self._auth)
-            self.start_time = next(first_record.read_records(sync_mode=SyncMode.full_refresh)).get(self.cursor_field, None)
+            last_record = CHTableQueryRecord(self.project_id, self.stream_name, "DESC", cursor_column, self.where_clause, fallback_start=self.fallback_start, authenticator=self._auth)
             self.end_time = next(last_record.read_records(sync_mode=SyncMode.full_refresh)).get(self.cursor_field, None)
-            if self.start_time and isinstance(self.start_time, str):
-                self.start_time = datetime.strptime(self.start_time, '%Y-%m-%dT%H:%M:%S.%f%z')
             if self.end_time and isinstance(self.end_time, str):
                 self.end_time = datetime.strptime(self.end_time, '%Y-%m-%dT%H:%M:%S.%f%z')
-        return self.start_time, self.end_time
+        return self.end_time
     
-    def _chunk_dates(self, start_date: datetime, end_date: datetime, table_start: datetime) -> Iterable[Tuple[datetime, datetime]]:
+    def _chunk_dates(self, start_date: datetime, end_date: datetime, table_start: datetime=None) -> Iterable[Tuple[datetime, datetime]]:
         step = timedelta(minutes=self.slice_range)
         new_start_date = start_date
         if start_date == end_date:
@@ -952,19 +949,17 @@ class BigqueryCDCStream(BigqueryResultStream, IncrementalMixin):
             return
         while new_start_date < end_date+timedelta(seconds=1):
             before_date = min(end_date+timedelta(seconds=1), new_start_date + step)
-            if table_start and before_date < table_start:
-                before_date = table_start + step
             yield new_start_date, before_date
             new_start_date = before_date
 
     def stream_slices(self, stream_state: Mapping[str, Any] = None, cursor_field=None, sync_mode=None, **kwargs) -> Iterable[Optional[Mapping[str, any]]]:
-        start_time, end_time = self._extract_borders()
+        end_time = self._extract_borders()
         default_start = self.fallback_start
         if stream_state:
             self._cursor = stream_state.get(self.cursor_field)
             default_start =  datetime.strptime(self._cursor, '%Y-%m-%dT%H:%M:%S.%f%z') - timedelta(seconds=30)
         if end_time and default_start <= end_time:
-            for start, end in self._chunk_dates(default_start, end_time, start_time):
+            for start, end in self._chunk_dates(default_start, end_time):
                 yield {
                     "start" : start.isoformat(timespec='microseconds'), "end": end.isoformat(timespec='microseconds')
                 }
