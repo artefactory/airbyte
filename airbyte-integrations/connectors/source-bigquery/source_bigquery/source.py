@@ -33,7 +33,7 @@ from airbyte_cdk.sources.streams.concurrent.cursor import ConcurrentCursor, Curs
 from airbyte_cdk.sources.streams.concurrent.state_converters.datetime_stream_state_converter import EpochValueConcurrentStreamStateConverter, IsoMillisConcurrentStreamStateConverter
 
 from .auth import BigqueryAuth
-from .streams import BigqueryDatasets, BigqueryTables, BigqueryDataset, BigqueryTable, BigqueryTableData, BigqueryIncrementalStream, IncrementalQueryResult, TableChangeHistory, BigqueryCDCStream
+from .streams import BigqueryDatasets, BigqueryTables, BigqueryDataset, BigqueryTable, CDCFirstSyncStream, BigqueryIncrementalStream, IncrementalQueryResult, TableChangeHistory, BigqueryCDCStream
 
 """
 This file provides a stubbed example of how to use the Airbyte CDK to develop both a source connector which supports full refresh or and an
@@ -229,14 +229,25 @@ class SourceBigquery(ConcurrentSourceAdapter):
             table_obj = TableChangeHistory(project_id, dataset_id, table_id, given_name=stream_name, where_clause=where_clause, \
                                            fallback_start=max_travel_datetime, slice_range=slice_range, authenticator=self._auth)
             try:
-                first_record = next(table_obj.read_records(sync_mode=SyncMode.full_refresh))
+                records = next(table_obj.read_records(sync_mode=SyncMode.full_refresh))
+                stream_state = self._get_stream_state(table_obj)
+                #If first read then use normal stream to get records before max time travel window
+                if float(records["totalBytesProcessed"]) == 0 and not stream_state:
+                    table_obj = CDCFirstSyncStream(project_id, dataset_id, table_id, table_obj.path(), table_obj.get_json_schema, \
+                                                   given_name=stream_name, where_clause=where_clause, \
+                                                   fallback_start=max_travel_datetime, slice_range=slice_range, authenticator=self._auth)
             except exceptions.HTTPError as error:
                 if error.response.status_code == 400:
                     table_obj = None
+                    self.logger.warning("You probably no longer have permission to time travel on this table") #TODO: add link to documentation
                 else:
                     raise error 
         if table_obj:
             self._concurrent_streams.append(table_obj.stream)
+
+    def _get_stream_state(self, table_obj):
+        state_manager = ConnectorStateManager(stream_instance_map={table_obj.name: table_obj}, state=self.state)
+        return state_manager.get_stream_state(table_obj.name, table_obj.namespace)
 
     def _to_concurrent(
         self, stream: Stream, fallback_start: datetime, slice_range: timedelta, state_manager: ConnectorStateManager
