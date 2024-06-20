@@ -239,7 +239,7 @@ class SourceBigquery(ConcurrentSourceAdapter):
             except exceptions.HTTPError as error:
                 if error.response.status_code == 400:
                     table_obj = None
-                    self.logger.warning("You probably no longer have permission to time travel on this table") #TODO: add link to documentation
+                    #TODO: add link to documentation
                 else:
                     raise error 
         if table_obj:
