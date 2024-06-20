@@ -23,8 +23,8 @@ class SchemaTypes:
     boolean: Dict = {"type": ["null", "boolean"]}
     array: Dict = {"type": ["null", "array"], "items": {}}
     object: Dict = {"type": ["null", "object"]}
-    timestamp_with_timezone: Dict = {"type": ["null", "timestamp_with_timezone"]}
-    timestamp_without_timezone: Dict = {"type": ["null", "timestamp_without_timezone"]}
+    timestamp_with_timezone: Dict = {"type": ["null", "string"], "airbyte_type": "timestamp_with_timezone"}
+    timestamp_without_timezone: Dict = {"type": ["null", "string"], "airbyte_type": "timestamp_without_timezone"}
     time_without_timezone: Dict = {"type": ["null", "time_without_timezone"]}
 
 # https://docs.airbyte.com/integrations/sources/bigquery
@@ -38,8 +38,8 @@ SIMPLE_BIGQUERY_TYPES: Dict = {
     "STRING": SchemaTypes.string,
     "BYTES": SchemaTypes.string,
     "DATE": SchemaTypes.string,
-    "DATETIME": SchemaTypes.string,
-    "TIMESTAMP": SchemaTypes.string,
+    "DATETIME": SchemaTypes.timestamp_without_timezone,
+    "TIMESTAMP": SchemaTypes.timestamp_with_timezone,
     "TIME": SchemaTypes.string,
     "GEOGRAPHY": SchemaTypes.string
 }
