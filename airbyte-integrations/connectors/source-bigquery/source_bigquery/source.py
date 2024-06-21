@@ -222,13 +222,8 @@ class SourceBigquery(ConcurrentSourceAdapter):
             table_obj = IncrementalQueryResult(project_id, dataset_id, table_id, given_name=stream_name, where_clause=where_clause, fallback_start=FALLBACK_START, slice_range=slice_range, authenticator=self._auth)
         else:
             table_creation_datetime = pendulum.from_timestamp(float(table_info["creationTime"])/1000.0) # timestamps returned are in milliseconds hence the /1000
-            dataset = next(BigqueryDataset(project_id, dataset_id, authenticator=self._auth).read_records(sync_mode=SyncMode.full_refresh))
-            max_time_travel_hours = float(dataset.get("maxTimeTravelHours", 168))
-            max_travel_datetime =  datetime.now(tz=pytz.timezone("UTC")) - timedelta(hours=max_time_travel_hours) + timedelta(minutes=2) # add two minutes as margin for maximum duration between the time we get the maxTimeTravelHours and the time we send other requests
-            if max_travel_datetime < table_creation_datetime:
-                max_travel_datetime = table_creation_datetime
             table_obj = TableChangeHistory(project_id, dataset_id, table_id, given_name=stream_name, where_clause=where_clause, \
-                                           fallback_start=max_travel_datetime, slice_range=slice_range, authenticator=self._auth)
+                                           fallback_start=table_creation_datetime, slice_range=slice_range, authenticator=self._auth)
             try:
                 records = next(table_obj.read_records(sync_mode=SyncMode.full_refresh))
             except exceptions.HTTPError as error:
@@ -244,7 +239,7 @@ class SourceBigquery(ConcurrentSourceAdapter):
                 if float(records["totalBytesProcessed"]) == 0 and not stream_state:
                     table_obj = CDCFirstSyncStream(project_id, dataset_id, table_id, table_obj.path(), table_obj.get_json_schema, \
                                                     given_name=stream_name, where_clause=where_clause, \
-                                                    fallback_start=max_travel_datetime, slice_range=slice_range, authenticator=self._auth)
+                                                    fallback_start=table_creation_datetime, slice_range=slice_range, authenticator=self._auth)
         if table_obj:
             self._concurrent_streams.append(table_obj.stream)
 
