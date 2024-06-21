@@ -20,7 +20,7 @@ from airbyte_protocol.models import SyncMode, Type
 from airbyte_cdk.models import AirbyteCatalog, AirbyteMessage, AirbyteStateMessage, ConfiguredAirbyteCatalog, AirbyteStateType, AirbyteStreamState, StreamDescriptor, AirbyteStateBlob
 from airbyte_cdk.utils.traced_exception import AirbyteTracedException, FailureType
 from airbyte_cdk.sources.streams.concurrent.cursor import Cursor
-from .schema_helpers import SchemaHelpers
+from .schema_helpers import SchemaHelpers, TIME_TYPES
 
 """
 This file provides a stubbed example of how to use the Airbyte CDK to develop both a source connector which supports full refresh or and an
@@ -637,9 +637,9 @@ class BigqueryIncrementalStream(BigqueryResultStream, IncrementalMixin):
         slice = {}
         if stream_state:
             self._cursor = list(stream_state.values())[0]
-            if self._cursor:
+            if self._cursor and self.get_json_schema()["properties"][self.cursor_field] in TIME_TYPES:
                 default_start = parser.parse(self._cursor) - timedelta(seconds=30) # loopback window
-        if self.cursor_field and sync_mode == SyncMode.incremental:
+        if self.cursor_field and self.get_json_schema()["properties"][self.cursor_field] in TIME_TYPES and sync_mode == SyncMode.incremental:
             start_time, end_time = self._extract_borders()
             if start_time and end_time:
                 if not isinstance(start_time, datetime):
@@ -659,7 +659,7 @@ class BigqueryIncrementalStream(BigqueryResultStream, IncrementalMixin):
                             slice["end"] = end.isoformat(timespec='microseconds')
                             yield slice
         else:
-            yield
+            yield {}
 
     def request_body_json(
         self,
@@ -677,7 +677,10 @@ class BigqueryIncrementalStream(BigqueryResultStream, IncrementalMixin):
             self._cursor = list(stream_state.values())[0]
             state_field = list(stream_state.keys())[0]
             if self._cursor:
-                query_string = f"SELECT * FROM `{self.stream_name}` WHERE {state_field}>='{self._cursor}' ORDER BY {state_field}"
+                cursor_value = self._cursor
+                if isinstance(self._cursor, str):
+                    cursor_value = f"'{self._cursor}'"
+                query_string = f"SELECT * FROM `{self.stream_name}` WHERE {state_field}>={cursor_value} ORDER BY {state_field}"
         index = query_string.find("ORDER BY")
         if self.where_clause and index==-1:
             query_string = query_string + f" WHERE {self.where_clause}"

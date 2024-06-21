@@ -51,6 +51,7 @@ COMPLEX_BIGQUERY_TYPES: Dict = {
     "JSON": SchemaTypes.object
 }
 
+TIME_TYPES = [SchemaTypes.time_without_timezone, SchemaTypes.timestamp_with_timezone]
 
 class SchemaHelpers:
     @staticmethod

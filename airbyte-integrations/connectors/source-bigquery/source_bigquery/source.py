@@ -34,6 +34,7 @@ from airbyte_cdk.sources.streams.concurrent.state_converters.datetime_stream_sta
 
 from .auth import BigqueryAuth
 from .streams import BigqueryDatasets, BigqueryTables, BigqueryDataset, BigqueryTable, CDCFirstSyncStream, BigqueryIncrementalStream, IncrementalQueryResult, TableChangeHistory, BigqueryCDCStream
+from .schema_helpers import TIME_TYPES
 
 """
 This file provides a stubbed example of how to use the Airbyte CDK to develop both a source connector which supports full refresh or and an
@@ -230,18 +231,20 @@ class SourceBigquery(ConcurrentSourceAdapter):
                                            fallback_start=max_travel_datetime, slice_range=slice_range, authenticator=self._auth)
             try:
                 records = next(table_obj.read_records(sync_mode=SyncMode.full_refresh))
-                stream_state = self._get_stream_state(table_obj)
-                #If first read then use normal stream to get records before max time travel window
-                if float(records["totalBytesProcessed"]) == 0 and not stream_state:
-                    table_obj = CDCFirstSyncStream(project_id, dataset_id, table_id, table_obj.path(), table_obj.get_json_schema, \
-                                                   given_name=stream_name, where_clause=where_clause, \
-                                                   fallback_start=max_travel_datetime, slice_range=slice_range, authenticator=self._auth)
             except exceptions.HTTPError as error:
                 if error.response.status_code == 400:
                     table_obj = None
                     #TODO: add link to documentation
                 else:
                     raise error 
+            else:
+                stream_state = self._get_stream_state(table_obj)
+                #If first read then use normal stream to get records before max time travel window
+                #records["totalBytesProcessed"] is 0 when time travel window is bigger than what's allowed
+                if float(records["totalBytesProcessed"]) == 0 and not stream_state:
+                    table_obj = CDCFirstSyncStream(project_id, dataset_id, table_id, table_obj.path(), table_obj.get_json_schema, \
+                                                    given_name=stream_name, where_clause=where_clause, \
+                                                    fallback_start=max_travel_datetime, slice_range=slice_range, authenticator=self._auth)
         if table_obj:
             self._concurrent_streams.append(table_obj.stream)
 
@@ -252,7 +255,7 @@ class SourceBigquery(ConcurrentSourceAdapter):
     def _to_concurrent(
         self, stream: Stream, fallback_start: datetime, slice_range: timedelta, state_manager: ConnectorStateManager
     ) -> Stream:
-        if not self.catalog:
+        if not self.catalog or (stream.cursor_field and not stream.get_json_schema()["properties"][stream.cursor_field] in TIME_TYPES):
             return stream
         state = state_manager.get_stream_state(stream.name, stream.namespace)
         state = self._format_state(state)
