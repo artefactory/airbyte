@@ -25,7 +25,8 @@ class SchemaTypes:
     object: Dict = {"type": ["null", "object"]}
     timestamp_with_timezone: Dict = {"type": ["null", "string"], "airbyte_type": "timestamp_with_timezone"}
     timestamp_without_timezone: Dict = {"type": ["null", "string"], "airbyte_type": "timestamp_without_timezone"}
-    time_without_timezone: Dict = {"type": ["null", "time_without_timezone"]}
+    time_without_timezone: Dict = {"type": ["null", "string"], "airbyte_type": "time_without_timezone"}
+    date: Dict = {"type": ["null", "date"]}
 
 # https://docs.airbyte.com/integrations/sources/bigquery
 SIMPLE_BIGQUERY_TYPES: Dict = {
@@ -37,10 +38,10 @@ SIMPLE_BIGQUERY_TYPES: Dict = {
     "INTEGER": SchemaTypes.number,
     "STRING": SchemaTypes.string,
     "BYTES": SchemaTypes.string,
-    "DATE": SchemaTypes.string,
+    "DATE": SchemaTypes.date,
     "DATETIME": SchemaTypes.timestamp_without_timezone,
     "TIMESTAMP": SchemaTypes.timestamp_with_timezone,
-    "TIME": SchemaTypes.string,
+    "TIME": SchemaTypes.time_without_timezone,
     "GEOGRAPHY": SchemaTypes.string
 }
 
@@ -110,6 +111,8 @@ class SchemaHelpers:
             ts = float(field)
             dt = pendulum.from_timestamp(ts)
             return dt.isoformat(timespec='microseconds')
-        if SIMPLE_BIGQUERY_TYPES.get(field_type) == SchemaTypes.number and field:
+        if SIMPLE_BIGQUERY_TYPES.get(field_type) == SchemaTypes.integer and field:
+            return int(field) 
+        elif SIMPLE_BIGQUERY_TYPES.get(field_type) == SchemaTypes.number and field:
             return float(field)
         return field
