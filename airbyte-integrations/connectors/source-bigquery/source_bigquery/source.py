@@ -152,7 +152,7 @@ class SourceBigquery(ConcurrentSourceAdapter):
         slice_range = float(config.get("slice_range", _DEFAULT_SLICE_RANGE))
 
         self._add_filtered_streams(streams, project_id, sync_method, slice_range)
-        if self.catalog:
+        if self.catalog and self.catalog.streams:
             self._use_catalog_streams(project_id, sync_method, slice_range)
         else:
             if dataset_id:
@@ -251,7 +251,9 @@ class SourceBigquery(ConcurrentSourceAdapter):
     def _to_concurrent(
         self, stream: Stream, fallback_start: datetime, slice_range: timedelta, state_manager: ConnectorStateManager
     ) -> Stream:
-        if not self.catalog or (stream.cursor_field and not stream.get_json_schema()["properties"][stream.cursor_field] in TIME_TYPES):
+        #if no catalog given then we are not in read so no need for concurrency
+        #and if cursor field is not of type datetime concurrency will not work
+        if not (self.catalog and self.catalog.streams) or (stream.cursor_field and not stream.get_json_schema()["properties"][stream.cursor_field] in TIME_TYPES):
             return stream
         state = state_manager.get_stream_state(stream.name, stream.namespace)
         state = self._format_state(state)
