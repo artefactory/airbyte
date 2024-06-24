@@ -3,6 +3,7 @@
 #
 
 
+import os
 import logging
 from abc import ABC
 from typing import Any, Iterable, List, Mapping, MutableMapping, Optional, Tuple
@@ -56,6 +57,12 @@ CHANGE_HISTORY_START = datetime.now(tz=pytz.timezone("UTC")) - timedelta(days=7)
 # Source
 class SourceBigquery(ConcurrentSourceAdapter):
     logger = logging.getLogger("airbyte")
+    logger.level = {
+        "info": logging.INFO,
+        "debug": logging.DEBUG,
+        "warn": logging.WARN,
+        "error": logging.ERROR,
+    }.get(os.getenv("LOG_LEVEL", "info").lower(), logging.INFO)
     streams_catalog: Iterable[Mapping[str, Any]] = []
     _auth: BigqueryAuth = None
     _SLICE_BOUNDARY_FIELDS_BY_IMPLEMENTATION = {
