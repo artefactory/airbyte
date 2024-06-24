@@ -34,8 +34,8 @@ from airbyte_cdk.sources.streams.concurrent.cursor import ConcurrentCursor, Curs
 from airbyte_cdk.sources.streams.concurrent.state_converters.datetime_stream_state_converter import EpochValueConcurrentStreamStateConverter, IsoMillisConcurrentStreamStateConverter
 
 from .auth import BigqueryAuth
-from .streams import BigqueryDatasets, BigqueryTables, BigqueryStream, BigqueryTable, BigqueryTableData, BigqueryIncrementalStream, IncrementalQueryResult, TableChangeHistory, BigqueryCDCStream
-from .schema_helpers import SchemaHelpers
+from .streams import BigqueryDatasets, BigqueryTables, BigqueryDataset, BigqueryTable, CDCFirstSyncStream, BigqueryIncrementalStream, IncrementalQueryResult, TableChangeHistory, BigqueryCDCStream
+from .schema_helpers import TIME_TYPES
 
 """
 This file provides a stubbed example of how to use the Airbyte CDK to develop both a source connector which supports full refresh or and an
@@ -119,7 +119,8 @@ class SourceBigquery(ConcurrentSourceAdapter):
                 dataset_id = dataset.get("datasetReference")["datasetId"]
                 for table_info in BigqueryTables(dataset_id=dataset_id, project_id=config["project_id"], authenticator=self._auth).read_records(sync_mode=SyncMode.full_refresh):
                     table_id = table_info.get("tableReference")["tableId"]
-                    BigqueryTable(dataset_id=dataset_id, project_id=config["project_id"], table_id=table_id, authenticator=self._auth) #TODO: do fullrefresh
+                    table_info = BigqueryTable(dataset_id=dataset_id, project_id=config["project_id"], table_id=table_id, authenticator=self._auth)
+                    next(table_info.read_records(sync_mode=SyncMode.full_refresh))
         except exceptions.HTTPError as error:
             error_msg = f"An error occurred: {error.response.text}"
             try:
@@ -157,22 +158,20 @@ class SourceBigquery(ConcurrentSourceAdapter):
         sync_method = config["replication_method"]["method"]
         slice_range = float(config.get("slice_range", _DEFAULT_SLICE_RANGE))
 
-        for stream in streams:
-            filter_dataset_id, table_id = stream['parent_stream'].split(".")
-            where_clause = stream["where_clause"]
-            stream_name = stream["name"]
-            self._get_tables(project_id, filter_dataset_id, table_id, sync_method, slice_range, stream_name, where_clause)
-
-        if dataset_id:
-            for table_info in BigqueryTables(dataset_id=dataset_id, project_id=project_id, authenticator=self._auth).read_records(sync_mode=SyncMode.full_refresh):
-                table_id = table_info.get("tableReference")["tableId"]
-                self._get_tables(project_id, dataset_id, table_id, sync_method, slice_range)
+        self._add_filtered_streams(streams, project_id, sync_method, slice_range)
+        if self.catalog and self.catalog.streams:
+            self._use_catalog_streams(project_id, sync_method, slice_range)
         else:
-            for dataset in BigqueryDatasets(project_id=project_id, authenticator=self._auth).read_records(sync_mode=SyncMode.full_refresh):
-                dataset_id = dataset.get("datasetReference")["datasetId"]
+            if dataset_id:
                 for table_info in BigqueryTables(dataset_id=dataset_id, project_id=project_id, authenticator=self._auth).read_records(sync_mode=SyncMode.full_refresh):
                     table_id = table_info.get("tableReference")["tableId"]
-                    self._get_tables(project_id, dataset_id, table_id, sync_method, slice_range)
+                    self._add_tables(project_id, dataset_id, table_id, sync_method, slice_range, table_info)
+            else:
+                for dataset in BigqueryDatasets(project_id=project_id, authenticator=self._auth).read_records(sync_mode=SyncMode.full_refresh):
+                    dataset_id = dataset.get("datasetReference")["datasetId"]
+                    for table_info in BigqueryTables(dataset_id=dataset_id, project_id=project_id, authenticator=self._auth).read_records(sync_mode=SyncMode.full_refresh):
+                        table_id = table_info.get("tableReference")["tableId"]
+                        self._add_tables(project_id, dataset_id, table_id, sync_method, slice_range, table_info)
 
         self._set_cursor_field()
         self._set_sync_mode()
@@ -187,6 +186,30 @@ class SourceBigquery(ConcurrentSourceAdapter):
             for stream in self._concurrent_streams
         ]
     
+    def _add_filtered_streams(self, streams, project_id, sync_method, slice_range):
+        for stream in streams:
+            filter_dataset_id, table_id = stream['parent_stream'].split(".")
+            where_clause = stream["where_clause"]
+            stream_name = stream["name"]
+            table_info = next(BigqueryTable(dataset_id=filter_dataset_id, project_id=project_id, table_id=table_id, authenticator=self._auth).read_records(sync_mode=SyncMode.full_refresh))
+            self._add_tables(project_id, filter_dataset_id, table_id, sync_method, slice_range, table_info, stream_name, where_clause)
+
+    def _use_catalog_streams(self, project_id, sync_method, slice_range):
+        for configured_stream in self.catalog.streams:
+            try:
+                dataset_id, table_id = configured_stream.stream.name.split(".")
+                table_info = next(BigqueryTable(dataset_id=dataset_id, project_id=project_id, table_id=table_id, authenticator=self._auth).read_records(sync_mode=SyncMode.full_refresh))
+                self._add_tables(project_id, dataset_id, table_id, sync_method, slice_range, table_info)
+            except ValueError:
+                # This could happen for pushdown filter streams
+                pass
+            except exceptions.HTTPError as error:
+                if error.response.status_code == 404:
+                    # This could happen for pushdown filter streams
+                    pass
+                else:
+                    raise error 
+
     def _set_cursor_field(self):
         for stream in self._concurrent_streams:
             if not stream.cursor_field and self.catalog:
@@ -201,29 +224,46 @@ class SourceBigquery(ConcurrentSourceAdapter):
                     if configured_stream.stream.name == stream.name and configured_stream.sync_mode:
                         stream.configured_sync_mode = configured_stream.sync_mode
 
-    def _get_tables(self, project_id, dataset_id, table_id, sync_method, slice_range, stream_name=None, where_clause=""):
+    def _add_tables(self, project_id, dataset_id, table_id, sync_method, slice_range, table_info, stream_name=None, where_clause=""):
         # list and process each table under each base to generate the JSON Schema
         if sync_method == "Standard":
             table_obj = IncrementalQueryResult(project_id, dataset_id, table_id, given_name=stream_name, where_clause=where_clause, fallback_start=FALLBACK_START, slice_range=slice_range, authenticator=self._auth)
         else:
-            table_obj = TableChangeHistory(project_id, dataset_id, table_id, given_name=stream_name, where_clause=where_clause, fallback_start=CHANGE_HISTORY_START, slice_range=slice_range, authenticator=self._auth)
+            table_creation_datetime = pendulum.from_timestamp(float(table_info["creationTime"])/1000.0) # timestamps returned are in milliseconds hence the /1000
+            table_obj = TableChangeHistory(project_id, dataset_id, table_id, given_name=stream_name, where_clause=where_clause, \
+                                           fallback_start=table_creation_datetime, slice_range=slice_range, authenticator=self._auth)
             try:
-                next(table_obj.read_records(sync_mode=SyncMode.full_refresh))
+                records = next(table_obj.read_records(sync_mode=SyncMode.full_refresh))
             except exceptions.HTTPError as error:
                 if error.response.status_code == 400:
                     table_obj = None
+                    #TODO: add link to documentation
                 else:
                     raise error 
+            else:
+                stream_state = self._get_stream_state(table_obj)
+                #If first read then use normal stream to get records before max time travel window
+                #records["totalBytesProcessed"] is 0 when time travel window is bigger than what's allowed
+                if float(records["totalBytesProcessed"]) == 0 and not stream_state:
+                    table_obj = CDCFirstSyncStream(project_id, dataset_id, table_id, table_obj.path(), table_obj.get_json_schema, \
+                                                    given_name=stream_name, where_clause=where_clause, \
+                                                    fallback_start=table_creation_datetime, slice_range=slice_range, authenticator=self._auth)
         if table_obj:
             self._concurrent_streams.append(table_obj.stream)
+
+    def _get_stream_state(self, table_obj):
+        state_manager = ConnectorStateManager(stream_instance_map={table_obj.name: table_obj}, state=self.state)
+        return state_manager.get_stream_state(table_obj.name, table_obj.namespace)
 
     def _to_concurrent(
         self, stream: Stream, fallback_start: datetime, slice_range: timedelta, state_manager: ConnectorStateManager
     ) -> Stream:
-        if not self.catalog:
+        #if no catalog given then we are not in read so no need for concurrency
+        #and if cursor field is not of type datetime concurrency will not work
+        if not (self.catalog and self.catalog.streams) or (stream.cursor_field and not stream.get_json_schema()["properties"][stream.cursor_field] in TIME_TYPES):
             return stream
         state = state_manager.get_stream_state(stream.name, stream.namespace)
-        state = self._format_state(state)
+        state = self._format_state(state, stream)
         if stream.configured_sync_mode==SyncMode.full_refresh or not stream.cursor_field:
             return StreamFacade.create_from_stream(
                 stream,
@@ -255,11 +295,11 @@ class SourceBigquery(ConcurrentSourceAdapter):
 
         return stream
 
-    def _format_state(self, state):
+    def _format_state(self, state, stream):
         """
         This is to prevent parse_timestamp in IsoMillisConcurrentStreamStateConverter from crashing because of unexpected timestamp format
         """
-        if state:
+        if state and stream.get_json_schema()["properties"][list(state.keys())[0]] in TIME_TYPES:
             try:
                 pendulum.parse(list(state.values())[0])
             except pendulum.parsing.exceptions.ParserError as e:

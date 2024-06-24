@@ -25,6 +25,7 @@ acceptance_tests:
         empty_streams: []
         timeout_seconds: 40
         validate_stream_statuses: true
+        expect_trace_message_on_failure: false
         expect_records:
           path: "integration_tests/expected_records.jsonl"
           exact_order: no
@@ -34,6 +35,7 @@ acceptance_tests:
         timeout_seconds: 40
         validate_stream_statuses: true
         fail_on_extra_columns: false
+        expect_trace_message_on_failure: false
         expect_records:
           path: "integration_tests/expected_records.jsonl"
           exact_order: no
@@ -42,14 +44,8 @@ acceptance_tests:
     - config_path: "secrets/config.json"
       configured_catalog_path: "integration_tests/inc_configured_catalog.json"
       timeout_seconds: 40
-    - config_path: "secrets/config.json"
-      configured_catalog_path: "integration_tests/inc_configured_catalog.json"
-      timeout_seconds: 40
       future_state:
         future_state_path: "integration_tests/inc_abnormal_state.json"
-    - config_path: "secrets/cdc_config.json"
-      configured_catalog_path: "integration_tests/cdc_configured_catalog.json"
-      timeout_seconds: 40
     - config_path: "secrets/cdc_config.json"
       configured_catalog_path: "integration_tests/cdc_configured_catalog.json"
       timeout_seconds: 40

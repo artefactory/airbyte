@@ -20,7 +20,7 @@ from airbyte_protocol.models import SyncMode, Type
 from airbyte_cdk.models import AirbyteCatalog, AirbyteMessage, AirbyteStateMessage, ConfiguredAirbyteCatalog, AirbyteStateType, AirbyteStreamState, StreamDescriptor, AirbyteStateBlob
 from airbyte_cdk.utils.traced_exception import AirbyteTracedException, FailureType
 from airbyte_cdk.sources.streams.concurrent.cursor import Cursor
-from .schema_helpers import SchemaHelpers
+from .schema_helpers import SchemaHelpers, TIME_TYPES
 
 """
 This file provides a stubbed example of how to use the Airbyte CDK to develop both a source connector which supports full refresh or and an
@@ -38,6 +38,7 @@ CHANGE_FIELDS = {"_CHANGE_TIMESTAMP": "change_timestamp", "_CHANGE_TYPE": "chang
 PAGE_SIZE = 10000
 TIMEOUT = 30000 # 30 seconds
 SLICE_RANGE = 525600 # 1 year in minutes
+DEFAULT_CHANGE_FIELD = {"change_timestamp": "0001-01-01T00:00:00.000000+00:00", "change_type": "INSERT"}
 
 class BigqueryStream(HttpStream, ABC):
     """
@@ -60,7 +61,7 @@ class BigqueryStream(HttpStream, ABC):
         return self.stream_name
 
     def get_json_schema(self) -> Mapping[str, Any]:
-        return self.stream_schema()
+        return {}
 
     def next_page_token(self, response: requests.Response, **kwargs) -> Optional[Mapping[str, Any]]:
         return None
@@ -140,6 +141,34 @@ class BigqueryDatasets(BigqueryStream):
                         )
 
 
+class BigqueryDataset(BigqueryStream):
+    """
+    """
+    name = "dataset"
+
+    def __init__(self, project_id: str, dataset_id: str, **kwargs):
+        self.project_id = project_id
+        self.dataset_id = dataset_id
+        super().__init__(self.path(), self.name, self.get_json_schema(), **kwargs)
+
+    def path(self, **kwargs) -> str:
+        """
+        Documentation: https://cloud.google.com/bigquery/docs/reference/rest/v2/datasets/get
+        """
+        return f"/bigquery/v2/projects/{self.project_id}/datasets/{self.dataset_id}"
+
+    def get_json_schema(self) -> Mapping[str, Any]:
+        return {}
+    
+    def parse_response(self, response: requests.Response, **kwargs) -> Iterable[Mapping]:
+        """
+
+        :return an iterable containing each record in the response
+        """
+        record = response.json()
+        yield record
+        
+
 class BigqueryTables(BigqueryDatasets):
     name = "tables"
 
@@ -197,8 +226,7 @@ class BigqueryTable(BigqueryTables):
 
     def path(self, **kwargs) -> str:
         """
-        Documentation: https://cloud.google.com/bigquery/docs/reference/rest#rest-resource:-v2.tables
-                       https://cloud.google.com/bigquery/docs/reference/rest/v2/tables/get
+        Documentation: https://cloud.google.com/bigquery/docs/reference/rest/v2/tables/get
         """
         return f"{super().path()}/{self.table_id}"
 
@@ -333,19 +361,28 @@ class BigqueryResultStream(BigqueryStream):
         self.logger.info(f"Checkpoint state of {self.name} is {stream_state}")
         print(state.json(exclude_unset=True))  # Emit state
 
+    def get_time_travel_datetime(self, dataset_id, table_creation_datetime) -> datetime:
+        dataset = next(BigqueryDataset(self.project_id, dataset_id, authenticator=self._auth).read_records(sync_mode=SyncMode.full_refresh))
+        max_time_travel_hours = float(dataset.get("maxTimeTravelHours", 168))
+        max_travel_datetime =  datetime.now(tz=pytz.timezone("UTC")) - timedelta(hours=max_time_travel_hours) + timedelta(minutes=2) # add two minutes as margin for maximum duration between the time we get the maxTimeTravelHours and the time we send other requests
+        if max_travel_datetime < table_creation_datetime:
+            max_travel_datetime = table_creation_datetime
+        return max_travel_datetime
+    
 
 class CHTableQueryRecord(BigqueryResultStream):
     """
     """
     name = "ch_query_record"
 
-    def __init__(self, project_id: list, parent_stream: str, order: str, column: str, where_clause, **kwargs):
+    def __init__(self, project_id: list, parent_stream: str, order: str, column: str, where_clause: str, fallback_start: datetime, **kwargs):
         self.project_id = project_id
         self.parent_stream = parent_stream
         self.order = order
         self.column = column
         self.where_clause = where_clause.replace("\"", "'")
         self.data = None
+        self.fallback_start = fallback_start.isoformat(timespec='microseconds')
         super().__init__(project_id, self.path(), self.name, self.get_json_schema(), **kwargs)
 
     def get_json_schema(self) -> Mapping[str, Any]:
@@ -357,7 +394,7 @@ class CHTableQueryRecord(BigqueryResultStream):
         stream_slice: Optional[Mapping[str, Any]] = None,
         next_page_token: Optional[Mapping[str, Any]] = None,
     ) -> Optional[Mapping[str, Any]]:
-        query_string = f"SELECT * FROM APPENDS(TABLE `{self.parent_stream}`,NULL,NULL) ORDER BY {self.column} {self.order} LIMIT 1"
+        query_string = f"SELECT * FROM APPENDS(TABLE `{self.parent_stream}`,'{self.fallback_start}',NULL) ORDER BY {self.column} {self.order} LIMIT 1"
         if self.where_clause:
             index = query_string.find("ORDER BY")
             query_string = query_string[:index] + f" WHERE {self.where_clause} " + query_string[index:]
@@ -526,6 +563,9 @@ class BigqueryIncrementalStream(BigqueryResultStream, IncrementalMixin):
             self.set_primary_key()
         return self._primary_key
     
+    def get_json_schema(self) -> Mapping[str, Any]:
+        return self.stream_schema()
+    
     def set_primary_key(self):
         self._primary_key = self._get_primary_key()
         self._is_primary_key_set = True
@@ -568,8 +608,8 @@ class BigqueryIncrementalStream(BigqueryResultStream, IncrementalMixin):
 
     def _extract_borders(self):
         if not self.start_time and not self.end_time:
-            first_record = TableQueryRecord(self.project_id, self.stream_name, "ASC", self.cursor_field, self.where_clause, authenticator=self._auth)
-            last_record = TableQueryRecord(self.project_id, self.stream_name, "DESC", self.cursor_field, self.where_clause, authenticator=self._auth)
+            first_record = TableQueryRecord(self.project_id, self.stream_name, "ASC", self.cursor_field, self.where_clause, fallback_start=self.fallback_start, authenticator=self._auth)
+            last_record = TableQueryRecord(self.project_id, self.stream_name, "DESC", self.cursor_field, self.where_clause, fallback_start=self.fallback_start, authenticator=self._auth)
             self.start_time = next(first_record.read_records(sync_mode=SyncMode.full_refresh)).get(self.cursor_field, None)
             self.end_time = next(last_record.read_records(sync_mode=SyncMode.full_refresh)).get(self.cursor_field, None)
             if self.start_time and isinstance(self.start_time, str):
@@ -606,9 +646,9 @@ class BigqueryIncrementalStream(BigqueryResultStream, IncrementalMixin):
         slice = {}
         if stream_state:
             self._cursor = list(stream_state.values())[0]
-            if self._cursor:
+            if self._cursor and self.get_json_schema()["properties"][self.cursor_field] in TIME_TYPES:
                 default_start = parser.parse(self._cursor) - timedelta(seconds=30) # loopback window
-        if self.cursor_field and sync_mode == SyncMode.incremental:
+        if self.cursor_field and self.get_json_schema()["properties"][self.cursor_field] in TIME_TYPES and sync_mode == SyncMode.incremental:
             start_time, end_time = self._extract_borders()
             if start_time and end_time:
                 if not isinstance(start_time, datetime):
@@ -628,7 +668,7 @@ class BigqueryIncrementalStream(BigqueryResultStream, IncrementalMixin):
                             slice["end"] = end.isoformat(timespec='microseconds')
                             yield slice
         else:
-            yield
+            yield {}
 
     def request_body_json(
         self,
@@ -646,7 +686,10 @@ class BigqueryIncrementalStream(BigqueryResultStream, IncrementalMixin):
             self._cursor = list(stream_state.values())[0]
             state_field = list(stream_state.keys())[0]
             if self._cursor:
-                query_string = f"SELECT * FROM `{self.stream_name}` WHERE {state_field}>='{self._cursor}' ORDER BY {state_field}"
+                cursor_value = self._cursor
+                if isinstance(self._cursor, str):
+                    cursor_value = f"'{self._cursor}'"
+                query_string = f"SELECT * FROM `{self.stream_name}` WHERE {state_field}>={cursor_value} ORDER BY {state_field}"
         index = query_string.find("ORDER BY")
         if self.where_clause and index==-1:
             query_string = query_string + f" WHERE {self.where_clause}"
@@ -704,6 +747,8 @@ class BigqueryIncrementalStream(BigqueryResultStream, IncrementalMixin):
 
 class IncrementalQueryResult(BigqueryResultStream):
     """
+    This class is lighter version of BigqueryIncrementalStream as we use the dryRun option which only tests if the query is correct and only sends the schema in response, 
+    and also we do not have all the logic for handling the state in this class.
     """
     primary_key = None
     cursor_field = []
@@ -817,7 +862,7 @@ class BigqueryCDCStream(BigqueryResultStream, IncrementalMixin):
 
     @property
     def namespace(self):
-        return None # TODO: update to self.dataset_id
+        return None # TODO: update to self.dataset_id for backward compatibility
     
     @property
     def name(self):
@@ -838,7 +883,8 @@ class BigqueryCDCStream(BigqueryResultStream, IncrementalMixin):
 
     @state.setter
     def state(self, value):
-        self._cursor = value[self.cursor_field]
+        if value:
+            self._cursor = value[self.cursor_field]
 
     @property
     def source_defined_cursor(self) -> bool:
@@ -858,6 +904,9 @@ class BigqueryCDCStream(BigqueryResultStream, IncrementalMixin):
         if not self._is_primary_key_set:
             self.set_primary_key()
         return self._primary_key
+    
+    def get_json_schema(self) -> Mapping[str, Any]:
+        return self.stream_schema()
     
     def set_primary_key(self):
         self._primary_key = self._get_primary_key()
@@ -898,20 +947,16 @@ class BigqueryCDCStream(BigqueryResultStream, IncrementalMixin):
             self._checkpoint_time = datetime.now()
         return self.state
 
-    def _extract_borders(self):
-        if not self.start_time and not self.end_time:
+    def _extract_borders(self, time_travel_start) -> datetime:
+        if not self.end_time:
             cursor_column = next(key for key, value in CHANGE_FIELDS.items() if value == self.cursor_field)
-            first_record = CHTableQueryRecord(self.project_id, self.stream_name, "ASC", cursor_column, self.where_clause, authenticator=self._auth)
-            last_record = CHTableQueryRecord(self.project_id, self.stream_name, "DESC", cursor_column, self.where_clause, authenticator=self._auth)
-            self.start_time = next(first_record.read_records(sync_mode=SyncMode.full_refresh)).get(self.cursor_field, None)
+            last_record = CHTableQueryRecord(self.project_id, self.stream_name, "DESC", cursor_column, self.where_clause, fallback_start=time_travel_start, authenticator=self._auth)
             self.end_time = next(last_record.read_records(sync_mode=SyncMode.full_refresh)).get(self.cursor_field, None)
-            if self.start_time and isinstance(self.start_time, str):
-                self.start_time = datetime.strptime(self.start_time, '%Y-%m-%dT%H:%M:%S.%f%z')
             if self.end_time and isinstance(self.end_time, str):
                 self.end_time = datetime.strptime(self.end_time, '%Y-%m-%dT%H:%M:%S.%f%z')
-        return self.start_time, self.end_time
+        return self.end_time
     
-    def _chunk_dates(self, start_date: datetime, end_date: datetime, table_start: datetime) -> Iterable[Tuple[datetime, datetime]]:
+    def _chunk_dates(self, start_date: datetime, end_date: datetime, table_start: datetime=None) -> Iterable[Tuple[datetime, datetime]]:
         step = timedelta(minutes=self.slice_range)
         new_start_date = start_date
         if start_date == end_date:
@@ -919,21 +964,35 @@ class BigqueryCDCStream(BigqueryResultStream, IncrementalMixin):
             return
         while new_start_date < end_date+timedelta(seconds=1):
             before_date = min(end_date+timedelta(seconds=1), new_start_date + step)
-            if table_start and before_date < table_start:
-                before_date = table_start + step
             yield new_start_date, before_date
             new_start_date = before_date
 
     def stream_slices(self, stream_state: Mapping[str, Any] = None, cursor_field=None, sync_mode=None, **kwargs) -> Iterable[Optional[Mapping[str, any]]]:
-        start_time, end_time = self._extract_borders()
-        default_start = self.fallback_start
+        default_start = self.get_time_travel_datetime(self.dataset_id, self.fallback_start)
+        end_time = self._extract_borders(default_start)
+        self.fallback_start = default_start
         if stream_state:
             self._cursor = stream_state.get(self.cursor_field)
             default_start =  datetime.strptime(self._cursor, '%Y-%m-%dT%H:%M:%S.%f%z') - timedelta(seconds=30)
-        if end_time and default_start <= end_time:
-            for start, end in self._chunk_dates(default_start, end_time, start_time):
+        now = datetime.now(tz=default_start.tzinfo)
+        if not end_time:
+            end_time = now
+        if default_start <= end_time:
+            for start, end in self._chunk_dates(default_start, end_time):
                 yield {
-                    "start" : start.isoformat(timespec='microseconds'), "end": end.isoformat(timespec='microseconds')
+                    "start" : start.isoformat(timespec='microseconds'), 
+                    "end": end.isoformat(timespec='microseconds')
+                }
+        elif default_start <= now:
+            yield {
+                    "start" : default_start.isoformat(timespec='microseconds'), 
+                    "end": (now+timedelta(microseconds=1)).isoformat(timespec='microseconds')
+                }
+        else:
+            #workaround because bigquery does not like start time higher than current time
+            yield {
+                    "start" : (end_time+timedelta(microseconds=1)).isoformat(timespec='microseconds'), 
+                    "end": (end_time+timedelta(microseconds=2)).isoformat(timespec='microseconds')
                 }
 
     def request_body_json(
@@ -967,7 +1026,7 @@ class BigqueryCDCStream(BigqueryResultStream, IncrementalMixin):
         if next_page:
             query_job = GetQueryResults(self.project_id, self.dataset_id, self.table_id, \
                                         job_id, record["jobReference"]["location"], \
-                                        next_page, authenticator=self._auth)
+                                        next_page, change_history=True, authenticator=self._auth) #
             records = query_job.read_records(sync_mode=SyncMode.full_refresh)
             for record in records:
                 yield record
@@ -977,7 +1036,8 @@ class BigqueryCDCStream(BigqueryResultStream, IncrementalMixin):
                 data = row.get("f")
                 formated_data = {
                     "_bigquery_table_id": job_id,
-                    "_bigquery_created_time": datetime.now(tz=pytz.timezone("UTC")).isoformat(timespec='microseconds'), #TODO: Update this to row insertion time
+                    "_bigquery_created_time": datetime.now(tz=pytz.timezone("UTC")).isoformat(timespec='microseconds'),
+                    **DEFAULT_CHANGE_FIELD,
                     **{CHANGE_FIELDS.get(element["name"], element["name"]): SchemaHelpers.format_field(data[fields.index(element)]["v"], element["type"]) for element in fields},
                 }
                 yield formated_data
@@ -998,9 +1058,47 @@ class BigqueryCDCStream(BigqueryResultStream, IncrementalMixin):
             retry = (records["jobComplete"] == False)
         return retry
 
+class CDCFirstSyncStream(BigqueryCDCStream):
+    def __init__(self, project_id, dataset_id, table_id, stream_path, stream_schema, given_name=None, \
+                 where_clause: str="", fallback_start=None, slice_range=SLICE_RANGE, **kwargs):
+        self.stream_name = dataset_id + "." + table_id
+        super().__init__(project_id, dataset_id, table_id, stream_path, stream_schema, given_name, \
+                 where_clause, fallback_start, slice_range, **kwargs)
+    @property
+    def stream(self):
+        return self
+    
+    def stream_slices(self, stream_state: Mapping[str, Any] = None, cursor_field=None, sync_mode=None, **kwargs) -> Iterable[Optional[Mapping[str, any]]]:
+        yield {}
+        
+    def request_body_json(
+        self,
+        stream_state: Optional[Mapping[str, Any]],
+        stream_slice: Optional[Mapping[str, Any]] = None,
+        next_page_token: Optional[Mapping[str, Any]] = None,
+    ) -> Optional[Mapping[str, Any]]:
+        query_string = f"SELECT * FROM `{self.stream_name}`"
+        if stream_slice:
+            start = stream_slice.get("start", None)
+            end = stream_slice.get("end", None)
+            if start and end:
+                query_string = f"SELECT * FROM `{self.stream_name}` WHERE {self.cursor_field}>='{start}' AND {self.cursor_field}<'{end}'"
+        if self.where_clause:
+            query_string = query_string + f" AND {self.where_clause}"
+        request_body = {
+            "kind": "bigquery#queryRequest",
+            "query": query_string,
+            "useLegacySql": False,
+            "timeoutMs": TIMEOUT,
+            "maxResults": self.page_size
+            }
+        return request_body
+    
 
 class TableChangeHistory(BigqueryResultStream):
     """
+    This class is lighter version of BigqueryCDCStream as we use the dryRun option which only tests if the query is correct and only sends the schema in response, 
+    and also we do not have all the logic for handling the state in this class.
     """
     primary_key = None
 
@@ -1013,6 +1111,7 @@ class TableChangeHistory(BigqueryResultStream):
         self.table_id = table_id
         self.where_clause = where_clause.replace("\"", "'")
         self._json_schema = {}
+        self.fallback_start = fallback_start
         super().__init__(project_id, self.path(), self.table_qualifier, self.project_id, self.get_json_schema, retry_policy=self.should_retry, **kwargs)
         self.stream_obj = BigqueryCDCStream(project_id, dataset_id, table_id, self.path(), self.get_json_schema, \
                                             given_name, where_clause, fallback_start=fallback_start, slice_range=slice_range, **kwargs)
@@ -1041,9 +1140,10 @@ class TableChangeHistory(BigqueryResultStream):
         stream_slice: Optional[Mapping[str, Any]] = None,
         next_page_token: Optional[Mapping[str, Any]] = None,
     ) -> Optional[Mapping[str, Any]]:
-        query_string = f"SELECT * FROM APPENDS(TABLE `{self.table_qualifier}`,NULL,NULL)"
+        self.fallback_start = self.get_time_travel_datetime(self.dataset_id, self.fallback_start)
+        query_string = f"SELECT * FROM APPENDS(TABLE `{self.table_qualifier}`,'{self.fallback_start}',NULL)"
         if self.where_clause:
-            query_string = f"SELECT * FROM APPENDS(TABLE `{self.table_qualifier}`,NULL,NULL) WHERE {self.where_clause}"
+            query_string = f"SELECT * FROM APPENDS(TABLE `{self.table_qualifier}`,'{self.fallback_start}',NULL) WHERE {self.where_clause}"
         request_body = {
             "kind": "bigquery#queryRequest",
             "query": query_string,
@@ -1081,12 +1181,15 @@ class GetQueryResults(BigqueryStream):
     """
     primary_key = None
 
-    def __init__(self, project_id: list, dataset_id: str, table_id: str, job_id: str, job_location: str, page_token: str, **kwargs):
+    def __init__(self, project_id: list, dataset_id: str, table_id: str, job_id: str, job_location: str, page_token: str, change_history=False,**kwargs):
         self.project_id = project_id
         self.parent_stream = dataset_id + "." + table_id
         self.job_id = job_id
         self.job_location = job_location
         self.page_token = page_token
+        self.additional_fields = {}
+        if change_history:
+            self.additional_fields = DEFAULT_CHANGE_FIELD
         super().__init__(self.path(), self.parent_stream, self.project_id, self.get_json_schema, **kwargs)
 
     @property
@@ -1146,6 +1249,7 @@ class GetQueryResults(BigqueryStream):
             yield {
                 "_bigquery_table_id": record.get("jobReference")["jobId"],
                 "_bigquery_created_time": None, #TODO: Update this to row insertion time
+                **self.additional_fields,
                 **{CHANGE_FIELDS.get(element["name"], element["name"]): SchemaHelpers.format_field(data[fields.index(element)]["v"], element["type"]) for element in fields},
             }
 
