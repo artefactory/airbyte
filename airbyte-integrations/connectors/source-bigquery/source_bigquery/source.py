@@ -256,7 +256,7 @@ class SourceBigquery(ConcurrentSourceAdapter):
         if not (self.catalog and self.catalog.streams) or (stream.cursor_field and not stream.get_json_schema()["properties"][stream.cursor_field] in TIME_TYPES):
             return stream
         state = state_manager.get_stream_state(stream.name, stream.namespace)
-        state = self._format_state(state)
+        state = self._format_state(state, stream)
         if stream.configured_sync_mode==SyncMode.full_refresh or not stream.cursor_field:
             return StreamFacade.create_from_stream(
                 stream,
@@ -288,17 +288,15 @@ class SourceBigquery(ConcurrentSourceAdapter):
 
         return stream
 
-    def _format_state(self, state):
+    def _format_state(self, state, stream):
         """
         This is to prevent parse_timestamp in IsoMillisConcurrentStreamStateConverter from crashing because of unexpected timestamp format
         """
-        if state:
+        if state and stream.get_json_schema()["properties"][list(state.keys())[0]] in TIME_TYPES:
             try:
                 pendulum.parse(list(state.values())[0])
             except pendulum.parsing.exceptions.ParserError as e:
                 state[list(state.keys())[0]] = self._format_timestamp(list(state.values())[0])
-            except TypeError as e:
-                pass
         return state
 
     def _format_timestamp(self, timestamp: str) -> str:
