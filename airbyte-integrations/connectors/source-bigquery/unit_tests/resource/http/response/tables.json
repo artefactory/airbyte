@@ -1,6 +1,7 @@
 {
   "kind": "bigquery#tableList",
   "etag": "etag987654321",
+  "nextPageToken": "ABCDEF123456",
   "tables": [
     {
       "kind": "bigquery#table",

@@ -1,0 +1,66 @@
+{
+  "kind": "bigquery#queryResponse",
+  "schema": {
+    "fields": [
+      {
+        "name": "constraint_catalog",
+        "type": "STRING",
+        "mode": "NULLABLE"
+      },
+      {
+        "name": "constraint_schema",
+        "type": "STRING",
+        "mode": "NULLABLE"
+      },
+      {
+        "name": "constraint_name",
+        "type": "STRING",
+        "mode": "NULLABLE"
+      },
+      {
+        "name": "table_catalog",
+        "type": "STRING",
+        "mode": "NULLABLE"
+      },
+      {
+        "name": "table_schema",
+        "type": "STRING",
+        "mode": "NULLABLE"
+      },
+      {
+        "name": "table_name",
+        "type": "STRING",
+        "mode": "NULLABLE"
+      },
+      {
+        "name": "column_name",
+        "type": "STRING",
+        "mode": "NULLABLE"
+      },
+      {
+        "name": "ordinal_position",
+        "type": "INTEGER",
+        "mode": "NULLABLE"
+      },
+      {
+        "name": "position_in_unique_constraint",
+        "type": "INTEGER",
+        "mode": "NULLABLE"
+      }
+    ]
+  },
+  "jobReference": {
+    "projectId": "glb-clientadvisor-dev",
+    "jobId": "job_9bbeG2Qpmht6rHv7cB3mWR06qorj",
+    "location": "EU"
+  },
+  "pageToken": "ABCDEF123456",
+  "totalRows": "0",
+  "totalBytesProcessed": "10485760",
+  "jobComplete": true,
+  "cacheHit": false,
+  "queryId": "job_9bbeG2Qpmht6rHv7cB3mWR06qorj",
+  "jobCreationReason": {
+    "code": "REQUESTED"
+  }
+}

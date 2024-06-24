@@ -76,7 +76,7 @@ class DiscoverTest(TestCase):
                         "useLegacySql": False,
                         "timeoutMs": 30000,
                     }).build(),
-                    BigqueryResponseBuilder.queries().build()
+                    BigqueryResponseBuilder.query_information_schema().build()
                 )
 
         source = SourceBigquery(_NO_CATALOG, config, _NO_STATE)

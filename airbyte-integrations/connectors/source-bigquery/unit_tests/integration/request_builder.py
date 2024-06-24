@@ -6,6 +6,7 @@ from typing import List, Optional
 from airbyte_cdk.test.mock_http import HttpRequest
 from airbyte_cdk.test.mock_http.request import ANY_QUERY_PARAMS
 
+from conftest import FAKE_ACCESS_TOKEN
 
 class Paths:
     DATASETS = "bigquery/v2/projects/{project_id}/datasets"
@@ -73,7 +74,7 @@ class BigqueryRequestBuilder:
     def build(self) -> HttpRequest:
         return HttpRequest(
             url=f"https://bigquery.googleapis.com/{self._resource}",
-            # headers={"Authorization": f"Bearer toto"},
+            headers={"Authorization": f"Bearer {FAKE_ACCESS_TOKEN}"},
             body=self._body,
             query_params=(
                 {} | (
