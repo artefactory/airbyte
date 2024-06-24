@@ -38,7 +38,7 @@ CHANGE_FIELDS = {"_CHANGE_TIMESTAMP": "change_timestamp", "_CHANGE_TYPE": "chang
 PAGE_SIZE = 10000
 TIMEOUT = 30000 # 30 seconds
 SLICE_RANGE = 525600 # 1 year in minutes
-
+DEFAULT_CHANGE_FIELD = {"change_timestamp": "0001-01-01T00:00:00.000000+00:00", "change_type": "INSERT"}
 
 class BigqueryStream(HttpStream, ABC):
     """
@@ -1036,8 +1036,8 @@ class BigqueryCDCStream(BigqueryResultStream, IncrementalMixin):
                 data = row.get("f")
                 formated_data = {
                     "_bigquery_table_id": job_id,
-                    "_bigquery_created_time": datetime.now(tz=pytz.timezone("UTC")).isoformat(timespec='microseconds'), #TODO: Update this to row insertion time
-                    **{"change_timestamp": None, "change_type": None},
+                    "_bigquery_created_time": datetime.now(tz=pytz.timezone("UTC")).isoformat(timespec='microseconds'),
+                    **DEFAULT_CHANGE_FIELD,
                     **{CHANGE_FIELDS.get(element["name"], element["name"]): SchemaHelpers.format_field(data[fields.index(element)]["v"], element["type"]) for element in fields},
                 }
                 yield formated_data
@@ -1189,7 +1189,7 @@ class GetQueryResults(BigqueryStream):
         self.page_token = page_token
         self.additional_fields = {}
         if change_history:
-            self.additional_fields = {"change_timestamp": None, "change_type": None}
+            self.additional_fields = DEFAULT_CHANGE_FIELD
         super().__init__(self.path(), self.parent_stream, self.project_id, self.get_json_schema, **kwargs)
 
     @property
