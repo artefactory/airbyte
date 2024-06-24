@@ -43,15 +43,9 @@ class ReadFullRefreshTest(TestCase):
         dataset_id = "dataset_id_1"
         table_id = "table_id_1"
 
-        mock_discover_calls(
-            http_mocker,
-            {
-                config["project_id"]: {
-                    dataset_id: {
-                        table_id
-                    }
-                }
-            }
+        http_mocker.get(
+            BigqueryRequestBuilder.table_endpoint(project_id=config["project_id"], dataset_id=dataset_id, table_id=table_id).with_max_results(10000).build(),
+            BigqueryResponseBuilder.table(dataset_id, table_id).build()
         )
 
         http_mocker.post(
@@ -59,13 +53,40 @@ class ReadFullRefreshTest(TestCase):
                 build_query(
                     dataset_id=dataset_id,
                     table_id=table_id,
+                    dry_run=True,
+                    use_legacy_sql=False
+                )
+            ).build(),
+            BigqueryResponseBuilder.queries().build()
+        )
+        
+        http_mocker.post(
+            BigqueryRequestBuilder.queries_endpoint(project_id=config["project_id"]).with_body(
+                build_query(
+                    dataset_id=dataset_id,
+                    table_id=table_id,
                     timeout_ms=30000,
                     max_results=10000,
+                    use_legacy_sql=False
                 )
             ).build(),
             BigqueryResponseBuilder.queries().build()
         )
 
+        http_mocker.post(
+                    BigqueryRequestBuilder.queries_endpoint(project_id=config["project_id"]).with_body(
+                        build_query(
+                            project_id=config["project_id"],
+                            dataset_id=dataset_id,
+                            table_id="INFORMATION_SCHEMA.KEY_COLUMN_USAGE",
+                            where=f"table_name='{table_id}'",
+                            query_end_char=";",
+                            timeout_ms=30000,
+                        )
+                    ).build(),
+                    BigqueryResponseBuilder.query_information_schema().build()
+                )
+        
         catalog = CatalogBuilder().with_stream(
             ConfiguredAirbyteStreamBuilder().with_name(
                 f"{dataset_id}.{table_id}"
@@ -98,17 +119,11 @@ class ReadFullRefreshTest(TestCase):
             where_clause=_PUSHDOWN_FILTER_CONDITION
         ).build()
 
-        mock_discover_calls(
-            http_mocker,
-            {
-                config["project_id"]: {
-                    "dataset_id_1": {
-                        "table_id_1"
-                    }
-                }
-            }
+        http_mocker.get(
+            BigqueryRequestBuilder.table_endpoint(project_id=config["project_id"], dataset_id=dataset_id, table_id=table_id).with_max_results(10000).build(),
+            BigqueryResponseBuilder.table(dataset_id, table_id).build()
         )
-
+        
         http_mocker.post(
             BigqueryRequestBuilder.queries_endpoint(project_id=config["project_id"]).with_body(
                 build_query(
@@ -133,6 +148,20 @@ class ReadFullRefreshTest(TestCase):
             ).build(),
             BigqueryResponseBuilder.queries().build()
         )
+
+        http_mocker.post(
+                    BigqueryRequestBuilder.queries_endpoint(project_id=config["project_id"]).with_body(
+                        build_query(
+                            project_id=config["project_id"],
+                            dataset_id=dataset_id,
+                            table_id="INFORMATION_SCHEMA.KEY_COLUMN_USAGE",
+                            where=f"table_name='{table_id}'",
+                            query_end_char=";",
+                            timeout_ms=30000,
+                        )
+                    ).build(),
+                    BigqueryResponseBuilder.query_information_schema().build()
+                )
 
         catalog = CatalogBuilder().with_stream(
             ConfiguredAirbyteStreamBuilder().with_name(
