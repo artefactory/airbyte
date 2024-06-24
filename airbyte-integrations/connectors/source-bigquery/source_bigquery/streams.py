@@ -1026,7 +1026,7 @@ class BigqueryCDCStream(BigqueryResultStream, IncrementalMixin):
         if next_page:
             query_job = GetQueryResults(self.project_id, self.dataset_id, self.table_id, \
                                         job_id, record["jobReference"]["location"], \
-                                        next_page, authenticator=self._auth)
+                                        next_page, change_history=True, authenticator=self._auth) #
             records = query_job.read_records(sync_mode=SyncMode.full_refresh)
             for record in records:
                 yield record
