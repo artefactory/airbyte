@@ -38,7 +38,7 @@ SIMPLE_BIGQUERY_TYPES: Dict = {
     "INTEGER": SchemaTypes.number,
     "STRING": SchemaTypes.string,
     "BYTES": SchemaTypes.string,
-    "DATE": SchemaTypes.string,
+    "DATE": SchemaTypes.string, #TODO: update to new date type
     "DATETIME": SchemaTypes.timestamp_without_timezone,
     "TIMESTAMP": SchemaTypes.timestamp_with_timezone,
     "TIME": SchemaTypes.time_without_timezone,
