@@ -81,8 +81,13 @@ class BigqueryResponseBuilder:
         return http_response_builder
 
     @classmethod
-    def table(cls) -> HttpResponseBuilder:
-        pass
+    def table(cls, dataset_id ,table_id) -> HttpResponseBuilder:
+        http_response_builder = _a_response(
+            "table",
+            FieldPath("schema"),
+             BigqueryPaginationStrategy.NextPageToken
+        )
+        return http_response_builder
 
     @classmethod
     def table_data(cls) -> HttpResponseBuilder:
