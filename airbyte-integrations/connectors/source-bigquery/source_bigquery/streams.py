@@ -38,7 +38,7 @@ CHANGE_FIELDS = {"_CHANGE_TIMESTAMP": "change_timestamp", "_CHANGE_TYPE": "chang
 PAGE_SIZE = 10000
 TIMEOUT = 30000 # 30 seconds
 SLICE_RANGE = 525600 # 1 year in minutes
-DEFAULT_CHANGE_FIELD = {"change_timestamp": "0001-01-01T00:00:00.000000+00:00", "change_type": "INSERT"}
+DEFAULT_CHANGE_FIELD = {"change_timestamp": "0001-01-01T00:00:30.000000+00:00", "change_type": "INSERT"}
 
 class BigqueryStream(HttpStream, ABC):
     """
@@ -968,13 +968,14 @@ class BigqueryCDCStream(BigqueryResultStream, IncrementalMixin):
             new_start_date = before_date
 
     def stream_slices(self, stream_state: Mapping[str, Any] = None, cursor_field=None, sync_mode=None, **kwargs) -> Iterable[Optional[Mapping[str, any]]]:
-        default_start = self.get_time_travel_datetime(self.dataset_id, self.fallback_start)
-        end_time = self._extract_borders(default_start)
-        self.fallback_start = default_start
+        self.fallback_start = self.get_time_travel_datetime(self.dataset_id, self.fallback_start)
+        end_time = self._extract_borders(self.fallback_start) #to avoid empty partions at the end
+        default_start = self.fallback_start
         if stream_state:
             self._cursor = stream_state.get(self.cursor_field)
             default_start =  datetime.strptime(self._cursor, '%Y-%m-%dT%H:%M:%S.%f%z') - timedelta(seconds=30)
         now = datetime.now(tz=default_start.tzinfo)
+        default_start = max(default_start, self.fallback_start)
         if not end_time:
             end_time = now
         if default_start <= end_time:
