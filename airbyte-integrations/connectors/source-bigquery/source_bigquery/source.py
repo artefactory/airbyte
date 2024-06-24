@@ -158,13 +158,13 @@ class SourceBigquery(ConcurrentSourceAdapter):
             if dataset_id:
                 for table_info in BigqueryTables(dataset_id=dataset_id, project_id=project_id, authenticator=self._auth).read_records(sync_mode=SyncMode.full_refresh):
                     table_id = table_info.get("tableReference")["tableId"]
-                    self._get_tables(project_id, dataset_id, table_id, sync_method, slice_range, table_info)
+                    self._add_tables(project_id, dataset_id, table_id, sync_method, slice_range, table_info)
             else:
                 for dataset in BigqueryDatasets(project_id=project_id, authenticator=self._auth).read_records(sync_mode=SyncMode.full_refresh):
                     dataset_id = dataset.get("datasetReference")["datasetId"]
                     for table_info in BigqueryTables(dataset_id=dataset_id, project_id=project_id, authenticator=self._auth).read_records(sync_mode=SyncMode.full_refresh):
                         table_id = table_info.get("tableReference")["tableId"]
-                        self._get_tables(project_id, dataset_id, table_id, sync_method, slice_range, table_info)
+                        self._add_tables(project_id, dataset_id, table_id, sync_method, slice_range, table_info)
 
         self._set_cursor_field()
         self._set_sync_mode()
@@ -185,14 +185,14 @@ class SourceBigquery(ConcurrentSourceAdapter):
             where_clause = stream["where_clause"]
             stream_name = stream["name"]
             table_info = next(BigqueryTable(dataset_id=filter_dataset_id, project_id=project_id, table_id=table_id, authenticator=self._auth).read_records(sync_mode=SyncMode.full_refresh))
-            self._get_tables(project_id, filter_dataset_id, table_id, sync_method, slice_range, table_info, stream_name, where_clause)
+            self._add_tables(project_id, filter_dataset_id, table_id, sync_method, slice_range, table_info, stream_name, where_clause)
 
     def _use_catalog_streams(self, project_id, sync_method, slice_range):
         for configured_stream in self.catalog.streams:
             try:
                 dataset_id, table_id = configured_stream.stream.name.split(".")
                 table_info = next(BigqueryTable(dataset_id=dataset_id, project_id=project_id, table_id=table_id, authenticator=self._auth).read_records(sync_mode=SyncMode.full_refresh))
-                self._get_tables(project_id, dataset_id, table_id, sync_method, slice_range, table_info)
+                self._add_tables(project_id, dataset_id, table_id, sync_method, slice_range, table_info)
             except ValueError:
                 # This could happen for pushdown filter streams
                 pass
@@ -217,7 +217,7 @@ class SourceBigquery(ConcurrentSourceAdapter):
                     if configured_stream.stream.name == stream.name and configured_stream.sync_mode:
                         stream.configured_sync_mode = configured_stream.sync_mode
 
-    def _get_tables(self, project_id, dataset_id, table_id, sync_method, slice_range, table_info, stream_name=None, where_clause=""):
+    def _add_tables(self, project_id, dataset_id, table_id, sync_method, slice_range, table_info, stream_name=None, where_clause=""):
         # list and process each table under each base to generate the JSON Schema
         if sync_method == "Standard":
             table_obj = IncrementalQueryResult(project_id, dataset_id, table_id, given_name=stream_name, where_clause=where_clause, fallback_start=FALLBACK_START, slice_range=slice_range, authenticator=self._auth)
