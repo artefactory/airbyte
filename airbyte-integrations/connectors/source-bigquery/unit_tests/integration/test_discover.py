@@ -19,7 +19,6 @@ from airbyte_cdk.test.mock_http.response_builder import (
 )
 from airbyte_cdk.test.state_builder import StateBuilder
 from airbyte_protocol.models import AirbyteStateBlob, AirbyteStreamState, ConfiguredAirbyteCatalog, FailureType, StreamDescriptor, SyncMode
-# from integration.utils import discover
 from integration.config import ConfigBuilder
 from integration.request_builder import BigqueryRequestBuilder
 from integration.response_builder import BigqueryResponseBuilder
@@ -43,7 +42,7 @@ _NO_CATALOG = CatalogBuilder().build()
 class DiscoverTest(TestCase):
 
     @HttpMocker()
-    def test_simple_discovery(self, http_mocker: HttpMocker) -> None:
+    def test_simple(self, http_mocker: HttpMocker) -> None:
         config = ConfigBuilder().default().build()
 
         dataset_ids = ["dataset_id_1", "dataset_id_2"]
@@ -89,3 +88,53 @@ class DiscoverTest(TestCase):
         ] == [
             f"{dataset_id}.{table_id}" for dataset_id in dataset_ids for table_id in tables_ids
         ]
+
+        assert not output.errors
+
+    @HttpMocker()
+    def test_no_datasets(self, http_mocker: HttpMocker) -> None:
+        config = ConfigBuilder().default().build()
+
+        dataset_ids = []
+
+        http_mocker.get(
+            BigqueryRequestBuilder.datasets_endpoint(project_id=config["project_id"]).build(),
+            BigqueryResponseBuilder.datasets(dataset_ids=dataset_ids).build()
+        )
+
+        source = SourceBigquery(_NO_CATALOG, config, _NO_STATE)
+        
+        output = discover(source, config, expecting_exception=False)
+
+        assert [
+            stream.name for stream in output._messages[0].catalog.streams
+        ] == []
+
+        assert not output.errors
+
+    @HttpMocker()
+    def test_no_tables(self, http_mocker: HttpMocker) -> None:
+        config = ConfigBuilder().default().build()
+
+        dataset_ids = ["dataset_id_1", "dataset_id_2"]
+
+        http_mocker.get(
+            BigqueryRequestBuilder.datasets_endpoint(project_id=config["project_id"]).build(),
+            BigqueryResponseBuilder.datasets(dataset_ids=dataset_ids).build()
+        )
+
+        for dataset_id in dataset_ids:
+            http_mocker.get(
+                BigqueryRequestBuilder.tables_endpoint(project_id=config["project_id"], dataset_id=dataset_id).build(),
+                BigqueryResponseBuilder.tables(table_ids=[]).build()
+            )
+
+        source = SourceBigquery(_NO_CATALOG, config, _NO_STATE)
+        
+        output = discover(source, config, expecting_exception=False)
+
+        assert [
+            stream.name for stream in output._messages[0].catalog.streams
+        ] == []
+
+        assert not output.errors
