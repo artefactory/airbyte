@@ -297,6 +297,8 @@ class SourceBigquery(ConcurrentSourceAdapter):
                 pendulum.parse(list(state.values())[0])
             except pendulum.parsing.exceptions.ParserError as e:
                 state[list(state.keys())[0]] = self._format_timestamp(list(state.values())[0])
+            except TypeError as e:
+                pass
         return state
 
     def _format_timestamp(self, timestamp: str) -> str:
