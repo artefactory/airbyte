@@ -1,0 +1,35 @@
+{
+    "resultSetMetaData": {
+        "numRows": 7,
+        "format": "jsonv2",
+        "partitionInfo": [
+            {
+                "rowCount": 7,
+                "uncompressedSize": 6049
+            }
+        ],
+        "rowType": [
+            {
+                "name": "ID",
+                "database": "TEST_AIRBYTE",
+                "schema": "INTEGRATION_TEST",
+                "table": "TEST_TABLE",
+                "nullable": false,
+                "type": "unknown type",
+                "length": null,
+                "scale": 0,
+                "precision": 38,
+                "byteLength": null,
+                "collation": null
+            }
+        ]
+    },
+    "data": [],
+    "code": "090001",
+    "statementStatusUrl": "/api/v2/statements/01b4d344-0000-6056-0000-31c10047b4a6?requestId=8e9dee0b-3c4e-4a72-8674-0409a07ae42a",
+    "requestId": "8e9dee0b-3c4e-4a72-8674-0409a07ae42a",
+    "sqlState": "00000",
+    "statementHandle": "01b48b36-0000-5f2a-0000-31c100407156",
+    "message": "Statement executed successfully.",
+    "createdOn": 1717666846523
+}

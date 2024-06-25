@@ -1,0 +1,20 @@
+{
+    "credentials": {
+        "auth_type": "JWT Token",
+        "user_name": "USER NAME",
+        "private_key": "-----BEGIN PRIVATE KEY----- your key content -----END PRIVATE KEY-----"
+    },
+    "streams": [
+        {
+            "name": "push_down_1",
+            "parent_stream": "Bad parent stream name",
+            "where_clause": "ID>2"
+        }
+    ],
+    "host": "https://XXXXXXXXXXX.snowflakecomputing.com",
+    "role": "ROLE",
+    "warehouse": "WAREHOUSE",
+    "database": "DATABASE",
+    "schema": "SCHEMA",
+    "replication_method":{"method":"standard"}
+}
