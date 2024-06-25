@@ -1,5 +1,13 @@
-{
-  "sat_test_dataset.sat_basic_dataset": {
-    "test_column_17": "2200-10-20 11:22:33 UTC"
+[
+  {
+    "type": "STREAM",
+    "stream": {
+      "stream_descriptor": {
+        "name": "sat_test_dataset.sat_basic_dataset"
+      },
+      "stream_state": {
+        "test_column_17": "9999-12-31T11:22:33.000Z"
+      }
+    }
   }
-}
+]
