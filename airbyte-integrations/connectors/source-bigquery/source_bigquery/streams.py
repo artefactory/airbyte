@@ -744,12 +744,15 @@ class BigqueryIncrementalStream(BigqueryResultStream, IncrementalMixin):
                 cursor_value = self._cursor
                 if isinstance(self._cursor, str):
                     cursor_value = f"'{self._cursor}'"
-                query_string = f"SELECT * FROM `{self.stream_name}` WHERE {state_field}>={cursor_value} ORDER BY {state_field}"
+                query_string = f"SELECT * FROM `{self.stream_name}` WHERE {state_field}>={cursor_value} ORDER BY {state_field}"      
         index = query_string.find("ORDER BY")
         if self.where_clause and index == -1:
             query_string = query_string + f" WHERE {self.where_clause}"
         elif self.where_clause:
             query_string = query_string[:index] + f" AND {self.where_clause} " + query_string[index:]
+        
+        if self.cursor_field and index == -1:
+            query_string = query_string + f" ORDER BY {self.cursor_field}"
         request_body = {
             "kind": "bigquery#queryRequest",
             "query": query_string,
