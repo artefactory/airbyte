@@ -105,3 +105,7 @@ scan-journal.log
 
 # mvn
 target/
+
+.nvenv/
+airbyte-integrations/connectors/source-bigquery-new-ref/*
+airbyte-integrations/connectors/source-bigquery-ref/*
