@@ -318,7 +318,7 @@ class SourceBigquery(ConcurrentSourceAdapter):
             return stream
         state = state_manager.get_stream_state(stream.name, stream.namespace)
         state = self._format_state(state, stream)
-        if stream.configured_sync_mode == SyncMode.full_refresh or not stream.cursor_field:
+        if stream.configured_sync_mode == SyncMode.full_refresh or not stream.cursor_field or NO_CURSOR_STATE_KEY in state:
             return StreamFacade.create_from_stream(
                 stream,
                 self,
