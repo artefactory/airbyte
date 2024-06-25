@@ -39,18 +39,18 @@ acceptance_tests:
         expect_records:
           path: "integration_tests/expected_records.jsonl"
           exact_order: no
-  incremental: 
-   tests:
-    - config_path: "secrets/config.json"
-      configured_catalog_path: "integration_tests/inc_configured_catalog.json"
-      timeout_seconds: 100
-      future_state:
-        future_state_path: "integration_tests/inc_abnormal_state.json"
-    - config_path: "secrets/cdc_config.json"
-      configured_catalog_path: "integration_tests/cdc_configured_catalog.json"
-      timeout_seconds: 100
-      future_state:
-        future_state_path: "integration_tests/cdc_abnormal_state.json"
+  incremental:
+    tests:
+      - config_path: "secrets/config.json"
+        configured_catalog_path: "integration_tests/inc_configured_catalog.json"
+        timeout_seconds: 100
+        future_state:
+          future_state_path: "integration_tests/inc_abnormal_state.json"
+      - config_path: "secrets/cdc_config.json"
+        configured_catalog_path: "integration_tests/cdc_configured_catalog.json"
+        timeout_seconds: 100
+        future_state:
+          future_state_path: "integration_tests/cdc_abnormal_state.json"
   full_refresh:
     tests:
       - config_path: "secrets/config.json"

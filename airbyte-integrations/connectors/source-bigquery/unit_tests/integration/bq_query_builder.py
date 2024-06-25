@@ -1,4 +1,7 @@
+# Copyright (c) 2024 Airbyte, Inc., all rights reserved.
+
 from typing import List, Optional
+
 
 def build_query(
         select: Optional[List[str]] = ["*"],

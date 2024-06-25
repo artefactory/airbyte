@@ -1,9 +1,11 @@
-import os
-import pytest
-import airbyte_cdk.test.mock_http.request
-import source_bigquery.auth
+# Copyright (c) 2024 Airbyte, Inc., all rights reserved.
 
+import os
 from typing import Any
+
+import airbyte_cdk.test.mock_http.request
+import pytest
+import source_bigquery.auth
 from oauth2client.service_account import ServiceAccountCredentials
 
 FAKE_ACCESS_TOKEN = "fake_access_token"

@@ -3,9 +3,10 @@
 #
 
 
-import os
 import logging
+import os
 from abc import ABC
+from datetime import datetime, timedelta
 from typing import Any, Iterable, List, Mapping, MutableMapping, Optional, Tuple
 
 import pendulum
@@ -13,29 +14,41 @@ import pendulum.parsing
 import pendulum.parsing.exceptions
 import pytz
 import requests
-from dateutil import parser
-from requests import codes, exceptions  # type: ignore[import]
-from datetime import datetime, timedelta
-from airbyte_cdk.sources import AbstractSource
-from airbyte_cdk.sources.streams import Stream
-from airbyte_cdk.sources.streams.http import HttpStream, HttpSubStream
-from airbyte_cdk.sources.streams.http.requests_native_auth import TokenAuthenticator
-from airbyte_protocol.models import SyncMode, Type
-from airbyte_cdk.models import AirbyteCatalog, AirbyteMessage, AirbyteStateMessage, ConfiguredAirbyteCatalog, Level, ConfiguredAirbyteStream
 from airbyte_cdk.logger import AirbyteLogFormatter
-from airbyte_cdk.utils.traced_exception import AirbyteTracedException, FailureType
-from airbyte_cdk.sources.concurrent_source.concurrent_source_adapter import ConcurrentSourceAdapter
+from airbyte_cdk.models import AirbyteCatalog, AirbyteMessage, AirbyteStateMessage, ConfiguredAirbyteCatalog, ConfiguredAirbyteStream, Level
+from airbyte_cdk.sources import AbstractSource
 from airbyte_cdk.sources.concurrent_source.concurrent_source import ConcurrentSource
+from airbyte_cdk.sources.concurrent_source.concurrent_source_adapter import ConcurrentSourceAdapter
 from airbyte_cdk.sources.connector_state_manager import ConnectorStateManager
 from airbyte_cdk.sources.message import InMemoryMessageRepository
 from airbyte_cdk.sources.source import TState
+from airbyte_cdk.sources.streams import Stream
 from airbyte_cdk.sources.streams.concurrent.adapters import StreamFacade
 from airbyte_cdk.sources.streams.concurrent.cursor import ConcurrentCursor, CursorField, FinalStateCursor
-from airbyte_cdk.sources.streams.concurrent.state_converters.datetime_stream_state_converter import EpochValueConcurrentStreamStateConverter, IsoMillisConcurrentStreamStateConverter
+from airbyte_cdk.sources.streams.concurrent.state_converters.datetime_stream_state_converter import (
+    EpochValueConcurrentStreamStateConverter,
+    IsoMillisConcurrentStreamStateConverter,
+)
+from airbyte_cdk.sources.streams.http import HttpStream, HttpSubStream
+from airbyte_cdk.sources.streams.http.requests_native_auth import TokenAuthenticator
+from airbyte_cdk.utils.traced_exception import AirbyteTracedException, FailureType
+from airbyte_protocol.models import SyncMode, Type
+from dateutil import parser
+from requests import codes, exceptions  # type: ignore[import]
 
 from .auth import BigqueryAuth
-from .streams import BigqueryDatasets, BigqueryTables, BigqueryDataset, BigqueryTable, CDCFirstSyncStream, BigqueryIncrementalStream, IncrementalQueryResult, TableChangeHistory, BigqueryCDCStream
 from .schema_helpers import TIME_TYPES
+from .streams import (
+    BigqueryCDCStream,
+    BigqueryDataset,
+    BigqueryDatasets,
+    BigqueryIncrementalStream,
+    BigqueryTable,
+    BigqueryTables,
+    CDCFirstSyncStream,
+    IncrementalQueryResult,
+    TableChangeHistory,
+)
 
 """
 This file provides a stubbed example of how to use the Airbyte CDK to develop both a source connector which supports full refresh or and an
@@ -50,8 +63,8 @@ There are additional required TODOs in the files within the integration_tests fo
 """
 _DEFAULT_CONCURRENCY = 10
 _MAX_CONCURRENCY = 10
-_DEFAULT_SLICE_RANGE = 525600 # 1 year by default
-FALLBACK_START =  datetime.strptime("0001-01-01T00:00:00.000Z", '%Y-%m-%dT%H:%M:%S.%f%z')
+_DEFAULT_SLICE_RANGE = 525600  # 1 year by default
+FALLBACK_START = datetime.strptime("0001-01-01T00:00:00.000Z", "%Y-%m-%dT%H:%M:%S.%f%z")
 CHANGE_HISTORY_START = datetime.now(tz=pytz.timezone("UTC")) - timedelta(days=7) + timedelta(seconds=30)
 
 # Source
@@ -98,7 +111,7 @@ class SourceBigquery(ConcurrentSourceAdapter):
                 failure_type=FailureType.config_error,
             )
         return config
-    
+
     def check_connection(self, logger, config: Mapping[str, Any]) -> Tuple[bool, any]:
         """
         Implement a connection check to validate that the user-provided config can be used to connect to the underlying API
@@ -110,27 +123,29 @@ class SourceBigquery(ConcurrentSourceAdapter):
         :param logger:  logger object
         :return Tuple[bool, any]: (True, None) if the input config can be used to connect to the API successfully, (False, error) otherwise.
         """
-        
+
         try:
             self.validate_config(config)
             self._auth = BigqueryAuth(config)
             # try reading first table from each dataset, to check the connectivity,
-            for dataset in BigqueryDatasets(project_id=config["project_id"], authenticator=self._auth).read_records(sync_mode=SyncMode.full_refresh):
+            for dataset in BigqueryDatasets(project_id=config["project_id"], authenticator=self._auth).read_records(
+                sync_mode=SyncMode.full_refresh
+            ):
                 dataset_id = dataset.get("datasetReference")["datasetId"]
-                for table_info in BigqueryTables(dataset_id=dataset_id, project_id=config["project_id"], authenticator=self._auth).read_records(sync_mode=SyncMode.full_refresh):
+                for table_info in BigqueryTables(
+                    dataset_id=dataset_id, project_id=config["project_id"], authenticator=self._auth
+                ).read_records(sync_mode=SyncMode.full_refresh):
                     table_id = table_info.get("tableReference")["tableId"]
-                    table_info = BigqueryTable(dataset_id=dataset_id, project_id=config["project_id"], table_id=table_id, authenticator=self._auth)
+                    table_info = BigqueryTable(
+                        dataset_id=dataset_id, project_id=config["project_id"], table_id=table_id, authenticator=self._auth
+                    )
                     next(table_info.read_records(sync_mode=SyncMode.full_refresh))
         except exceptions.HTTPError as error:
             error_msg = f"An error occurred: {error.response.text}"
             try:
                 error_data = error.response.json()[0]
             except (KeyError, requests.exceptions.JSONDecodeError) as e:
-                raise AirbyteTracedException(
-                    internal_message=str(e),
-                    failure_type=FailureType.system_error,
-                    message=error_msg
-                )
+                raise AirbyteTracedException(internal_message=str(e), failure_type=FailureType.system_error, message=error_msg)
             else:
                 error_code = error_data.get("errorCode")
                 if error.response.status_code == codes.FORBIDDEN and error_code == "REQUEST_LIMIT_EXCEEDED":
@@ -143,7 +158,7 @@ class SourceBigquery(ConcurrentSourceAdapter):
                     )
             return False, error_msg
         return True, None
-    
+
     def streams(self, config: Mapping[str, Any]) -> List[Stream]:
         """
         Replace the streams below with your own streams.
@@ -163,42 +178,50 @@ class SourceBigquery(ConcurrentSourceAdapter):
             self._use_catalog_streams(project_id, sync_method, slice_range)
         else:
             if dataset_id:
-                for table_info in BigqueryTables(dataset_id=dataset_id, project_id=project_id, authenticator=self._auth).read_records(sync_mode=SyncMode.full_refresh):
+                for table_info in BigqueryTables(dataset_id=dataset_id, project_id=project_id, authenticator=self._auth).read_records(
+                    sync_mode=SyncMode.full_refresh
+                ):
                     table_id = table_info.get("tableReference")["tableId"]
                     self._add_tables(project_id, dataset_id, table_id, sync_method, slice_range, table_info)
             else:
-                for dataset in BigqueryDatasets(project_id=project_id, authenticator=self._auth).read_records(sync_mode=SyncMode.full_refresh):
+                for dataset in BigqueryDatasets(project_id=project_id, authenticator=self._auth).read_records(
+                    sync_mode=SyncMode.full_refresh
+                ):
                     dataset_id = dataset.get("datasetReference")["datasetId"]
-                    for table_info in BigqueryTables(dataset_id=dataset_id, project_id=project_id, authenticator=self._auth).read_records(sync_mode=SyncMode.full_refresh):
+                    for table_info in BigqueryTables(dataset_id=dataset_id, project_id=project_id, authenticator=self._auth).read_records(
+                        sync_mode=SyncMode.full_refresh
+                    ):
                         table_id = table_info.get("tableReference")["tableId"]
                         self._add_tables(project_id, dataset_id, table_id, sync_method, slice_range, table_info)
 
         self._set_cursor_field()
         self._set_sync_mode()
-        state_manager = ConnectorStateManager(stream_instance_map={stream.name: stream for stream in self._concurrent_streams}, state=self.state)
-        return [
-            self._to_concurrent(
-                stream,
-                stream.fallback_start,
-                slice_range,
-                state_manager  
-            )
-            for stream in self._concurrent_streams
-        ]
-    
+        state_manager = ConnectorStateManager(
+            stream_instance_map={stream.name: stream for stream in self._concurrent_streams}, state=self.state
+        )
+        return [self._to_concurrent(stream, stream.fallback_start, slice_range, state_manager) for stream in self._concurrent_streams]
+
     def _add_filtered_streams(self, streams, project_id, sync_method, slice_range):
         for stream in streams:
-            filter_dataset_id, table_id = stream['parent_stream'].split(".")
+            filter_dataset_id, table_id = stream["parent_stream"].split(".")
             where_clause = stream["where_clause"]
             stream_name = stream["name"]
-            table_info = next(BigqueryTable(dataset_id=filter_dataset_id, project_id=project_id, table_id=table_id, authenticator=self._auth).read_records(sync_mode=SyncMode.full_refresh))
+            table_info = next(
+                BigqueryTable(
+                    dataset_id=filter_dataset_id, project_id=project_id, table_id=table_id, authenticator=self._auth
+                ).read_records(sync_mode=SyncMode.full_refresh)
+            )
             self._add_tables(project_id, filter_dataset_id, table_id, sync_method, slice_range, table_info, stream_name, where_clause)
 
     def _use_catalog_streams(self, project_id, sync_method, slice_range):
         for configured_stream in self.catalog.streams:
             try:
                 dataset_id, table_id = configured_stream.stream.name.split(".")
-                table_info = next(BigqueryTable(dataset_id=dataset_id, project_id=project_id, table_id=table_id, authenticator=self._auth).read_records(sync_mode=SyncMode.full_refresh))
+                table_info = next(
+                    BigqueryTable(dataset_id=dataset_id, project_id=project_id, table_id=table_id, authenticator=self._auth).read_records(
+                        sync_mode=SyncMode.full_refresh
+                    )
+                )
                 self._add_tables(project_id, dataset_id, table_id, sync_method, slice_range, table_info)
             except ValueError:
                 # This could happen for pushdown filter streams
@@ -208,7 +231,7 @@ class SourceBigquery(ConcurrentSourceAdapter):
                     # This could happen for pushdown filter streams
                     pass
                 else:
-                    raise error 
+                    raise error
 
     def _set_cursor_field(self):
         for stream in self._concurrent_streams:
@@ -227,27 +250,55 @@ class SourceBigquery(ConcurrentSourceAdapter):
     def _add_tables(self, project_id, dataset_id, table_id, sync_method, slice_range, table_info, stream_name=None, where_clause=""):
         # list and process each table under each base to generate the JSON Schema
         if sync_method == "Standard":
-            table_obj = IncrementalQueryResult(project_id, dataset_id, table_id, given_name=stream_name, where_clause=where_clause, fallback_start=FALLBACK_START, slice_range=slice_range, authenticator=self._auth)
+            table_obj = IncrementalQueryResult(
+                project_id,
+                dataset_id,
+                table_id,
+                given_name=stream_name,
+                where_clause=where_clause,
+                fallback_start=FALLBACK_START,
+                slice_range=slice_range,
+                authenticator=self._auth,
+            )
         else:
-            table_creation_datetime = pendulum.from_timestamp(float(table_info["creationTime"])/1000.0) # timestamps returned are in milliseconds hence the /1000
-            table_obj = TableChangeHistory(project_id, dataset_id, table_id, given_name=stream_name, where_clause=where_clause, \
-                                           fallback_start=table_creation_datetime, slice_range=slice_range, authenticator=self._auth)
+            table_creation_datetime = pendulum.from_timestamp(
+                float(table_info["creationTime"]) / 1000.0
+            )  # timestamps returned are in milliseconds hence the /1000
+            table_obj = TableChangeHistory(
+                project_id,
+                dataset_id,
+                table_id,
+                given_name=stream_name,
+                where_clause=where_clause,
+                fallback_start=table_creation_datetime,
+                slice_range=slice_range,
+                authenticator=self._auth,
+            )
             try:
                 records = next(table_obj.read_records(sync_mode=SyncMode.full_refresh))
             except exceptions.HTTPError as error:
                 if error.response.status_code == 400:
                     table_obj = None
-                    #TODO: add link to documentation
+                    # TODO: add link to documentation
                 else:
-                    raise error 
+                    raise error
             else:
                 stream_state = self._get_stream_state(table_obj)
-                #If first read then use normal stream to get records before max time travel window
-                #records["totalBytesProcessed"] is 0 when time travel window is bigger than what's allowed
+                # If first read then use normal stream to get records before max time travel window
+                # records["totalBytesProcessed"] is 0 when time travel window is bigger than what's allowed
                 if float(records["totalBytesProcessed"]) == 0 and not stream_state:
-                    table_obj = CDCFirstSyncStream(project_id, dataset_id, table_id, table_obj.path(), table_obj.get_json_schema, \
-                                                    given_name=stream_name, where_clause=where_clause, \
-                                                    fallback_start=table_creation_datetime, slice_range=slice_range, authenticator=self._auth)
+                    table_obj = CDCFirstSyncStream(
+                        project_id,
+                        dataset_id,
+                        table_id,
+                        table_obj.path(),
+                        table_obj.get_json_schema,
+                        given_name=stream_name,
+                        where_clause=where_clause,
+                        fallback_start=table_creation_datetime,
+                        slice_range=slice_range,
+                        authenticator=self._auth,
+                    )
         if table_obj:
             self._concurrent_streams.append(table_obj.stream)
 
@@ -258,13 +309,15 @@ class SourceBigquery(ConcurrentSourceAdapter):
     def _to_concurrent(
         self, stream: Stream, fallback_start: datetime, slice_range: timedelta, state_manager: ConnectorStateManager
     ) -> Stream:
-        #if no catalog given then we are not in read so no need for concurrency
-        #and if cursor field is not of type datetime concurrency will not work
-        if not (self.catalog and self.catalog.streams) or (stream.cursor_field and not stream.get_json_schema()["properties"][stream.cursor_field] in TIME_TYPES):
+        # if no catalog given then we are not in read so no need for concurrency
+        # and if cursor field is not of type datetime concurrency will not work
+        if not (self.catalog and self.catalog.streams) or (
+            stream.cursor_field and not stream.get_json_schema()["properties"][stream.cursor_field] in TIME_TYPES
+        ):
             return stream
         state = state_manager.get_stream_state(stream.name, stream.namespace)
         state = self._format_state(state, stream)
-        if stream.configured_sync_mode==SyncMode.full_refresh or not stream.cursor_field:
+        if stream.configured_sync_mode == SyncMode.full_refresh or not stream.cursor_field:
             return StreamFacade.create_from_stream(
                 stream,
                 self,
@@ -308,7 +361,7 @@ class SourceBigquery(ConcurrentSourceAdapter):
 
     def _format_timestamp(self, timestamp: str) -> str:
         ts = parser.parse(timestamp)
-        return ts.isoformat(timespec='microseconds')
+        return ts.isoformat(timespec="microseconds")
 
     def _create_empty_state(self) -> MutableMapping[str, Any]:
         return {}

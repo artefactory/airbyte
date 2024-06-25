@@ -13,15 +13,15 @@ from airbyte_cdk.test.mock_http.response_builder import (
     FieldPath,
     HttpResponseBuilder,
     RecordBuilder,
-    create_response_builder,
     create_record_builder,
+    create_response_builder,
     find_template,
 )
 from airbyte_cdk.test.state_builder import StateBuilder
 from airbyte_protocol.models import AirbyteStateBlob, AirbyteStreamState, ConfiguredAirbyteCatalog, FailureType, StreamDescriptor, SyncMode
-from integration.mocked import mock_discover_calls
-from integration.config import ConfigBuilder
 from integration.bq_query_builder import build_query
+from integration.config import ConfigBuilder
+from integration.mocked import mock_discover_calls
 from integration.request_builder import BigqueryRequestBuilder
 from integration.response_builder import BigqueryResponseBuilder
 from source_bigquery import SourceBigquery

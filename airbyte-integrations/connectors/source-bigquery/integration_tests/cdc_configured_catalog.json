@@ -1,20 +1,20 @@
 {
-    "streams": [
-      {
-        "stream": {
-          "name": "sat_test_dataset.sat_basic_dataset",
-          "json_schema": {
-            "$schema": "http://json-schema.org/draft-07/schema#",
-            "type": "object",
-            "properties": {}
-          },
-          "supported_sync_modes": ["full_refresh", "incremental"],
-          "source_defined_cursor": true,
-          "default_cursor_field": ["change_timestamp"]
+  "streams": [
+    {
+      "stream": {
+        "name": "sat_test_dataset.sat_basic_dataset",
+        "json_schema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "properties": {}
         },
-        "sync_mode": "incremental",
-        "destination_sync_mode": "append",
-        "cursor_field": ["change_timestamp"]
-      }
-    ]
-  }
+        "supported_sync_modes": ["full_refresh", "incremental"],
+        "source_defined_cursor": true,
+        "default_cursor_field": ["change_timestamp"]
+      },
+      "sync_mode": "incremental",
+      "destination_sync_mode": "append",
+      "cursor_field": ["change_timestamp"]
+    }
+  ]
+}

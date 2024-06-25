@@ -1,6 +1,5 @@
 {
-    "sat_test_dataset.sat_basic_dataset": {
-      "test_column_17": "2200-10-20 11:22:33 UTC"
-    }
+  "sat_test_dataset.sat_basic_dataset": {
+    "test_column_17": "2200-10-20 11:22:33 UTC"
   }
-  
+}

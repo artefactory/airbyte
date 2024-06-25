@@ -1,7 +1,10 @@
+# Copyright (c) 2024 Airbyte, Inc., all rights reserved.
+
 from typing import Mapping, Set
+
+from integration.bq_query_builder import build_query
 from integration.request_builder import BigqueryRequestBuilder
 from integration.response_builder import BigqueryResponseBuilder
-from integration.bq_query_builder import build_query
 
 
 def mock_discover_calls(http_mocker, tables: Mapping[str, Mapping[str, Set[str]]]) -> None:

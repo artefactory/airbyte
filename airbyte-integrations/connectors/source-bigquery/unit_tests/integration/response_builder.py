@@ -1,19 +1,18 @@
 # Copyright (c) 2023 Airbyte, Inc., all rights reserved.
 
 import json
-
 from typing import List, Optional
+
 from airbyte_cdk.test.mock_http import HttpResponse
 from airbyte_cdk.test.mock_http.response_builder import (
     FieldPath,
-    NestedPath,
     HttpResponseBuilder,
+    NestedPath,
     RecordBuilder,
-    create_response_builder,
     create_record_builder,
+    create_response_builder,
     find_template,
 )
-
 from integration.pagination import BigqueryPaginationStrategy
 
 

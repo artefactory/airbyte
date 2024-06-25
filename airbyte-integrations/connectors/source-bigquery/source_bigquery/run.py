@@ -5,10 +5,11 @@
 
 import sys
 
-from airbyte_cdk.entrypoint import launch
 from airbyte_cdk.entrypoint import AirbyteEntrypoint, launch
 from airbyte_cdk.models import AirbyteErrorTraceMessage, AirbyteMessage, AirbyteTraceMessage, TraceType, Type
+
 from .source import SourceBigquery
+
 
 def run():
     _args = sys.argv[1:]
