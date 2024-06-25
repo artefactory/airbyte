@@ -31,6 +31,7 @@ from airbyte_cdk.sources.streams.concurrent.state_converters.datetime_stream_sta
 )
 from airbyte_cdk.sources.streams.http import HttpStream, HttpSubStream
 from airbyte_cdk.sources.streams.http.requests_native_auth import TokenAuthenticator
+from airbyte_cdk.sources.streams.core import Stream, StreamData, NO_CURSOR_STATE_KEY
 from airbyte_cdk.utils.traced_exception import AirbyteTracedException, FailureType
 from airbyte_protocol.models import SyncMode, Type
 from dateutil import parser
@@ -317,7 +318,7 @@ class SourceBigquery(ConcurrentSourceAdapter):
             return stream
         state = state_manager.get_stream_state(stream.name, stream.namespace)
         state = self._format_state(state, stream)
-        if stream.configured_sync_mode == SyncMode.full_refresh or not stream.cursor_field:
+        if stream.configured_sync_mode == SyncMode.full_refresh or not stream.cursor_field or NO_CURSOR_STATE_KEY in state:
             return StreamFacade.create_from_stream(
                 stream,
                 self,
@@ -352,7 +353,7 @@ class SourceBigquery(ConcurrentSourceAdapter):
         """
         This is to prevent parse_timestamp in IsoMillisConcurrentStreamStateConverter from crashing because of unexpected timestamp format
         """
-        if state and stream.get_json_schema()["properties"][list(state.keys())[0]] in TIME_TYPES:
+        if state and not NO_CURSOR_STATE_KEY in state and stream.get_json_schema()["properties"][list(state.keys())[0]] in TIME_TYPES:
             try:
                 pendulum.parse(list(state.values())[0])
             except pendulum.parsing.exceptions.ParserError as e:

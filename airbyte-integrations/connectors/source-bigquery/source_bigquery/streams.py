@@ -24,7 +24,7 @@ from airbyte_cdk.models import (
 from airbyte_cdk.sources import AbstractSource
 from airbyte_cdk.sources.streams import IncrementalMixin, Stream
 from airbyte_cdk.sources.streams.concurrent.cursor import Cursor
-from airbyte_cdk.sources.streams.core import Stream, StreamData
+from airbyte_cdk.sources.streams.core import Stream, StreamData, NO_CURSOR_STATE_KEY
 from airbyte_cdk.sources.streams.http import HttpStream, HttpSubStream
 from airbyte_cdk.utils.traced_exception import AirbyteTracedException, FailureType
 from airbyte_protocol.models import SyncMode, Type
@@ -695,7 +695,7 @@ class BigqueryIncrementalStream(BigqueryResultStream, IncrementalMixin):
             self.cursor_field = cursor_field
         default_start = self.fallback_start
         slice = {}
-        if stream_state:
+        if stream_state and not NO_CURSOR_STATE_KEY in stream_state:
             self._cursor = list(stream_state.values())[0]
             if self._cursor and self.get_json_schema()["properties"][self.cursor_field] in TIME_TYPES:
                 default_start = parser.parse(self._cursor) - timedelta(seconds=30)  # loopback window
@@ -737,7 +737,7 @@ class BigqueryIncrementalStream(BigqueryResultStream, IncrementalMixin):
             end = stream_slice.get("end", None)
             if start and end:
                 query_string = f"SELECT * FROM `{self.stream_name}` WHERE {self.cursor_field}>='{start}' AND {self.cursor_field}<'{end}' ORDER BY {self.cursor_field}"
-        elif stream_state:
+        elif stream_state and not NO_CURSOR_STATE_KEY in stream_state:
             self._cursor = list(stream_state.values())[0]
             state_field = list(stream_state.keys())[0]
             if self._cursor:
@@ -1081,7 +1081,7 @@ class BigqueryCDCStream(BigqueryResultStream, IncrementalMixin):
         self.fallback_start = self.get_time_travel_datetime(self.dataset_id, self.fallback_start)
         end_time = self._extract_borders(self.fallback_start)  # to avoid empty partions at the end
         default_start = self.fallback_start
-        if stream_state:
+        if stream_state and not NO_CURSOR_STATE_KEY in stream_state:
             self._cursor = stream_state.get(self.cursor_field)
             default_start = datetime.strptime(self._cursor, "%Y-%m-%dT%H:%M:%S.%f%z") - timedelta(seconds=30)
         now = datetime.now(tz=default_start.tzinfo)
