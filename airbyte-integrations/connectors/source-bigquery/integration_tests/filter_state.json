@@ -1,0 +1,14 @@
+[
+    {
+      "type": "STREAM",
+      "stream": {
+        "stream_descriptor": {
+          "name": "sub",
+          "namespace": null
+        },
+        "stream_state": {
+          "is": 20
+        }
+      }
+    }
+  ]

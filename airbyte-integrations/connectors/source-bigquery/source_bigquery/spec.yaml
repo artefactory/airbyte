@@ -1,16 +1,17 @@
 documentationUrl: https://docs.airbyte.com/integrations/sources/bigquery
 supportsIncremental: true
-supported_sync_modes: 
+supported_sync_modes:
   - overwrite
   - append
   - append_dedup
 connectionSpecification:
   $schema: http://json-schema.org/draft-07/schema#
-  title: Bigquery Spec
+  title: BigQuery Source Spec
   type: object
   required:
     - project_id
     - credentials_json
+    - replication_method
   properties:
     project_id:
       type: string
@@ -25,6 +26,41 @@ connectionSpecification:
       description: The contents of your Service Account Key JSON file. See the <a href=\"https://docs.airbyte.com/integrations/sources/bigquery#setup-the-bigquery-source-in-airbyte\">docs</a> for more information on how to obtain this key.
       title: Credentials JSON
       airbyte_secret: true
+    slice_range:
+      type: string
+      description: The streams partitions range in minutes
+      title: Slice Range
+    replication_method:
+      type: object
+      title: Update Method
+      description: Configures how data is extracted from the database.
+      order: 11
+      group: advanced
+      default: Standard
+      display_type: radio
+      oneOf:
+        - title: Scan Changes with User Defined Cursor
+          description:
+            Incrementally detects new inserts and updates using the <a href="https://docs.airbyte.com/understanding-airbyte/connections/incremental-append/#user-defined-cursor">cursor
+            column</a> chosen when configuring a connection (e.g. created_at, updated_at).
+          required:
+            - method
+          properties:
+            method:
+              type: string
+              const: Standard
+              order: 1
+        - title: Read Changes using Change History
+          description:
+            Incrementally reads new inserts using Bigquery's change history the Postgres <a href="https://cloud.google.com/bigquery/docs/change-history">Change history</a>.
+            for tables of any size.
+          required:
+            - method
+          properties:
+            method:
+              type: string
+              const: History
+              order: 8
     streams:
       title: Push Down Filter
       description: Used to filter out data on the source and creates a dedicated stream
@@ -55,6 +91,6 @@ connectionSpecification:
             description: A string that must be a valid where clause in the relevant warehouse (not nullable).
             type: string
         required:
-        - name
-        - parent_stream
-        - where_clause
+          - name
+          - parent_stream
+          - where_clause

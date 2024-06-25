@@ -3,11 +3,10 @@
     "type": "STREAM",
     "stream": {
       "stream_descriptor": {
-        "name": "test.MOCK_DATA",
-        "namespace": null
+        "name": "sat_test_dataset.sat_basic_dataset"
       },
       "stream_state": {
-        "change_timestamp": "2024-05-30T23:50:31.057000+00:00"
+        "test_column_17": "9999-12-31T11:22:33.000Z"
       }
     }
   }

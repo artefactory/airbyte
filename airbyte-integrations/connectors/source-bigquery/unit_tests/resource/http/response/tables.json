@@ -1,0 +1,52 @@
+{
+  "kind": "bigquery#tableList",
+  "etag": "etag987654321",
+  "nextPageToken": "ABCDEF123456",
+  "tables": [
+    {
+      "kind": "bigquery#table",
+      "id": "my_project:my_dataset.my_table_1",
+      "tableReference": {
+        "projectId": "my_project",
+        "datasetId": "my_dataset",
+        "tableId": "my_table_1"
+      },
+      "friendlyName": "My First Table",
+      "type": "TABLE",
+      "timePartitioning": {
+        "type": "DAY",
+        "expirationMs": "2592000000"
+      },
+      "rangePartitioning": {
+        "field": "age",
+        "range": {
+          "start": "0",
+          "end": "100",
+          "interval": "10"
+        }
+      },
+      "clustering": {
+        "fields": ["last_name", "first_name"]
+      },
+      "hivePartitioningOptions": {
+        "mode": "AUTO",
+        "sourceUriPrefix": "gs://my_bucket/path/to/data"
+      },
+      "labels": {
+        "env": "prod",
+        "team": "analytics"
+      },
+      "view": {
+        "useLegacySql": false,
+        "privacyPolicy": {
+          "policyId": "policy123",
+          "description": "Sample privacy policy"
+        }
+      },
+      "creationTime": "1622547800000",
+      "expirationTime": "1625139800000",
+      "requirePartitionFilter": true
+    }
+  ],
+  "totalItems": 1
+}

@@ -1,0 +1,58 @@
+{
+  "kind": "bigquery#table",
+  "etag": "etag987654321",
+  "id": "my_project:my_dataset.my_table_1",
+  "selfLink": "https://bigquery.googleapis.com/bigquery/v2/projects/sb-airbyte-connector-1ee6/datasets/test/tables/test_test_test_test_test_airbyte_dataset_test_airbyte_dataset_MOCK_DATA",
+  "tableReference": {
+    "projectId": "my_project",
+    "datasetId": "dataset_id_1",
+    "tableId": "table_id_1"
+  },
+  "schema": {
+    "fields": [
+      {
+        "name": "id",
+        "type": "STRING"
+      },
+      {
+        "name": "name",
+        "type": "STRING"
+      },
+      {
+        "name": "age",
+        "type": "INTEGER"
+      }
+    ]
+  },
+  "timePartitioning": {
+    "type": "DAY",
+    "field": "_airbyte_extracted_at"
+  },
+  "numBytes": "20176",
+  "numLongTermBytes": "0",
+  "numRows": "108",
+  "creationTime": "1718367696928",
+  "lastModifiedTime": "1718367735603",
+  "type": "TABLE",
+  "location": "europe-west1",
+  "clustering": {
+    "fields": ["_airbyte_extracted_at"]
+  },
+  "numTimeTravelPhysicalBytes": "0",
+  "numTotalLogicalBytes": "20176",
+  "numActiveLogicalBytes": "20176",
+  "numLongTermLogicalBytes": "0",
+  "numTotalPhysicalBytes": "11484",
+  "numActivePhysicalBytes": "11484",
+  "numLongTermPhysicalBytes": "0",
+  "numPartitions": "1",
+  "partitionDefinition": {
+    "partitionedColumn": [
+      {
+        "field": "_airbyte_extracted_at"
+      }
+    ]
+  },
+  "numCurrentPhysicalBytes": "11484",
+  "nextPageToken": "ABCDEF123456"
+}

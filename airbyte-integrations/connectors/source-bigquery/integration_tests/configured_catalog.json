@@ -2,21 +2,18 @@
   "streams": [
     {
       "stream": {
-        "name": "customers",
+        "name": "sat_test_dataset.sat_basic_dataset",
         "json_schema": {},
-        "supported_sync_modes": ["full_refresh"]
+        "supported_sync_modes": ["full_refresh"],
+        "source_defined_cursor": false,
+        "default_cursor_field": null,
+        "source_defined_primary_key": [["id"]],
+        "namespace": null
       },
       "sync_mode": "full_refresh",
-      "destination_sync_mode": "overwrite"
-    },
-    {
-      "stream": {
-        "name": "employees",
-        "json_schema": {},
-        "supported_sync_modes": ["full_refresh", "incremental"]
-      },
-      "sync_mode": "incremental",
-      "destination_sync_mode": "append"
+      "cursor_field": null,
+      "destination_sync_mode": "append",
+      "primary_key": [["id"]]
     }
   ]
 }

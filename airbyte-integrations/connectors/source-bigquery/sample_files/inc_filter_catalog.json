@@ -1,0 +1,20 @@
+{
+  "streams": [
+    {
+      "stream": {
+        "name": "sub",
+        "json_schema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "properties": {}
+        },
+        "supported_sync_modes": ["full_refresh", "incremental"],
+        "source_defined_cursor": true,
+        "default_cursor_field": ["_bigquery_created_time"]
+      },
+      "sync_mode": "incremental",
+      "destination_sync_mode": "overwrite",
+      "cursor_field": ["_airbyte_extracted_at"]
+    }
+  ]
+}
